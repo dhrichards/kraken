@@ -6,7 +6,8 @@ from dolfinx.fem import (Function, functionspace,
 from dolfinx.fem.petsc import (apply_lifting, apply_lifting_nest,
                                assemble_matrix, assemble_matrix_block,
                                assemble_matrix_nest, assemble_vector,
-                               assemble_vector_block)
+                               assemble_vector_block, set_bc,
+                               set_bc_nest)
 from mpi4py import MPI
 from petsc4py import PETSc
 
