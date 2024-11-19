@@ -30,11 +30,11 @@ nondim_height = true_height/material.L
 Hw = material.ρi/material.ρw*nondim_height
 
 msh = mesh.create_rectangle(MPI.COMM_WORLD,
-                            [np.array([-nondim_length/2, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
+                            [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
                             [200,50], mesh.CellType.triangle)
 
 
-uh = elasticity_no_damage(msh,material)
+uh = elasticity(msh,material,0.0)
 
 
 
@@ -54,15 +54,13 @@ ph.interpolate(expr)
 λ2 = fem.Function(Q)
 λ2.interpolate(fem.Expression(λ[1],Q.element.interpolation_points()))
 
-λ3 = fem.Function(Q)
-λ3.interpolate(fem.Expression(λ[2],Q.element.interpolation_points()))
 
-#%%
+
 from dolfinx.io import XDMFFile
 with XDMFFile(MPI.COMM_WORLD, "testnondim.xdmf", "w") as ufile_xdmf:
         ufile_xdmf.write_mesh(msh)
-        # ufile_xdmf.write_function(uh)
+        ufile_xdmf.write_function(uh)
         # ufile_xdmf.write_function(ph)
-        ufile_xdmf.write_function(λ1)
+        # ufile_xdmf.write_function(λ1)
 
 # %%

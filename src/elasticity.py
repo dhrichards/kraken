@@ -1,10 +1,14 @@
 import numpy as np
-from dolfinx import mesh, fem, plot, io, default_scalar_type
-from dolfinx.fem.petsc import LinearProblem
+from dolfinx import mesh, fem, plot, io, default_scalar_type, la
+from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
+from dolfinx.log import LogLevel, set_log_level
+from dolfinx.nls.petsc import NewtonSolver
+from petsc4py import PETSc
 from mpi4py import MPI
 import ufl
 import numpy as np
 from phasefield import *
+import nonlinear
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -23,7 +27,7 @@ def stress_nondim(u,ν):
     return λoverμ*ufl.tr(ε(u))*ufl.Identity(len(u)) + 2*ε(u)
 
 
-def elasticity(msh, material, d=0.0):
+def elasticity(msh, material, d):
     V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
     fdim = msh.topology.dim - 1
@@ -52,8 +56,8 @@ def elasticity(msh, material, d=0.0):
     
 
     # Because of the degraded stress the problem is non linear
-    u = ufl.Function(V)
-    v = ufl.Function(V)
+    u = fem.Function(V)
+    v = ufl.TestFunction(V)
 
     a = ufl.inner(σ(u), ε(v)) * ufl.dx
     L =   C1 *( g*ufl.dot(f, v) + pw*g*ufl.div(v) )* ufl.dx \
@@ -61,10 +65,27 @@ def elasticity(msh, material, d=0.0):
     
     F = a - L
 
-    problem = LinearProblem(a, L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-    uh = problem.solve()
+    problem = NonlinearProblem(F, u, [bc])
+    
+    solver = NewtonSolver(MPI.COMM_WORLD, problem)
 
-    return uh
+    set_log_level(LogLevel.WARNING)
+    n, converged = solver.solve(u)
+
+    # problem = nonlinear.SNESProblem(F, u, bc)
+
+    # b_u = la.create_petsc_vector(V.dofmap.index_map, V.dofmap.index_map_bs)
+    # J_u = fem.petsc.create_matrix(problem.a)
+    # # Create Newton solver and solve
+    # solver_u_snes = PETSc.SNES().create()
+    # solver_u_snes.setType("ksponly")
+    # solver_u_snes.setFunction(problem.F, b_u)
+    # solver_u_snes.setJacobian(problem.J, J_u)
+    # solver_u_snes.setTolerances(rtol=1.0e-9, max_it=50)
+    # solver_u_snes.getKSP().setType("preonly")
+    # solver_u_snes.getKSP().setTolerances(rtol=1.0e-9)
+    # solver_u_snes.getKSP().getPC().setType("lu")
+    return u
 
 
 def elasticity_no_damage(msh, material):
