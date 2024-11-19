@@ -18,8 +18,12 @@ def water_pressure(msh,ρw=1.0,g=1.0):
     return pw
 
 
+def stress_nondim(u,ν):
+    λoverμ = 2*ν/(1-2*ν)
+    return λoverμ*ufl.tr(ε(u))*ufl.Identity(len(u)) + 2*ε(u)
 
-def elasticity(msh, dh, material):
+
+def elasticity(msh, material, d=0.0):
     V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
     fdim = msh.topology.dim - 1
@@ -41,19 +45,52 @@ def elasticity(msh, dh, material):
 
     f = fem.Constant(msh, default_scalar_type((0, -ρi/ρw)))
 
-    g = degradation(dh)
+    g = degradation(d)
 
     def σ(u):
-        return degraded_stress(u,dh,ν)
+        return degraded_stress(u,d,ν)
+    
+
+    # Because of the degraded stress the problem is non linear
+    u = ufl.Function(V)
+    v = ufl.Function(V)
+
+    a = ufl.inner(σ(u), ε(v)) * ufl.dx
+    L =   C1 *( g*ufl.dot(f, v) + pw*g*ufl.div(v) )* ufl.dx \
+        - C1 * g * pw *  ufl.dot(n, v) * ds
+    
+    F = a - L
+
+    problem = LinearProblem(a, L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    uh = problem.solve()
+
+    return uh
+
+
+def elasticity_no_damage(msh, material):
+    V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
+
+    # Pull properties out
+    ρi = material.ρi; ρw = material.ρw; C1 = material.C1
+    ν = material.ν
+
+    ds = ufl.Measure("ds", domain=msh)
+    n = ufl.FacetNormal(msh)
+    pw = water_pressure(msh)
+
+    f = fem.Constant(msh, default_scalar_type((0, -ρi/ρw)))
+
+    def σ(u):
+        return stress_nondim(u,ν)
 
     u = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
 
     a = ufl.inner(σ(u), ε(v)) * ufl.dx
-    L =   C1 *( g*ufl.dot(f, v) + pw*g*ufl.div(v) )* ufl.dx \
-        - C1 * g * pw *  ufl.dot(n, v) * ds
+    L =   C1 * ufl.inner(f, v) * ufl.dx \
+        - C1 * pw *  ufl.inner(n, v) * ds
 
-    problem = LinearProblem(a, L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    problem = LinearProblem(a, L, bcs=[])#, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     uh = problem.solve()
 
     return uh
