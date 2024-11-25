@@ -1,0 +1,28 @@
+import numpy as np
+from dolfinx import fem, mesh
+
+
+
+def get_boundary_dofs(V,boundary):
+    msh = V.mesh
+    fdim = msh.topology.dim - 1
+    boundary_facets = mesh.locate_entities_boundary(msh, fdim, boundary)
+    # boundary_dofs_x = fem.locate_dofs_topological(V, fdim, boundary_facets)
+    boundary_dofs_x = fem.locate_dofs_topological(V, fdim, boundary_facets)
+
+    return boundary_dofs_x
+
+def get_zero_vec(V,dtype):
+    return dtype(np.array([0]*V.value_size))
+
+
+def get_bc(V,boundary,bc_val):
+    boundary_dofs_x = get_boundary_dofs(V,boundary)
+    return fem.dirichletbc(bc_val, boundary_dofs_x, V)
+
+def get_zero_bc(V,boundary,dtype):
+    return get_bc(V,boundary,get_zero_vec(V,dtype))
+
+
+
+        

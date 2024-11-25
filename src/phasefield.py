@@ -5,10 +5,10 @@ from mpi4py import MPI
 import ufl
 import numpy as np
 from invariants import matrix_function
+from common import ε
 
 
-def ε(u):
-    return ufl.sym(ufl.grad(u))
+
 
 def positive_part(x):
     return ufl.max_value(x,0)
@@ -64,7 +64,7 @@ def initilise_history_function(msh):
      
 
 
-def phase_field(msh,uh,H,material):
+def solve(msh,uh,material,H=0.0):
     V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
     d = ufl.TrialFunction(V)

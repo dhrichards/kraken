@@ -28,14 +28,10 @@ from phasefield import degradation, ε, degraded_pressure
 from elasticity import water_pressure
 from nonlinear import NonlinearPDE_SNESProblem
 from material import MaterialProperties
-
-def viscosity(u, n, eps=1.e-8, A=1.0): 
-    return A**(-1/n) * (ufl.inner(ε(u), ε(u)) / 2 + eps)**((1 - n) / (2 * n))
+from common import *
 
 
-
-def stokes(mesh, material=MaterialProperties(), d=0.0, u=None, p=None):
-    gdim = mesh.geometry.dim
+def solve(mesh, vh, bc_func, material=MaterialProperties(), d=0.0, u=None, p=None):
 
     C1 = material.C1; C2 = material.C2
     ρw = material.ρw; ρi = material.ρi
@@ -45,6 +41,8 @@ def stokes(mesh, material=MaterialProperties(), d=0.0, u=None, p=None):
 
     P2 = functionspace(mesh, P2_el)
     P1 = functionspace(mesh, P1_el)
+
+    bcs = bc_func(P2)
 
     if u is None:
         u = Function(P2)
@@ -69,7 +67,7 @@ def stokes(mesh, material=MaterialProperties(), d=0.0, u=None, p=None):
     ds = ufl.Measure("ds", domain=mesh)
 
     # Water pressure
-    pw = water_pressure(mesh)
+    pw = water_pressure(mesh, vh, material)
 
     # Phase field changes
     g = degradation(d)
@@ -80,12 +78,101 @@ def stokes(mesh, material=MaterialProperties(), d=0.0, u=None, p=None):
         inner(ufl.div(u), q) * dx ]
     
 
-    J = [[derivative(F[0], u, du), derivative(F[0], p, dp)],
+    J = get_jacobian(F,u,p,du,dp)
+    P = get_preconditioner(J, u, dp, q, η) 
+
+
+    return _nested_solve(F, J, P, u, p, bcs)
+
+
+def solve_no_damage(mesh, vh, bc_func, material, u=None, p=None):
+
+    C1 = material.C1; C2 = material.C2
+    ρw = material.ρw; ρi = material.ρi
+
+    P2_el = element("Lagrange", mesh.basix_cell(), 2, shape=(mesh.geometry.dim,), dtype=default_real_type)
+    P1_el = element("Lagrange", mesh.basix_cell(), 1, dtype=default_real_type)
+
+    P2 = functionspace(mesh, P2_el)
+    P1 = functionspace(mesh, P1_el)
+
+    bcs = bc_func(P2)
+
+    if u is None:
+        u = Function(P2)
+    if p is None:
+        p = Function(P1)
+
+    du, dp = ufl.TrialFunction(P2), ufl.TrialFunction(P1)
+    v, q = ufl.TestFunction(P2), ufl.TestFunction(P1)
+
+    def η(u):
+        return viscosity(u, material.n, 1.e-8)
+    
+
+    f = Constant(mesh, (PETSc.ScalarType(0.0), PETSc.ScalarType(-ρi/ρw)))
+
+    # Outward-pointing unit normal to the boundary  
+    n = ufl.FacetNormal(mesh)           
+
+    # Surface measure
+    ds = ufl.Measure("ds", domain=mesh)
+
+    # Water pressure
+    pw = water_pressure(mesh,vh,material)
+    # pw = water_pressure_static(mesh)
+
+    
+    F = [(1/C2)*inner(ε(u), ε(v)) * dx + inner(p, ufl.div(v)) * dx\
+          - C1* (inner(f, v) )* dx - C1*pw*inner(n, v) * ds,
+        inner(ufl.div(u), q) * dx ]
+    
+
+    J = get_jacobian(F,u,p,du,dp)
+    P = get_preconditioner(J, u, dp, q, η) 
+    
+    
+    return _nested_solve(F, J, P, u, p, bcs)
+    
+
+def get_jacobian(F,u,p,du,dp):
+    return [[derivative(F[0], u, du), derivative(F[0], p, dp)],
             [derivative(F[1], u, du), derivative(F[1], p, dp)]]
-    
-    P = [[J[0][0], None],
+
+def get_preconditioner(J, u, dp, q, η):
+    return [[J[0][0], None],
             [None, (2 * η(u))**-1 * dp * q * ufl.dx]]
-    
+
+
+def _block_solve(F, J , P, u, p, bcs):
+    F, J, P = form(F), form(J), form(P)
+
+    snes = PETSc.SNES().create(MPI.COMM_WORLD)
+    snes.setTolerances(rtol=1.0e-15, max_it=10)
+    snes.getKSP().setTolerances(rtol=1e-12)
+    snes.getKSP().getPC().setType("lu")
+    snes.getKSP().getPC().setFactorSolverType("mumps")
+
+    problem = NonlinearPDE_SNESProblem(F, J, [u, p], bcs=bcs, P=P)
+
+    snes.setFunction(problem.F_block,
+                        dolfinx.fem.petsc.create_vector_block(F))
+    snes.setJacobian(problem.J_block,
+                        J=dolfinx.fem.petsc.create_matrix_block(J),
+                        P=None)
+    x = dolfinx.fem.petsc.create_vector_block(F)
+
+
+    snes.solve(None, x)
+    assert snes.getKSP().getConvergedReason() > 0
+
+    u.x.scatter_forward()
+    p.x.scatter_forward()
+
+    return u, p
+
+
+def _nested_solve(F, J, P, u, p, bcs):
     F, J, P = form(F), form(J), form(P)
 
 
@@ -101,7 +188,7 @@ def stokes(mesh, material=MaterialProperties(), d=0.0, u=None, p=None):
     snes.getKSP().getPC().setType("fieldsplit")
     snes.getKSP().getPC().setFieldSplitIS(["u", nested_IS[0][0]], ["p", nested_IS[1][1]])
 
-    problem = NonlinearPDE_SNESProblem(F, J, [u, p], [], P=P)
+    problem = NonlinearPDE_SNESProblem(F, J, [u, p], bcs=bcs, P=P)
     snes.setFunction(problem.F_nest, Fvec)
     snes.setJacobian(problem.J_nest, J=Jmat, P=Pmat)
 
@@ -127,7 +214,6 @@ def stokes(mesh, material=MaterialProperties(), d=0.0, u=None, p=None):
 
 
 
-    
 
 
 

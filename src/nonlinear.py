@@ -30,7 +30,7 @@ class NonlinearPDE_SNESProblem():
         with F.localForm() as f_local:
             f_local.set(0.0)
         assemble_vector(F, self.L)
-        apply_lifting(F, [self.a], bcs=[self.bcs], x0=[x], scale=-1.0)
+        apply_lifting(F, [self.a], bcs=[self.bcs], x0=[x], alpha=-1.0)
         F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         set_bc(F, self.bcs, x, -1.0)
 
@@ -53,12 +53,12 @@ class NonlinearPDE_SNESProblem():
         offset = 0
         x_array = x.getArray(readonly=True)
         for var in self.soln_vars:
-            size_local = var.vector.getLocalSize()
-            var.vector.array[:] = x_array[offset: offset + size_local]
-            var.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+            size_local = var.x.petsc_vec.getLocalSize()
+            var.x.petsc_vec.array[:] = x_array[offset: offset + size_local]
+            var.x.petsc_vec.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
             offset += size_local
 
-        assemble_vector_block(F, self.L, self.a, bcs=self.bcs, x0=x, scale=-1.0)
+        assemble_vector_block(F, self.L, self.a, bcs=self.bcs, x0=x, alpha=-1.0)
 
     def J_block(self, snes, x, J, P):
         assert x.getType() != "nest" and J.getType() != "nest" and P.getType() != "nest"
