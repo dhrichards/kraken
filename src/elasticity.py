@@ -1,5 +1,5 @@
 import numpy as np
-from dolfinx import mesh, fem, plot, io, default_scalar_type, la, default_real_type
+from dolfinx import fem, default_scalar_type, la, default_real_type
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.log import LogLevel, set_log_level
 from dolfinx.nls.petsc import NewtonSolver
@@ -12,7 +12,7 @@ from common import *
 import basix.ufl as bufl
 
 
-def solve(msh, material, bc_func, d=0.0, u=None):
+def solve(msh, material, bc_func, d=None, u=None):
     # V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
     el = bufl.element("Lagrange", msh.basix_cell(), 1, shape=(msh.geometry.dim,), dtype=default_real_type)
@@ -34,18 +34,23 @@ def solve(msh, material, bc_func, d=0.0, u=None):
     def pw(u):
         return water_pressure(msh,u,material)
 
-    f = fem.Constant(msh, default_scalar_type((0, -ρi/ρw)))
+    if msh.geometry.dim == 2:
+        f = fem.Constant(msh, default_scalar_type((0, -ρi/ρw)))
+    else:
+        f = fem.Constant(msh, default_scalar_type((0, 0, -ρi/ρw)))
 
+    if d is None:
+        d = fem.Constant(msh, default_scalar_type(0.0))
+    
     g = pf.degradation(d)
 
     def σ(u):
         return pf.degraded_stress(u,d,ν)
-        # return stress_nondim(u,ν)
+        # return stress(u,ν)
     
 
-    # Because of the degraded stress the problem is non linear
-    if u is None: # Get initial guess from linear solve with no damage
-        # u = elasticity_no_damage(msh, material, bc_func)
+    # Can take u from previous timestep, or initialise to zero
+    if u is None:
         u = fem.Function(V)
 
 
@@ -53,7 +58,7 @@ def solve(msh, material, bc_func, d=0.0, u=None):
     du = ufl.TrialFunction(V)
 
     a = ufl.inner(σ(u), ε(v)) * ufl.dx
-    L =   C1 *( g*ufl.dot(f, v) + g*pw(u)*ufl.div(v) )* ufl.dx \
+    L =   C1 *( g*ufl.dot(f, v) - pw(u)*ufl.inner(ufl.grad(g), v) )* ufl.dx \
         - C1 * g * pw(u) *  ufl.dot(n, v) * ds
     
 
@@ -77,7 +82,7 @@ def solve(msh, material, bc_func, d=0.0, u=None):
     # opts[f"{option_prefix}pc_hypre_type"] = "boomeramg"
     # opts[f"{option_prefix}pc_hypre_boomeramg_max_iter"] = 1
     # opts[f"{option_prefix}pc_hypre_boomeramg_cycle_type"] = "v"
-    # ksp.setFromOptions()
+    ksp.setFromOptions()
 
     set_log_level(LogLevel.INFO)
     n, converged = solver.solve(u)
