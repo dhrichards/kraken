@@ -27,11 +27,24 @@ def degradation(d):
      return (1-d)**2
 
 
+# def free_energy_plus(u,ν):
+#     λoverμ = 2*ν/(1-2*ν)
+#     εDplus = matrix_function(ufl.dev(ε(u)),positive_part)
+#     return (λoverμ+2/3)/2*positive_part(ufl.tr(ε(u)))**2 + \
+#             ufl.inner(εDplus,εDplus)
+
 def free_energy_plus(u,ν):
     λoverμ = 2*ν/(1-2*ν)
-    εDplus = matrix_function(ufl.dev(ε(u)),positive_part)
-    return (λoverμ+2/3)/2*positive_part(ufl.tr(ε(u)))^2 + \
-            ufl.inner(εDplus,εDplus)
+    εplus = matrix_function(ε(u),positive_part)
+    return 0.5*λoverμ*positive_part(ufl.tr(ε(u)))**2 + \
+            ufl.inner(εplus,εplus)
+
+# def free_energy_plus(u,ν):
+#     λoverμ = 2*ν/(1-2*ν)
+#     εplus = matrix_function(ε(u),positive_part)
+#     return 0.5*λoverμ*ufl.tr(εplus)**2 + \
+#             ufl.inner(εplus,εplus)
+
 
 def degraded_stress(u,d,ν):
     λoverμ = 2*ν/(1-2*ν)
@@ -65,17 +78,17 @@ def initilise_history_function(msh):
 
 
 def solve(msh,uh,material,H=0.0):
-    V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
+    V = fem.functionspace(msh, ("Lagrange", 1))
 
     d = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
 
     ψplus = free_energy_plus(uh,material.ν)
-    H = history_function(ψplus,material.ψcrit,H)
+    H = history_function(ψplus,material.ψcritstar,H)
 
     C3 = material.C3; l = material.l
 
-    a = ((1-2*C3*l)*H*d*v + l**2*ufl.inner(ufl.grad(d), ufl.grad(v))) * ufl.dx
+    a = ((1+2*C3*l*H)*d*v + l**2*ufl.inner(ufl.grad(d), ufl.grad(v))) * ufl.dx
     L = 2*C3*l*H*v * ufl.dx 
 
     problem = LinearProblem(a, L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})

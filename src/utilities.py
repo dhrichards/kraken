@@ -1,25 +1,16 @@
-import copy
+import numpy as np
+from dolfinx import fem
 
 
+def move_mesh(msh,uh,k):
+    V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
+    uhh = fem.Function(V)
+    uhh.interpolate(uh)
+    msh.geometry.x[:,:msh.geometry.dim] += k*uhh.x.array.reshape((-1, msh.geometry.dim))
 
-def dimensionalise_mesh(mesh, material):
-    """Dimensionalise mesh"""
-    mesh = copy.copy(mesh)
-    mesh.geometry.x[:,:mesh.geometry.dim] *= material.L
-    return mesh
-
-def nondimensionalise_mesh(mesh, material):
-    """Nondimensionalise mesh"""
-    mesh = copy.copy(mesh)
-    mesh.geometry.x[:,:mesh.geometry.dim] /= material.L
-    return mesh
-
-def dimensionalise_displacement(u, material):
-    """Dimensionalise displacement"""
-    return u*material.uc
-
-def nondimensionalise_displacement(u, material):
-    """Nondimensionalise displacement"""
-    return u/material.uc
-
+def mesh_sizes(mesh):
+    tdim = mesh.topology.dim
+    num_cells = mesh.topology.index_map(tdim).size_local
+    h = mesh.h(tdim,np.arange(num_cells))
+    return h
 

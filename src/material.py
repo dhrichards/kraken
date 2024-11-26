@@ -1,4 +1,4 @@
-
+from utilities import mesh_sizes
 
 secperyr = 60*60*24*365.25
 
@@ -14,11 +14,17 @@ class MaterialProperties:
         self.n = n # Flow law exponent
         self.Gc = Gc # Fracture toughness
 
+        
+
         self.ψcrit = ψcrit 
         self.l = l # Regularisation length
         self.uc = uc # Critical displacement
         self.L = L # Characteristic length
         self.τ = τ # Characteristic time in seconds
+
+        self.Hc = self.μ*(uc/L)**2
+        self.ψcritstar = self.ψcrit / self.Hc
+        
 
 
 
@@ -67,6 +73,11 @@ class MaterialProperties:
     def set_C3l_to_one(self):
         """change regularisation length so C3*l=1."""
         self.l = 1/self.C3
+
+    def set_l_from_mesh(self,msh):
+        """Set the regularisation length from the mesh."""
+        h = mesh_sizes(msh)
+        self.l = 2*h.max()
     
 
 

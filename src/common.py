@@ -1,4 +1,5 @@
 import ufl
+import numpy as np
 
 def viscosity(u, n, eps=1.e-8, A=1.0): 
     return A**(-1/n) * (ufl.inner(ε(u), ε(u)) / 2 + eps)**((1 - n) / (2 * n))
@@ -29,3 +30,5 @@ def water_pressure(msh,vh,material):
 def stress(u,ν):
     λoverμ = 2*ν/(1-2*ν)
     return λoverμ*ufl.tr(ε(u))*ufl.Identity(len(u)) + 2*ε(u)
+
+
