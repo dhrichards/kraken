@@ -40,7 +40,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 
 material.set_l_from_mesh(msh)
 
-dt = 1/6
+dt = 1/12
 # 
 clamped_both = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
                             get_zero_bc(V, right_boundary, default_scalar_type)]
@@ -58,7 +58,7 @@ for i in range(1):
 
     # utilities.move_mesh(msh,vh,material.uc/material.L)
 
-    uh, ph = stokes.solve_no_damage(msh, vh, bc, material, dt)
+    uh, ph = stokes.solve(msh, bc, material, dt)
 
     utilities.move_mesh(msh,uh,dt*material.uc/material.L)
 

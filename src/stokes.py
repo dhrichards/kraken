@@ -12,7 +12,7 @@ from material import MaterialProperties
 from common import *
 
 
-def solve(msh, vh, bc_func, material=MaterialProperties(), d=None, u=None, p=None):
+def solve(msh, bc_func, material, dt, d=None, u=None, p=None):
 
     C1 = material.C1; C2 = material.C2
     ρw = material.ρw; ρi = material.ρi
@@ -53,24 +53,25 @@ def solve(msh, vh, bc_func, material=MaterialProperties(), d=None, u=None, p=Non
     ds = ufl.Measure("ds", domain=msh)
 
     # Water pressure
-    pw = water_pressure(msh, vh, material)
+    def pw(u):
+        return water_pressure(msh,u*dt,material)
 
     # Phase field changes
     g = degradation(d)
 
     
-    F = [(1/C2)*g*η(u)*ufl.inner(ε(u), ε(v)) * ufl.dx \
-        - ufl.inner(hat(-p), ufl.div(v)) * ufl.dx \
-        - C1 * g * ufl.inner(f, v) * ufl.dx \
-        + C1 * pw * ufl.inner(ufl.grad(g), v) * ufl.dx \
-        + C1 * g * pw * ufl.inner(n, v) * ds,
-        ufl.inner(ufl.div(u), q) * ufl.dx ]
+    F = [((1/C2)*g*η(u)*ufl.inner(ufl.grad(u), ufl.grad(v)) \
+        + ufl.inner(hat(-p), ufl.div(v))\
+        - C1 * g * ufl.inner(f, v) \
+        + C1 * pw(u) * ufl.inner(ufl.grad(g), v)) * ufl.dx \
+        + C1 * g * pw(u) * ufl.inner(n, v) * ds,
+        - ufl.inner(ufl.div(u), q) * ufl.dx ]
     
-    # F = [(1/C2)*ufl.inner(ε(u), ε(v)) * ufl.dx \
-    #     + ufl.inner(p, ufl.div(v)) * ufl.dx \
-    #     - C1* (ufl.inner(f, v) )* ufl.dx \
-    #     + C1*pw*ufl.inner(n, v) * ds,
-    #     ufl.inner(ufl.div(u), q) * ufl.dx ]
+    # F = [((1/C2)*η(u)*ufl.inner(ufl.grad(u), ufl.grad(v))  \
+    #     - ufl.inner(p, ufl.div(v))  \
+    #     - C1 * ufl.inner(f, v)) * ufl.dx \
+    #     + C1*pw(u)*ufl.inner(n, v) * ds,
+    #     - ufl.inner(ufl.div(u), q) * ufl.dx ]
     
 
     J = get_jacobian(F,u,p,du,dp)
@@ -80,7 +81,7 @@ def solve(msh, vh, bc_func, material=MaterialProperties(), d=None, u=None, p=Non
     return _nested_solve(F, J, P, u, p, bcs)
 
 
-def solve_no_damage(mesh, vh, bc_func, material, dt, u=None, p=None):
+def solve_no_damage(mesh, bc_func, material, dt, u=None, p=None):
 
     C1 = material.C1; C2 = material.C2
     ρw = material.ρw; ρi = material.ρi
@@ -124,12 +125,12 @@ def solve_no_damage(mesh, vh, bc_func, material, dt, u=None, p=None):
     # pw = water_pressure_static(mesh)
 
     # Create nullspace
-    c = fem.Function(P2)
-    c.interpolate(lambda x: np.array([[0],[1]])) # Constraint $v[1]$ averaged to zero.
-    c2 = c.x.petsc_vec
-    c2.scale(1 / c2.norm())
+    # c = fem.Function(P2)
+    # c.interpolate(lambda x: np.array([[0],[1]])) # Constraint $v[1]$ averaged to zero.
+    # c2 = c.x.petsc_vec
+    # c2.scale(1 / c2.norm())
 
-    nullspace = PETSc.NullSpace().create(vectors=[c2], comm=mesh.comm)
+    # nullspace = PETSc.NullSpace().create(vectors=[c2], comm=mesh.comm)
 
 
 
