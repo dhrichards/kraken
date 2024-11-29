@@ -1,10 +1,11 @@
 import numpy as np
 from dolfinx import mesh, fem, plot, io, default_scalar_type
 from dolfinx.fem.petsc import LinearProblem
+from petsc4py import PETSc
 from mpi4py import MPI
 import ufl
 import numpy as np
-from invariants import matrix_function
+from invariants import matrix_function, eigenstate
 from common import ε
 
 
@@ -23,38 +24,69 @@ def negative_part(x):
 #     return ufl.elem_op(negative_part, A)
 
 
-def degradation(d):
-     return (1-d)**2
+def degradation(d,k=1e-5):
+    return (1-d)**2 + k
 
 
 # def free_energy_plus(u,ν):
+# # based on definition in Stocek
+#     dim = len(u)
 #     λoverμ = 2*ν/(1-2*ν)
 #     εDplus = matrix_function(ufl.dev(ε(u)),positive_part)
-#     return (λoverμ+2/3)/2*positive_part(ufl.tr(ε(u)))**2 + \
+#     return (λoverμ+2/dim)/2*positive_part(ufl.tr(ε(u)))**2 + \
 #             ufl.inner(εDplus,εDplus)
 
 def free_energy_plus(u,ν):
+# based on alternative formulation, equivalent to below
     λoverμ = 2*ν/(1-2*ν)
     εplus = matrix_function(ε(u),positive_part)
     return 0.5*λoverμ*positive_part(ufl.tr(ε(u)))**2 + \
             ufl.inner(εplus,εplus)
 
 # def free_energy_plus(u,ν):
+# ## based on formulation in Miehle "Thermodynamically consistent phase-field models of fracture"
 #     λoverμ = 2*ν/(1-2*ν)
-#     εplus = matrix_function(ε(u),positive_part)
-#     return 0.5*λoverμ*ufl.tr(εplus)**2 + \
-#             ufl.inner(εplus,εplus)
+#     εi, eigvecs = eigenstate(ε(u))
 
+#     return 0.5*λoverμ*positive_part(sum(εi))**2 + \
+#             positive_part(εi[0])**2 + positive_part(εi[1])**2
+
+
+# def degraded_stress(u,d,ν):
+#     dim = len(u)
+#     λoverμ = 2*ν/(1-2*ν)
+#     σ = λoverμ*ufl.tr(ε(u))*ufl.Identity(len(u)) + 2*ε(u)
+#     p = -(λoverμ+2/dim)*ufl.tr(ε(u))
+#     σplus = positive_part(-p)*ufl.Identity(len(u)) \
+#         + 2*matrix_function(ufl.dev(ε(u)),positive_part)
+#     σminus = σ - σplus
+
+#     return degradation(d)*σplus + σminus
 
 def degraded_stress(u,d,ν):
-    λoverμ = 2*ν/(1-2*ν)
-    σ = λoverμ*ufl.tr(ε(u))*ufl.Identity(len(u)) + 2*ε(u)
-    p = -(λoverμ+2/3)*ufl.tr(ε(u))
-    σplus = positive_part(-p)*ufl.Identity(len(u)) \
-        + 2*matrix_function(ufl.dev(ε(u)),positive_part)
-    σminus = σ - σplus
+    λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
+    σ = λoverμ*ufl.tr(ε(u))*I + 2*ε(u)   
+    σplus = λoverμ*positive_part(ufl.tr(ε(u)))*I + \
+        2*matrix_function(ε(u),positive_part)
+    σminus = λoverμ*negative_part(ufl.tr(ε(u)))*I + \
+        2*matrix_function(ε(u),negative_part)
 
     return degradation(d)*σplus + σminus
+
+# def degraded_stress(u,d,ν):
+#     # Miehle - equivalent to above
+#     λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
+#     E, N = eigenstate(ε(u))
+#     σ = λoverμ*ufl.tr(ε(u))*I + 2*ε(u)
+#     # lambda sum for sigmaplus
+#     sum_E_plus = positive_part(sum(E))
+#     σplus = ufl.zero(ufl.shape(σ))
+#     # apply UFL function on eigenvalue and synthesise matrix function
+#     for Ei, Ni in zip(E, N):
+#         σplus += (λoverμ*sum_E_plus + 2*positive_part(Ei)) * Ni
+
+#     σminus = σ - σplus
+#     return degradation(d)*σplus + σminus
 
 def degraded_pressure(p,d):
     pplus = positive_part(p)
@@ -94,7 +126,34 @@ def solve(msh,uh,material,H=0.0):
     problem = LinearProblem(a, L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     dh = problem.solve()
 
+    dh.name = "d"
+
     return dh,H
-        
+
+
+
+def crack2phasefield(msh,l,crack):
+    V = fem.functionspace(msh, ("Lagrange", 1))
+
+    d = ufl.TrialFunction(V)
+    v = ufl.TestFunction(V)
+
+
+    msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
+    deactivate_cells = mesh.locate_entities(msh, msh.topology.dim, crack)
+    deactivate_dofs = fem.locate_dofs_topological(V, msh.topology.dim, deactivate_cells)
+    bc = fem.dirichletbc(PETSc.ScalarType(1.0), deactivate_dofs, V)
+
+    f = fem.Constant(msh, default_scalar_type(0.0))
+
+    a = (d*v + l**2*ufl.inner(ufl.grad(d), ufl.grad(v))) * ufl.dx
+    L = (f * v) * ufl.dx 
+
+    problem = LinearProblem(a, L, bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    dh = problem.solve()
+
+    dh.name = "d"
+
+    return dh
 
 
