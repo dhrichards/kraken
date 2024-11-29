@@ -10,9 +10,10 @@ import numpy as np
 import phasefield as pf
 from common import *
 import basix.ufl as bufl
+import nonlinear
 
 
-def solve(msh, material, bc_func, d=None, u=None):
+def solve(msh, material, bc_func, d=None, u=None, pw=None):
     # V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
     el = bufl.element("Lagrange", msh.basix_cell(), 1, shape=(msh.geometry.dim,), dtype=default_real_type)
@@ -31,8 +32,8 @@ def solve(msh, material, bc_func, d=None, u=None):
     n = ufl.FacetNormal(msh)
     # pw = water_pressure(msh)
 
-    def pw(u):
-        return water_pressure(msh,u,material)
+    if pw is None:
+        pw = lambda u: water_pressure(msh,u,material)
 
     if msh.geometry.dim == 2:
         f = fem.Constant(msh, default_scalar_type((0, -ρi/ρw)))
@@ -51,7 +52,7 @@ def solve(msh, material, bc_func, d=None, u=None):
 
     # Can take u from previous timestep, or initialise to zero
     if u is None:
-        u = fem.Function(V)
+        u = fem.Function(V, name="elastic displacement")
 
 
     v = ufl.TestFunction(V)
@@ -70,7 +71,8 @@ def solve(msh, material, bc_func, d=None, u=None):
     
     solver = NewtonSolver(MPI.COMM_WORLD, problem)
     solver.convergence_criterion = "incremental"
-    # solver.rtol = 1e-6
+    solver.rtol = 1e-6
+    solver.atol = 1e-6
     solver.report = True
 
     ksp = solver.krylov_solver
@@ -79,6 +81,7 @@ def solve(msh, material, bc_func, d=None, u=None):
     opts[f"{option_prefix}ksp_type"] = "preonly"
     # opts[f"{option_prefix}ksp_rtol"] = 1.0e-8
     opts[f"{option_prefix}pc_type"] = "lu"
+    # opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
     # opts[f"{option_prefix}pc_hypre_type"] = "boomeramg"
     # opts[f"{option_prefix}pc_hypre_boomeramg_max_iter"] = 1
     # opts[f"{option_prefix}pc_hypre_boomeramg_cycle_type"] = "v"
@@ -101,8 +104,8 @@ def solve(msh, material, bc_func, d=None, u=None):
     # # snes.setFromOptions()
     
 
-    # snes.getKSP().getPC().setType("none")
-    # snes.getKSP().setType("gmres")
+    # snes.getKSP().getPC().setType("lu")
+    # snes.getKSP().setType("preonly")
     # # snes.getKSP().getPC().setFactorSolverType("mumps")
 
     # problem = nonlinear.NonlinearPDE_SNESProblem(F, J, u, bcs)
@@ -114,13 +117,11 @@ def solve(msh, material, bc_func, d=None, u=None):
     # snes.solve(None, soln_vector)
     # snes_converged = snes.getConvergedReason()
     # ksp_converged = snes.getKSP().getConvergedReason()
-    # if snes_converged < 1 or ksp_converged < 1:
-    #     info(f"SNES converged reason: {snes_converged}")
-    #     info(f"KSP converged reason: {ksp_converged}")
+    # assert snes_converged > 0
 
 
     #
-    # problem = nonlinear.SNESProblem(F, u, bc)
+    # problem = nonlinear.SNESProblem(F, u, bcs)
 
     # b_u = la.create_petsc_vector(V.dofmap.index_map, V.dofmap.index_map_bs)
     # J_u = fem.petsc.create_matrix(problem.a)
