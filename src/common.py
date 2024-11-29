@@ -16,9 +16,9 @@ def water_pressure_static(msh,ρw=1.0,g=1.0):
     return pw
 
 
-def water_pressure(msh,vh,material):
+def water_pressure(msh,vh):
     x = ufl.SpatialCoordinate(msh)
-    z = x[msh.geometry.dim-1] + vh[msh.geometry.dim-1]*material.uc/material.L
+    z = x[msh.geometry.dim-1] + vh[msh.geometry.dim-1]#*material.uc/material.L
 
 
     pw = ufl.conditional(ufl.lt(z, 0),

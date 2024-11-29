@@ -13,10 +13,10 @@ import basix.ufl as bufl
 import nonlinear
 
 
-def solve(msh, material, bc_func, d=None, u=None, pw=None):
+def solve(msh, bc_func, material, d=None, u=None, pw=None):
     # V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
-    el = bufl.element("Lagrange", msh.basix_cell(), 1, shape=(msh.geometry.dim,), dtype=default_real_type)
+    el = bufl.element("Lagrange", msh.basix_cell(), 2, shape=(msh.geometry.dim,), dtype=default_real_type)
     
     V = fem.functionspace(msh, el)
     
@@ -25,20 +25,19 @@ def solve(msh, material, bc_func, d=None, u=None, pw=None):
     bcs = bc_func(V)
 
     # Pull properties out
-    ρi = material.ρi; ρw = material.ρw; C1 = material.C1
-    ν = material.ν
+    ρratio = material.ρratio; C1 = material.C1; ν = material.ν
 
     ds = ufl.Measure("ds", domain=msh)
     n = ufl.FacetNormal(msh)
     # pw = water_pressure(msh)
 
     if pw is None:
-        pw = lambda u: water_pressure(msh,u,material)
+        pw = lambda u: water_pressure(msh,u)
 
     if msh.geometry.dim == 2:
-        f = fem.Constant(msh, default_scalar_type((0, -ρi/ρw)))
+        f = fem.Constant(msh, default_scalar_type((0, -ρratio)))
     else:
-        f = fem.Constant(msh, default_scalar_type((0, 0, -ρi/ρw)))
+        f = fem.Constant(msh, default_scalar_type((0, 0, -ρratio)))
 
     if d is None:
         d = fem.Constant(msh, default_scalar_type(0.0))

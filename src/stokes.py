@@ -12,10 +12,10 @@ from material import MaterialProperties
 from common import *
 
 
-def solve(msh, bc_func, material, dt, d=None, u=None, p=None):
+def solve(msh, bc_func, vh, material, dt, d=None, u=None, p=None):
 
     C1 = material.C1; C2 = material.C2
-    ρw = material.ρw; ρi = material.ρi
+    ρratio = material.ρratio
 
     P2_el = bufl.element("Lagrange", msh.basix_cell(), 2, shape=(msh.geometry.dim,), dtype=default_real_type)
     P1_el = bufl.element("Lagrange", msh.basix_cell(), 1, dtype=default_real_type)
@@ -26,9 +26,9 @@ def solve(msh, bc_func, material, dt, d=None, u=None, p=None):
     bcs = bc_func(P2)
 
     if u is None:
-        u = fem.Function(P2)
+        u = fem.Function(P2, name="velocity")
     if p is None:
-        p = fem.Function(P1)
+        p = fem.Function(P1, name="pressure")
     du, dp = ufl.TrialFunction(P2), ufl.TrialFunction(P1)
     v, q = ufl.TestFunction(P2), ufl.TestFunction(P1)
 
@@ -42,9 +42,9 @@ def solve(msh, bc_func, material, dt, d=None, u=None, p=None):
         return degraded_pressure(p, d)
     
     if msh.geometry.dim == 2:
-        f = fem.Constant(msh, default_scalar_type((0, -ρi/ρw)))
+        f = fem.Constant(msh, default_scalar_type((0, -ρratio)))
     else:
-        f = fem.Constant(msh, default_scalar_type((0, 0, -ρi/ρw)))
+        f = fem.Constant(msh, default_scalar_type((0, 0, -ρratio)))
 
     # Outward-pointing unit normal to the boundary  
     n = ufl.FacetNormal(msh)           
@@ -54,13 +54,14 @@ def solve(msh, bc_func, material, dt, d=None, u=None, p=None):
 
     # Water pressure
     def pw(u):
-        return water_pressure(msh,u*dt,material)
+        return water_pressure(msh,u*dt + vh)
+    
 
     # Phase field changes
     g = degradation(d)
 
     
-    F = [((1/C2)*g*η(u)*ufl.inner(ufl.grad(u), ufl.grad(v)) \
+    F = [((1/C2)*g*η(u)*ufl.inner(ε(u), ε(v)) \
         + ufl.inner(hat(-p), ufl.div(v))\
         - C1 * g * ufl.inner(f, v) \
         + C1 * pw(u) * ufl.inner(ufl.grad(g), v)) * ufl.dx \
