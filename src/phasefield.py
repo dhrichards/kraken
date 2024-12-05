@@ -6,7 +6,7 @@ from mpi4py import MPI
 import ufl
 import numpy as np
 from invariants import matrix_function, eigenstate
-from common import ε
+from common import ε, stress, free_energy
 
 
 
@@ -28,6 +28,9 @@ def degradation(d,k=1e-5):
     return (1-d)**2 + k
 
 
+def γ(d,l):
+    return 0.5/l * (d**2 + l**2 * ufl.inner(ufl.grad(d), ufl.grad(d)))
+
 # def free_energy_plus(u,ν):
 # # based on definition in Stocek
 #     dim = len(u)
@@ -43,10 +46,16 @@ def free_energy_plus(u,ν):
     return 0.5*λoverμ*positive_part(ufl.tr(ε(u)))**2 + \
             ufl.inner(εplus,εplus)
 
+
+def degraded_free_energy(u,d,ν,ψcritstar):
+    ψplus = free_energy_plus(u,ν)
+    ψminus = free_energy(u,ν) - ψplus
+    return degradation(d)*(ψplus-ψcritstar) + (ψminus+ψcritstar)
+
 # def free_energy_plus(u,ν):
 # ## based on formulation in Miehle "Thermodynamically consistent phase-field models of fracture"
 #     λoverμ = 2*ν/(1-2*ν)
-#     εi, eigvecs = eigenstate(ε(u))
+#     εi, eigvecs = eigenstate(stress(u,ν))
 
 #     return 0.5*λoverμ*positive_part(sum(εi))**2 + \
 #             positive_part(εi[0])**2 + positive_part(εi[1])**2
@@ -109,21 +118,24 @@ def initilise_history_function(msh):
      
 
 
-def solve(msh,uh,material,H=0.0):
+def solve(msh,bc_func,uh,material,H=0.0):
     V = fem.functionspace(msh, ("Lagrange", 1))
+
+    bcs = bc_func(V)
 
     d = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
 
     ψplus = free_energy_plus(uh,material.ν)
     H = history_function(ψplus,material.ψcritstar,H)
+    # H = free_energy(uh,material.ν)
 
     C3 = material.C3; l = material.l
 
     a = ((1+2*C3*l*H)*d*v + l**2*ufl.inner(ufl.grad(d), ufl.grad(v))) * ufl.dx
     L = 2*C3*l*H*v * ufl.dx 
 
-    problem = LinearProblem(a, L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+    problem = LinearProblem(a, L, bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     dh = problem.solve()
 
     dh.name = "d"

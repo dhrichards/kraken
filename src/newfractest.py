@@ -50,13 +50,18 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 
 material.set_l_from_mesh(msh)
 # 
-ubc = lambda V: [get_zero_bc(V.sub(0), left_boundary, default_scalar_type),
+ubc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
                     get_bc(V.sub(0), right_boundary, default_scalar_type(1.0)) ]
 
 dbc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
                  get_zero_bc(V, right_boundary, default_scalar_type)]
 
 
-vh, dh = eb.fixed_point(msh, [ubc, dbc], material.C3, material.ν, material.l)
+vh, dh = eb.fixed_point(msh, [ubc, dbc], material)
+# vh, dh = monolithic.solve(msh, ubc, material)
 
-utilities.plot_damage_state(vh,dh)
+
+# utilities.plot_damage_state(vh,dh)
+utilities.write_vtk("outputs/newfrac.pvd",msh,\
+                    [vh,dh],\
+                    ["v","d"])

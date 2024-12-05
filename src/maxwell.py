@@ -13,6 +13,7 @@ import stokes
 import poisson
 import phasefield
 import utilities
+import energybased as eb
 from common import *
 
 def left_boundary(x):
@@ -22,20 +23,24 @@ def right_boundary(x):
     return np.isclose(x[0], nondim_length/2)
 
 
-true_length = 16e3
+true_length = 8e3
 true_height = 300
 
-material = Material_no_uc(g=0.1)
-
+material = Material_no_uc()
+material.L = true_height    
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
+
+nz = 50
+cell_size = nondim_height/nz
+nx = int(nondim_length/cell_size)
 
 
 Hw = material.ρi/material.ρw*nondim_height
 
 msh = mesh.create_rectangle(MPI.COMM_WORLD,
-                            [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
-                            [100,10], mesh.CellType.triangle)
+                            [np.array([-nondim_length/2, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
+                            [nx,nz], mesh.CellType.triangle)
 
 
 material.set_l_from_mesh(msh)
@@ -47,30 +52,35 @@ clamped_bc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type)]
 symm_bc = lambda V: [get_zero_bc(V.sub(0), left_boundary, default_scalar_type)]
 no_bc = lambda V: []
 
-bc = symm_bc
 
+dh = None
+# vh,dh = monolithic.solve(msh,bc,material,H)
+# for i in range(1):
+#     vh = elasticity.solve(msh,symm_bc,material,dh)
+#     dh,H = phasefield.solve(msh,no_bc,vh,material)
 
-vh = elasticity.solve(msh,bc,material)
-uh, ph = stokes.solve(msh,bc,vh,material,1.0)
-dh,H = phasefield.solve(msh,vh,material,0.0)
+vh,dh = eb.fixed_point(msh, [no_bc,no_bc], material)
 
+σ_e = elasticity.stress(vh,material.ν)
+# σ_v = viscosity(uh,material.n,1e-8)*ε(uh)
 
-
-# vh = elasticity.solve(msh,material,bc,dh)
-
-σ_e = ufl.dev(elasticity.stress(vh,material.ν))
-σ_v = viscosity(uh,material.n,1e-8)*ε(uh)
-
+# ψ = free_energy(vh,material.ν)
 ψ = phasefield.free_energy_plus(vh,material.ν)
 
 
 from invariants import matrix_function
-λ,E = invariants.eigenstate(matrix_function((ε(vh)),phasefield.positive_part))
+λ,E = invariants.eigenstate(ε(vh)) 
+
+
+# if MPI.COMM_WORLD.rank == 0:
+#     utilities.plot_damage_state(vh,dh)
 
 
 utilities.write_vtk("outputs/phasefield.pvd",msh,\
-                    [vh,uh,ψ,dh,λ[0],λ[1],σ_e,σ_v,ε(uh)],\
-                    ["v","u","ψ","d","λ1","λ2","σ_e","σ_v","ε(u)"])
+                    [vh,ψ,dh,λ[0],λ[1],σ_e],\
+                    ["v","ψ","d","λ1","λ2","σ_e"])
+
+
 
 
 # %%
