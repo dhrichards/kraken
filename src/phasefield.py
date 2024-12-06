@@ -17,12 +17,6 @@ def positive_part(x):
 def negative_part(x):
     return ufl.min_value(x,0)
 
-# def positive_part_tensor(A): # Don't need this as matrix function operates on eigenvalues
-#     return ufl.elem_op(positive_part, A)
-
-# def negative_part_tensor(A):
-#     return ufl.elem_op(negative_part, A)
-
 
 def degradation(d,k=1e-5):
     return (1-d)**2 + k
@@ -31,13 +25,6 @@ def degradation(d,k=1e-5):
 def γ(d,l):
     return 0.5/l * (d**2 + l**2 * ufl.inner(ufl.grad(d), ufl.grad(d)))
 
-# def free_energy_plus(u,ν):
-# # based on definition in Stocek
-#     dim = len(u)
-#     λoverμ = 2*ν/(1-2*ν)
-#     εDplus = matrix_function(ufl.dev(ε(u)),positive_part)
-#     return (λoverμ+2/dim)/2*positive_part(ufl.tr(ε(u)))**2 + \
-#             ufl.inner(εDplus,εDplus)
 
 def free_energy_plus(u,ν):
 # based on alternative formulation, equivalent to below
@@ -63,16 +50,6 @@ def degraded_free_energy(u,d,ν,ψcritstar):
 #             positive_part(εi[0])**2 + positive_part(εi[1])**2
 
 
-# def degraded_stress(u,d,ν):
-#     dim = len(u)
-#     λoverμ = 2*ν/(1-2*ν)
-#     σ = λoverμ*ufl.tr(ε(u))*ufl.Identity(len(u)) + 2*ε(u)
-#     p = -(λoverμ+2/dim)*ufl.tr(ε(u))
-#     σplus = positive_part(-p)*ufl.Identity(len(u)) \
-#         + 2*matrix_function(ufl.dev(ε(u)),positive_part)
-#     σminus = σ - σplus
-
-#     return degradation(d)*σplus + σminus
 
 def degraded_stress(u,d,ν):
     λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
@@ -83,21 +60,6 @@ def degraded_stress(u,d,ν):
         2*matrix_function(ε(u),negative_part)
 
     return degradation(d)*σplus + σminus
-
-# def degraded_stress(u,d,ν):
-#     # Miehle - equivalent to above
-#     λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
-#     E, N = eigenstate(ε(u))
-#     σ = λoverμ*ufl.tr(ε(u))*I + 2*ε(u)
-#     # lambda sum for sigmaplus
-#     sum_E_plus = positive_part(sum(E))
-#     σplus = ufl.zero(ufl.shape(σ))
-#     # apply UFL function on eigenvalue and synthesise matrix function
-#     for Ei, Ni in zip(E, N):
-#         σplus += (λoverμ*sum_E_plus + 2*positive_part(Ei)) * Ni
-
-#     σminus = σ - σplus
-#     return degradation(d)*σplus + σminus
 
 def degraded_pressure(p,d):
     pplus = positive_part(p)
@@ -143,31 +105,5 @@ def solve(msh,bc_func,uh,material,H=0.0):
     dh.name = "d"
 
     return dh,H
-
-
-
-def crack2phasefield(msh,l,crack):
-    V = fem.functionspace(msh, ("Lagrange", 1))
-
-    d = ufl.TrialFunction(V)
-    v = ufl.TestFunction(V)
-
-
-    msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-    deactivate_cells = mesh.locate_entities(msh, msh.topology.dim, crack)
-    deactivate_dofs = fem.locate_dofs_topological(V, msh.topology.dim, deactivate_cells)
-    bc = fem.dirichletbc(PETSc.ScalarType(1.0), deactivate_dofs, V)
-
-    f = fem.Constant(msh, default_scalar_type(0.0))
-
-    a = (d*v + l**2*ufl.inner(ufl.grad(d), ufl.grad(v))) * ufl.dx
-    L = (f * v) * ufl.dx 
-
-    problem = LinearProblem(a, L, bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-    dh = problem.solve()
-
-    dh.name = "d"
-
-    return dh
 
 
