@@ -23,7 +23,7 @@ def velocity_linear(msh,σ,bc_func):
     return uh
 
 
-def velocity(msh,vh,bc_func,material,d=0.0,u=None):
+def velocity(msh,bc_func,vh,material,dt,d=0.0,u=None):
     V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
     bcs = bc_func(V)
@@ -44,11 +44,13 @@ def velocity(msh,vh,bc_func,material,d=0.0,u=None):
 
     ds = ufl.Measure("ds", domain=msh)
     n = ufl.FacetNormal(msh)
-    pw = water_pressure(msh,vh,material)
+    def pw(u):
+        return water_pressure(msh,u*dt + vh)
+    
 
     a = g * η(u) * ufl.inner(ε(u), ε(v)) * ufl.dx
     L = ufl.inner(ufl.dev(σ), ε(v)) * ufl.dx\
-        - (-pw - ufl.tr(σ)/3)*ufl.inner(n, v)*ds
+        - (-pw - ufl.tr(σ)/msh.geometry.dim)*ufl.inner(n, v)*ds
 
     F = a - L
 
@@ -62,5 +64,45 @@ def velocity(msh,vh,bc_func,material,d=0.0,u=None):
     n, converged = solver.solve(u)
     assert (converged)
 
+
+    return u
+
+
+def displacement(msh,vel,bc_func,material,d=0.0,u=None):
+    V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
+
+    bcs = bc_func(V)
+
+    if u is None:
+        u = fem.Function(V)
+
+    v = ufl.TestFunction(V)
+
+    C1 = material.C1; ν = material.ν
+
+    def σ(u):
+        return pf.degraded_stress(u,d,ν)
+
+    g = pf.degradation(d)
+
+    ds = ufl.Measure("ds", domain=msh)
+    n = ufl.FacetNormal(msh)
+    pw = water_pressure(msh,material)
+
+    a = ufl.inner(σ(u), ε(v)) * ufl.dx
+    L =   C1 *( g*ufl.dot(f, v) - pw*ufl.inner(ufl.grad(g), v) )* ufl.dx \
+        - C1 * g * pw *  ufl.dot(n, v) * ds
+
+    F = a - L
+
+    problem = fem.petsc.NonlinearProblem(F, u, bcs=bcs)
+
+    solver = nls.petsc.NewtonSolver(MPI.COMM_WORLD, problem)
+    solver.convergence_criterion = "incremental"
+    solver.rtol = 1e-6
+    solver.report = True
+
+    n, converged = solver.solve(u)
+    assert (converged)
 
     return u
