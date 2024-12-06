@@ -5,11 +5,12 @@ import basix.ufl as bufl
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
-from phasefield import degradation, degraded_pressure
+from phasefield import degradation, degraded_pressure, ε
 from elasticity import water_pressure
 import nonlinear
-from material import MaterialProperties
-from common import *
+
+def viscosity(u, n, eps=1.e-8, A=1.0): 
+    return A**(-1/n) * (ufl.inner(ε(u), ε(u)) / 2 + eps)**((1 - n) / (2 * n))
 
 
 def solve(msh, bc_func, vh, material, dt, d=None, u=None, p=None):

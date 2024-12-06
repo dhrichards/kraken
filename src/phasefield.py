@@ -8,7 +8,17 @@ import numpy as np
 from invariants import matrix_function, eigenstate
 from common import ε, stress, free_energy
 
+def ε(u):
+    return ufl.sym(ufl.grad(u))
 
+def stress(u,ν):
+    λoverμ = 2*ν/(1-2*ν)
+    return λoverμ*ufl.tr(ε(u))*ufl.Identity(len(u)) + 2*ε(u)
+
+
+def free_energy(u,ν):
+    λoverμ = 2*ν/(1-2*ν)
+    return 0.5*λoverμ*ufl.tr(ε(u))**2 + ufl.inner(ε(u),ε(u))
 
 
 def positive_part(x):

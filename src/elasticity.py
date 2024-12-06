@@ -8,41 +8,10 @@ from mpi4py import MPI
 import ufl
 import numpy as np
 import phasefield as pf
-from common import *
+from phasefield import ε
 import basix.ufl as bufl
 import nonlinear
 
-def piola_kirchoff_stress(u, ν):
-    # Spatial dimension
-    d = len(u)
-
-    λoverμ = 2 * ν / (1 - 2 * ν)
-
-    # Identity tensor
-    I = ufl.variable(ufl.Identity(d))
-
-    # Deformation gradient
-    F = ufl.variable(I + ufl.grad(u))
-
-    # Right Cauchy-Green tensor
-    C = ufl.variable(F.T * F)
-
-    # Invariants of deformation tensors
-    Ic = ufl.variable(ufl.tr(C))
-    J = ufl.variable(ufl.det(F))
-
-    psi = (1.0 / 2) * (Ic - 3) - 1.0 * ufl.ln(J) + (λoverμ / 2) * (ufl.ln(J))**2
-    # Stress
-    # Hyper-elasticity
-    P = ufl.diff(psi, F)
-    return P
-
-import copy
-def deformed_normal(u,msh):
-    temp_mesh = copy.copy(msh)
-    temp_mesh.geometry.x[:,:msh.geometry.dim] += u.x.array.reshape((-1, msh.geometry.dim))
-
-    return ufl.FacetNormal(temp_mesh)
 
 
 

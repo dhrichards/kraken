@@ -8,7 +8,7 @@ from mpi4py import MPI
 import ufl
 import numpy as np
 import phasefield as pf
-from common import *
+import bodyforces as bf
 import basix.ufl as bufl
 import nonlinear
 
@@ -36,22 +36,9 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
     ρratio = material.ρratio; C1 = material.C1; ν = material.ν
     C3 = material.C3; l = material.l; ψcrit = material.ψcritstar
 
-    ds = ufl.Measure("ds", domain=msh)
-
-    n = ufl.FacetNormal(msh)
-
     # pw = water_pressure(msh)
 
-    if pw is None:
-        pw = lambda u: water_pressure(msh,u)
 
-    if msh.geometry.dim == 2:
-        f = fem.Constant(msh, default_scalar_type((0, -ρratio)))
-    else:
-        f = fem.Constant(msh, default_scalar_type((0, 0, -ρratio)))
-
-    
-    g = lambda d: pf.degradation(d)
 
     # Define the state
     if u is None:
@@ -69,12 +56,13 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
     
 
 
-    # internal_energy = (pf.degraded_free_energy(u,d,ν,ψcrit) + (1/C3)*pf.γ(d,l)) * ufl.dx
-    internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
+    internal_energy = (pf.degraded_free_energy(u,d,ν,ψcrit) + (1/C3)*pf.γ(d,l)) * ufl.dx
+    # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
 
-    external_energy =  C1 *( ufl.dot(f, u) - pw(u)*ufl.inner(ufl.grad(g(d)), u) )* ufl.dx \
-        - C1 * g(d) * pw(u) *  ufl.dot(n, u) * ds
+    # external_energy =  C1 *( ufl.dot(f, u) - pw(u)*ufl.inner(ufl.grad(g(d)), u) )* ufl.dx \
+    #     - C1 * g(d) * pw(u) *  ufl.dot(n, u) * ds
     
+    external_energy = lambda u,d: bf.totalforces(msh,u,d,material,pw)
 
     total_energy = internal_energy - external_energy
 
