@@ -27,6 +27,7 @@ class MaterialProperties:
         self.ψcritstar = self.ψcrit / self.Hc
         self.pc = self.μ * uc / L
         self.pwc = self.ρw * self.g * L
+        self.ρratio = self.ρi/self.ρw
 
         
 
@@ -103,13 +104,15 @@ class Material_no_uc:
         self.τ = (self.A**(1/self.n) * self.μ)**-self.n
         self.l = 1/self.C3
 
-        self.Hc = self.μ**2
+        self.Hc = self.μ
         self.ψcritstar = self.ψcrit / self.Hc
         self.pc = self.μ 
-        self.pwc = self.ρw * self.g * self.L
         self.ρratio = self.ρi/self.ρw
         
 
+    @property
+    def pwc(self):
+        return self.ρw * self.g * self.L
 
     @property
     def λ(self):
@@ -145,6 +148,12 @@ class Material_no_uc:
         """Set the regularisation length from the mesh."""
         h = mesh_sizes(msh)
         self.l = 2*h.max()
+
+    def yrs2nondimt(self,yr):
+        return yr*secperyr/self.τ
+    
+    def nondimt2yrs(self,t):
+        return t*self.τ/secperyr
 
 
 

@@ -17,7 +17,7 @@ import nonlinear
 
 
 
-def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None):
+def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
 
     
 
@@ -66,9 +66,11 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None):
     d_ub = fem.Function(V_d, name="Upper bound")
     d_ub.x.array[:] = 1
     d_lb.x.array[:] = 0
+    
 
 
-    internal_energy = (pf.degraded_free_energy(u,d,ν,ψcrit) + (1/C3)*pf.γ(d,l)) * ufl.dx
+    # internal_energy = (pf.degraded_free_energy(u,d,ν,ψcrit) + (1/C3)*pf.γ(d,l)) * ufl.dx
+    internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
 
     external_energy =  C1 *( ufl.dot(f, u) - pw(u)*ufl.inner(ufl.grad(g(d)), u) )* ufl.dx \
         - C1 * g(d) * pw(u) *  ufl.dot(n, u) * ds
@@ -118,8 +120,7 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None):
     ksp.setFromOptions()
 
     # set_log_level(LogLevel.INFO)
-    n, converged = solver_u.solve(u)
-    assert (converged)
+    
 
 
 
@@ -130,7 +131,6 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None):
     damage_problem = nonlinear.NonlinearPDE_SNESProblem(
         fem.form(E_d), fem.form(E_d_d), d, bcs=bcs_d)
     
-
 
     # b_d = la.create_petsc_vector(V_d.dofmap.index_map, V_d.dofmap.index_map_bs)
     # J_d = fem.petsc.create_matrix(damage_problem.a)
@@ -146,12 +146,13 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None):
     # We set the bound (Note: they are passed as reference and not as values)
     solver_d_snes.setVariableBounds(d_lb.x.petsc_vec,d_ub.x.petsc_vec)
 
-
+    # n, converged = solver_u.solve(u)
+    # assert (converged)
     # solver_u_snes.solve(None, u.x.petsc_vec)
-    solver_d_snes.solve(None, d.x.petsc_vec)
+    # solver_d_snes.solve(None, d.x.petsc_vec)
     # assert solver_u_snes.getConvergedReason() > 0
     # assert solver_d_snes.getConvergedReason() > 0
-    # u,d = minimisation(solver_u,solver_d_snes,u,d)
+    u,d = minimisation(solver_u,solver_d_snes,u,d,max_its)
     return u,d
 
 
@@ -166,13 +167,15 @@ def minimisation(solver_u,solver_d, u, d, max_its=100, tol=1e-6):
         # solver_u.solve(None,u.x.petsc_vec)
         n, converged = solver_u.solve(u)
         solver_d.solve(None,d.x.petsc_vec)
+        # solver_d.solve(d)
 
         # print(solver_u.getConvergedReason())
         # assert solver_u.getConvergedReason() > 0
         assert (converged)
 
         L2_error = ufl.inner(d-d_old,d-d_old)*ufl.dx
-        error_L2 = np.sqrt(fem.assemble_scalar(fem.form(L2_error)))
+        error_L2_rank = fem.assemble_scalar(fem.form(L2_error))
+        error_L2 = np.sqrt(MPI.COMM_WORLD.allreduce(error_L2_rank, op=MPI.SUM))
         
         d.x.petsc_vec.copy(d_old.x.petsc_vec)
         print(f"iteration {i}, error {error_L2}")

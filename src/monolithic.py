@@ -14,17 +14,18 @@ import nonlinear
 
 
 
-def solve(msh, bc_func, material, Hprev=0.0, u=None, pw=None):
+def solve(msh, bc_func, material, pw=None):
     # V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
     vel = bufl.element("Lagrange", msh.basix_cell(), 1, shape=(msh.geometry.dim,), dtype=default_real_type)
     sel = bufl.element("Lagrange", msh.basix_cell(), 1, dtype=default_real_type)
-    mixed_el = bufl.mixed_element([vel, sel])
-    V = fem.functionspace(msh, mixed_el)
-    
+    # mixed_el = bufl.mixed_element([vel, sel])
+    # V = fem.functionspace(msh, mixed_el)
+    V_u = fem.functionspace(msh, vel)
+    V_d = fem.functionspace(msh, sel)
 
 
-    bcs = bc_func(V.sub(0))
+    bcs = bc_func(V_u)
 
     # Pull properties out
     ρratio = material.ρratio; C1 = material.C1; ν = material.ν
@@ -42,62 +43,38 @@ def solve(msh, bc_func, material, Hprev=0.0, u=None, pw=None):
     else:
         f = fem.Constant(msh, default_scalar_type((0, 0, -ρratio)))
 
+
+
+    u = fem.Function(V_u, name="Displacement")
+    d = fem.Function(V_d, name="Damage")
+
+    v = ufl.TestFunction(V_u)
+    e = ufl.TestFunction(V_d)
+
+    du = ufl.TrialFunction(V_u)
+    de = ufl.TrialFunction(V_d)
+
+    # need upper/lower bound for the damage field
+    d_lb = fem.Function(V_d, name="Lower bound")
+    d_ub = fem.Function(V_d, name="Upper bound")
+    d_ub.x.array[:] = 1
+    d_lb.x.array[:] = 0
+
+
+    internal_energy = (pf.degraded_free_energy(u,d,ν,material.ψcritstar)\
+                        + (1/C3)*pf.γ(d,l)) * ufl.dx
     
-
-    def g(d):
-        return pf.degradation(d)
+    F = [ufl.derivative(internal_energy, u, v),
+         ufl.derivative(internal_energy, d, e)]
     
-    def σ(u,d):
-        # return pf.degraded_stress(u,d,ν)
-        return stress(u,ν)
-
-    def H(u):
-        ψplus = pf.free_energy_plus(u,material.ν)
-        # return pf.history_function(ψplus,material.ψcritstar,Hprev)
-        return ψplus
+    J = [[ufl.derivative(F[0], u, du), ufl.derivative(F[0], d, de)],
+         [ufl.derivative(F[1], u, du), ufl.derivative(F[1], d, de)]]
     
-
-    sol = fem.Function(V)
-    u,d = ufl.split(sol)
-    v,e = ufl.TestFunctions(V)
-
-
-    a = ufl.inner(σ(u,d), ε(v)) * ufl.dx
-    a += ((1+2*C3*l*H(u))*d*e + l**2*ufl.inner(ufl.grad(d), ufl.grad(e))) * ufl.dx
-    L =   C1 *( g(d)*ufl.dot(f, v) - pw(u)*ufl.inner(ufl.grad(g(d)), v) )* ufl.dx \
-        - C1 * g(d) * pw(u) *  ufl.dot(n, v) * ds
+    P = [[J[0][0], None],
+            [None, None]]
     
-    L += 2*C3*l*H(u)*e * ufl.dx 
+    u,d = nonlinear.nested_solve(F, J, u, d, bcs)
     
-
-    
-    F = a - L
-    
-
-    problem = NonlinearProblem(F, sol, bcs)
-    
-    solver = NewtonSolver(MPI.COMM_WORLD, problem)
-    solver.convergence_criterion = "incremental"
-    solver.rtol = 1e-6
-    solver.atol = 1e-6
-    solver.report = True
-
-    ksp = solver.krylov_solver
-    opts = PETSc.Options()
-    option_prefix = ksp.getOptionsPrefix()
-    opts[f"{option_prefix}ksp_type"] = "preonly"
-    # opts[f"{option_prefix}ksp_rtol"] = 1.0e-8
-    opts[f"{option_prefix}pc_type"] = "lu"
-    # opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
-    # opts[f"{option_prefix}pc_hypre_type"] = "boomeramg"
-    # opts[f"{option_prefix}pc_hypre_boomeramg_max_iter"] = 1
-    # opts[f"{option_prefix}pc_hypre_boomeramg_cycle_type"] = "v"
-    ksp.setFromOptions()
-
-    set_log_level(LogLevel.INFO)
-    n, converged = solver.solve(sol)
-    assert (converged)
-    print(f"Number of interations: {n:d}")
 
 
     return u,d

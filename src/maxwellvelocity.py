@@ -13,7 +13,6 @@ import stokes
 import poisson
 import phasefield
 import utilities
-from dolfinx.io import XDMFFile
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -35,12 +34,12 @@ Hw = material.ρi/material.ρw*nondim_height
 
 msh = mesh.create_rectangle(MPI.COMM_WORLD,
                             [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
-                            [200,20], mesh.CellType.triangle)
+                            [100,20], mesh.CellType.triangle)
 
 
 material.set_l_from_mesh(msh)
 
-dt = 1/12
+dt = 1e-9
 # 
 clamped_both = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
                             get_zero_bc(V, right_boundary, default_scalar_type)]
@@ -54,11 +53,19 @@ bc = symm_bc
 
 for i in range(1):
     print(i)
-    vh = elasticity.solve(msh,material,bc)
+    vh = elasticity.solve(msh,bc, material)
 
     # utilities.move_mesh(msh,vh,material.uc/material.L)
 
-    uh, ph = stokes.solve(msh, bc, material, dt)
+    uh, ph = stokes.solve(msh, bc, vh, material, dt)
+
+    with io.VTKFile(MPI.COMM_WORLD, "outputs/displacement.pvd","w") as file:
+        file.write_mesh(msh,t=i*dt)
+        file.write_function([vh],t=i*dt)
+    
+    with io.VTKFile(MPI.COMM_WORLD, "outputs/velocity.pvd","w") as file:
+        file.write_mesh(msh, t=i*dt)
+        file.write_function([uh],t=i*dt)
 
     utilities.move_mesh(msh,uh,dt*material.uc/material.L)
 
@@ -66,24 +73,10 @@ for i in range(1):
 
 
 
-Q = fem.functionspace(msh, ("Lagrange", 1))
 
 
-V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
-uhh = fem.Function(V)
 
 
-with XDMFFile(MPI.COMM_WORLD, "displacement.xdmf", "w") as ufile_xdmf:
-        ufile_xdmf.write_mesh(msh)
-        ufile_xdmf.write_function(vh)
 
-uhh.interpolate(uh)
-with XDMFFile(MPI.COMM_WORLD, "velocity.xdmf", "w") as ufile_xdmf:
-        ufile_xdmf.write_mesh(msh)
-        ufile_xdmf.write_function(uhh)
-
-# with XDMFFile(MPI.COMM_WORLD, "velocitypoisson.xdmf", "w") as ufile_xdmf:
-#         ufile_xdmf.write_mesh(msh)
-#         ufile_xdmf.write_function(uhp)
 
 

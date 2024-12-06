@@ -111,7 +111,7 @@ class NonlinearPDE_SNESProblem():
 
 
 class SNESProblem:
-    def __init__(self, F, u, bcs=None, J=None):
+    def __init__(self, F, u, bcs, J=None):
         V = u.function_space
         du = ufl.TrialFunction(V)
         self.L = fem.form(F)
@@ -128,24 +128,127 @@ class SNESProblem:
         x.ghostUpdate(
             addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
         )
-        x.copy(self.u.vector)
-        self.u.vector.ghostUpdate(
+        x.copy(self.u.x.petsc_vec)
+        self.u.x.petsc_vec.ghostUpdate(
             addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
         )
 
         with F.localForm() as f_local:
             f_local.set(0.0)
         fem.petsc.assemble_vector(F, self.L)
-        fem.petsc.apply_lifting(F, [self.a], bcs=[self.bcs], x0=[x], scale=-1.0)
+        fem.petsc.apply_lifting(F, [self.a], bcs=[self.bcs], x0=[x], alpha=-1.0)
         F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-        if self.bcs:
-            fem.petsc.set_bc(F, self.bcs, x, -1.0)
+        fem.petsc.set_bc(F, self.bcs, x, -1.0)
 
     def J(self, snes, x, J, P):
         """Assemble Jacobian matrix."""
         J.zeroEntries()
-        if self.bcs:
-            fem.petsc.assemble_matrix(J, self.a, bcs=self.bcs)
-        else:
-            fem.petsc.assemble_matrix(J, self.a)
+        fem.petsc.assemble_matrix(J, self.a, bcs=self.bcs)
         J.assemble()
+
+
+
+
+
+
+def block_solve(F, J , P, u, p, bcs, V, Q):
+    F, J, P = fem.form(F), fem.form(J), fem.form(P)
+
+    V_map = V.dofmap.index_map
+    Q_map = Q.dofmap.index_map
+    offset_u = V_map.local_range[0] * V.dofmap.index_map_bs + Q_map.local_range[0]
+    offset_p = offset_u + V_map.size_local * V.dofmap.index_map_bs
+    is_u = PETSc.IS().createStride(
+        V_map.size_local * V.dofmap.index_map_bs, offset_u, 1, comm=PETSc.COMM_SELF
+    )
+    is_p = PETSc.IS().createStride(Q_map.size_local, offset_p, 1, comm=PETSc.COMM_SELF)
+
+    snes = PETSc.SNES().create(MPI.COMM_WORLD)
+    snes.setTolerances(rtol=1.0e-15, max_it=20)
+    snes.getKSP().setType("minres")
+    snes.getKSP().setTolerances(rtol=1e-12)
+    snes.getKSP().getPC().setType("fieldsplit")
+    snes.getKSP().getPC().setFieldSplitIS(("u", is_u), ("p", is_p))
+
+    problem = NonlinearPDE_SNESProblem(F, J, [u, p], bcs=bcs, P=P)
+
+    snes.setFunction(problem.F_block,
+                        fem.petsc.create_vector_block(F))
+    snes.setJacobian(problem.J_block,
+                        J=fem.petsc.create_matrix_block(J),
+                        P=None)
+    x = fem.petsc.create_vector_block(F)
+
+
+    snes.solve(None, x)
+    assert snes.getKSP().getConvergedReason() > 0
+
+    u.x.scatter_forward()
+    p.x.scatter_forward()
+
+    return u, p
+
+
+def nested_solve(F, J, u, p, bcs, P=None):
+    F, J = fem.form(F), fem.form(J)
+    if P is not None:
+        P = fem.form(P)
+
+
+    Jmat = fem.petsc.create_matrix_nest(J)
+    if P is not None:
+        Pmat = fem.petsc.create_matrix_nest(P)
+    else:
+        Pmat = None
+    Fvec = fem.petsc.create_vector_nest(F)
+
+    snes = PETSc.SNES().create(MPI.COMM_WORLD)
+    snes.setTolerances(rtol=1.0e-9, max_it=100)
+    nested_IS = Jmat.getNestISs()
+    snes.getKSP().setType("minres")
+    snes.getKSP().setTolerances(rtol=1e-7)
+    snes.getKSP().getPC().setType("fieldsplit")
+    snes.getKSP().getPC().setFieldSplitIS(["u", nested_IS[0][0]], ["p", nested_IS[1][1]])
+
+    snes.getKSP().getPC().setFieldSplitType(
+                PETSc.PC.CompositeType.ADDITIVE)
+
+    ksp_u, ksp_p = snes.getKSP().getPC().getFieldSplitSubKSP()
+    ksp_u.setType("preonly")
+    ksp_u.getPC().setType("hypre")
+    ksp_p.setType("preonly")
+    ksp_p.getPC().setType("hypre")
+
+    problem = NonlinearPDE_SNESProblem(F, J, [u, p], bcs=bcs, P=P)
+    snes.setFunction(problem.F_nest, Fvec)
+    snes.setJacobian(problem.J_nest, J=Jmat, P=Pmat)
+
+    # snes.setDM(nullspace)
+
+    
+
+    x = fem.petsc.create_vector_nest(F)
+
+    assert x.getType() == "nest"
+    for x_soln_pair in zip(x.getNestSubVecs(), (u, p)):
+        x_sub, soln_sub = x_soln_pair
+        soln_sub.x.petsc_vec.ghostUpdate(
+            addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
+        )
+        soln_sub.x.petsc_vec.copy(result=x_sub)
+        x_sub.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+
+    # Solve nonlinear problem
+    snes.solve(None, x)
+    assert snes.getKSP().getConvergedReason() > 0
+
+    u.x.scatter_forward()
+    p.x.scatter_forward()
+
+    return u, p
+
+
+
+
+
+

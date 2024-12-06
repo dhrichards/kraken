@@ -32,3 +32,6 @@ def stress(u,ν):
     return λoverμ*ufl.tr(ε(u))*ufl.Identity(len(u)) + 2*ε(u)
 
 
+def free_energy(u,ν):
+    λoverμ = 2*ν/(1-2*ν)
+    return 0.5*λoverμ*ufl.tr(ε(u))**2 + ufl.inner(ε(u),ε(u))

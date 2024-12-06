@@ -48,8 +48,10 @@ def free_energy_plus(u,ν):
 
 
 def degraded_free_energy(u,d,ν,ψcritstar):
+    # ψplus = positive_part(free_energy_plus(u,ν)-ψcritstar)
     ψplus = free_energy_plus(u,ν)
     ψminus = free_energy(u,ν) - ψplus
+    # return degradation(d)*(ψplus) + (ψminus)
     return degradation(d)*(ψplus-ψcritstar) + (ψminus+ψcritstar)
 
 # def free_energy_plus(u,ν):
