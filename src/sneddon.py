@@ -6,7 +6,7 @@ from mpi4py import MPI
 import ufl
 import numpy as np
 import elasticity
-import phasefield as pf
+import pf as pf
 from material import MaterialProperties, Material_no_uc
 from boundaryconditions import get_zero_bc
 import utilities

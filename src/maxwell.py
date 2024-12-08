@@ -62,7 +62,8 @@ no_bc = lambda V: []
 
 vh,dh = eb.fixed_point(msh, [symm_bc,no_bc], material)
 # vh,dh = pf.minimisation(msh, [symm_bc,no_bc], material, max_its = 1)
-uh,ph = stokes.solve(msh,symm_bc,vh,material,1.0, d=dh)
+uh,ph = stokes.solve(msh,symm_bc,vh,material,1.0,dh)
+uh_old, ph_old = stokes.solve(msh,symm_bc,vh,material,1.0)
 #%%
 # dt = 1.0
 # log.set_log_level(log.LogLevel.INFO)
@@ -94,8 +95,8 @@ from invariants import matrix_function
 #     utilities.plot_damage_state(vh,dh)
 
 utilities.write_vtk("outputs/pf.pvd",msh,\
-                    [vh,uh,ψ,dh,λ[0],λ[1],σ_e,σ_v,ψplus,ψplusp],\
-                    ["v","uh","ψ","d","λ1","λ2","σ_e","σ_v","ψplus","ψplusp"])
+                    [vh,uh,ψ,dh,λ[0],λ[1],σ_e,σ_v,ψplus,ψplusp,uh_old],\
+                    ["v","uh","ψ","d","λ1","λ2","σ_e","σ_v","ψplus","ψplusp","uh_old"])
 
 
 

@@ -36,8 +36,11 @@ def solve(msh, bc_func, vh, material, dt, d=None, u=None, p=None):
     if d is None:
         d = fem.Constant(msh, default_scalar_type(0.0))
 
+    # Phase field changes
+    g = degradation(d)
+
     def η(u):
-        return viscosity(u, material.n, 1.e-8)
+        return g*viscosity(u, material.n, 1.e-8)
     
     def hat(p):
         return degraded_pressure(p, d)
@@ -51,17 +54,18 @@ def solve(msh, bc_func, vh, material, dt, d=None, u=None, p=None):
 
     # Water pressure
     def pw(u):
-        return bf.water_pressure(msh,u*dt)
+        return bf.water_pressure(msh,vh + u*dt)
     
 
-    # Phase field changes
-    g = degradation(d)
     
-    F = [((1/C2)*g*η(u)*ufl.inner(ε(u), ε(v)) \
-        + ufl.inner(hat(-p), ufl.div(v))\
+    
+    F = [((1/C2)*η(u)*ufl.inner(ε(u), ε(v)) \
+        # + ufl.inner(hat(-p), ufl.div(v))\
+        - ufl.inner(p, ufl.div(v)) \
         - C1 * ufl.inner(f, v) \
         + C1 * pw(u) * ufl.inner(ufl.grad(g), v)) * ufl.dx \
         + C1 * g * pw(u) * ufl.inner(n, v) * ds,
+        # )*ufl.dx,
         - ufl.inner(ufl.div(u), q) * ufl.dx ]
     
     J = get_jacobian(F,u,p,du,dp)

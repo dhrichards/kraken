@@ -56,7 +56,7 @@ dbc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
 # log.set_log_level(log.LogLevel.INFO)
 
 vh, dh = eb.fixed_point(msh, [ubc, dbc], material)
-uh, ph = stokes.solve(msh, ubc, vh, material, 1.0)
+uh, ph = stokes.solve(msh, ubc, vh, material, 1.0, dh)
 # vh, dh = pf.minimisation(msh, [ubc, dbc], material)
 # vh, dh = monolithic.solve(msh, ubc, material)
 
