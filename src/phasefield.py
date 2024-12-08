@@ -6,7 +6,7 @@ from mpi4py import MPI
 import ufl
 import numpy as np
 from invariants import matrix_function, eigenstate
-from common import ε, stress, free_energy
+import elasticity as el
 
 def ε(u):
     return ufl.sym(ufl.grad(u))
@@ -23,6 +23,7 @@ def free_energy(u,ν):
 
 def positive_part(x):
     return ufl.max_value(x,0)
+    # return ufl.conditional(ufl.ge(x,c),x,0.0)
 
 def negative_part(x):
     return ufl.min_value(x,0)
@@ -45,11 +46,11 @@ def free_energy_plus(u,ν):
 
 
 def degraded_free_energy(u,d,ν,ψcritstar):
-    # ψplus = positive_part(free_energy_plus(u,ν)-ψcritstar)
-    ψplus = free_energy_plus(u,ν)
+    ψplus = free_energy_plus(u,ν)-ψcritstar
+    # ψplus = free_energy_plus(u,ν)
     ψminus = free_energy(u,ν) - ψplus
-    # return degradation(d)*(ψplus) + (ψminus)
-    return degradation(d)*(ψplus-ψcritstar) + (ψminus+ψcritstar)
+    return degradation(d)*(ψplus) + (ψminus)
+    # return degradation(d)*(ψplus-ψcritstar) + (ψminus+ψcritstar)
 
 # def free_energy_plus(u,ν):
 # ## based on formulation in Miehle "Thermodynamically consistent phase-field models of fracture"
@@ -77,43 +78,85 @@ def degraded_pressure(p,d):
     return degradation(d)*pplus + pminus
 
 
-def history_function(ψ,ψcrit,Hprev):
-    return ufl.max_value(positive_part(ψ-ψcrit),Hprev)
+def history_function(u,material,Hprev):
+    ψp = free_energy_plus(u,material.ν)
+    return ufl.max_value(positive_part(ψp-material.ψcritstar),Hprev)
 
 
-def initilise_history_function(msh):
-    V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
+# def initilise_history_function(msh):
+#     V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
-    H = fem.Function(V)
+#     H = fem.Function(V)
 
-    H.interpolate(0.0)
-    return H
+#     H.interpolate(0.0)
+#     return H
 
      
 
 
-def solve(msh,bc_func,uh,material,H=0.0):
+def solve(msh,bc_func,uh,material,Hprev=None):
     V = fem.functionspace(msh, ("Lagrange", 1))
+
+    if Hprev is None:
+        Hprev = fem.Constant(msh, default_scalar_type(0.0))
+
+    H = history_function(uh,material,Hprev)
 
     bcs = bc_func(V)
 
     d = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
 
-    ψplus = free_energy_plus(uh,material.ν)
-    H = history_function(ψplus,material.ψcritstar,H)
-    # H = free_energy(uh,material.ν)
-
     C3 = material.C3; l = material.l
 
-    a = ((1+2*C3*l*H)*d*v + l**2*ufl.inner(ufl.grad(d), ufl.grad(v))) * ufl.dx
-    L = 2*C3*l*H*v * ufl.dx 
+    # a = ((1+2*C3*l*H)*d*v + l**2*ufl.inner(ufl.grad(d), ufl.grad(v))) * ufl.dx
+    # L = 2*C3*l*H*v * ufl.dx 
+
+    F = (ufl.inner(d,v) + l**2*ufl.inner(ufl.grad(d), ufl.grad(v)) \
+         - C3*l*2*(1-d)*H*v) * ufl.dx
+    
+    a, L = ufl.lhs(F), ufl.rhs(F)
+    
 
     problem = LinearProblem(a, L, bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     dh = problem.solve()
 
     dh.name = "d"
 
-    return dh,H
+    return dh
 
+
+
+def minimisation(msh,bcfuncs,material,dh=None,uh=None,pw=None,Hprev=None,max_its=100):
+
+
+    Vd = fem.functionspace(msh, ("Lagrange", 1))
+    dh = fem.Function(Vd)
+
+
+    Vu = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim,)))
+    uh = fem.Function(Vu)
+    
+    L2_old = 0.0
+    for i in range(max_its):
+
+        uh = el.solve(msh,bcfuncs[0],material,dh,None,pw)
+        dh = solve(msh,bcfuncs[1],uh,material,Hprev)
+
+        L2_ = ufl.inner(dh,dh)*ufl.dx
+        L2_rank = fem.assemble_scalar(fem.form(L2_))
+        L2 = np.sqrt(MPI.COMM_WORLD.allreduce(L2_rank, op=MPI.SUM))
+
+        error_L2 = np.abs(L2 - L2_old)
+        print(f"iteration {i}, error {error_L2}")
+        
+        if error_L2 < 1e-4:
+            break
+
+        L2_old = L2
+
+
+    return uh,dh
+
+    
 

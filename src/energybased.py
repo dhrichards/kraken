@@ -36,8 +36,6 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
     ρratio = material.ρratio; C1 = material.C1; ν = material.ν
     C3 = material.C3; l = material.l; ψcrit = material.ψcritstar
 
-    # pw = water_pressure(msh)
-
 
 
     # Define the state
@@ -53,16 +51,21 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
     d_ub = fem.Function(V_d, name="Upper bound")
     d_ub.x.array[:] = 1
     d_lb.x.array[:] = 0
+
+    g = lambda d: pf.degradation(d)
+    f = bf.body_force(msh, ρratio)
+    n = ufl.FacetNormal(msh)
+    ds = ufl.Measure("ds", domain=msh)
+    pw = lambda u: bf.water_pressure(msh, u)
     
 
 
     internal_energy = (pf.degraded_free_energy(u,d,ν,ψcrit) + (1/C3)*pf.γ(d,l)) * ufl.dx
     # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
 
-    # external_energy =  C1 *( ufl.dot(f, u) - pw(u)*ufl.inner(ufl.grad(g(d)), u) )* ufl.dx \
-    #     - C1 * g(d) * pw(u) *  ufl.dot(n, u) * ds
+    external_energy =  C1 *( ufl.dot(f, u) - pw(u)*ufl.inner(ufl.grad(g(d)), u) )* ufl.dx \
+        - C1 * g(d) * pw(u) *  ufl.dot(n, u) * ds
     
-    external_energy = lambda u,d: bf.totalforces(msh,u,d,material,pw)
 
     total_energy = internal_energy - external_energy
 
@@ -115,13 +118,11 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
 
     E_d = ufl.derivative(internal_energy,d,ufl.TestFunction(V_d))
     E_d_d = ufl.derivative(E_d,d,ufl.TrialFunction(V_d))
-    # damage_problem = nonlinear.SNESProblem(E_d, d, bcs_d,J=E_d_d)
     damage_problem = nonlinear.NonlinearPDE_SNESProblem(
         fem.form(E_d), fem.form(E_d_d), d, bcs=bcs_d)
     
 
-    # b_d = la.create_petsc_vector(V_d.dofmap.index_map, V_d.dofmap.index_map_bs)
-    # J_d = fem.petsc.create_matrix(damage_problem.a)
+
     # Create Newton solver and solve
     solver_d_snes = PETSc.SNES().create(MPI.COMM_WORLD)
     solver_d_snes.setType("vinewtonrsls")
@@ -131,25 +132,19 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
     solver_d_snes.getKSP().setType("preonly")
     solver_d_snes.getKSP().setTolerances(rtol=1.0e-9)
     solver_d_snes.getKSP().getPC().setType("lu")
+    solver_d_snes.getKSP().getPC().setFactorSolverType("mumps")
     # We set the bound (Note: they are passed as reference and not as values)
     solver_d_snes.setVariableBounds(d_lb.x.petsc_vec,d_ub.x.petsc_vec)
 
-    # n, converged = solver_u.solve(u)
-    # assert (converged)
-    # solver_u_snes.solve(None, u.x.petsc_vec)
-    # solver_d_snes.solve(None, d.x.petsc_vec)
-    # assert solver_u_snes.getConvergedReason() > 0
-    # assert solver_d_snes.getConvergedReason() > 0
+
     u,d = minimisation(solver_u,solver_d_snes,u,d,max_its)
     return u,d
 
 
 
-def minimisation(solver_u,solver_d, u, d, max_its=100, tol=1e-6):
+def minimisation(solver_u,solver_d, u, d, max_its=100, tol=1e-4):
 
-    d_old = fem.Function(d.function_space)
-    d.x.petsc_vec.copy(result=d_old.x.petsc_vec)
-
+    L2_old = 0.0
     for i in range(max_its):
 
         # solver_u.solve(None,u.x.petsc_vec)
@@ -161,16 +156,20 @@ def minimisation(solver_u,solver_d, u, d, max_its=100, tol=1e-6):
         # assert solver_u.getConvergedReason() > 0
         assert (converged)
 
-        L2_error = ufl.inner(d-d_old,d-d_old)*ufl.dx
-        error_L2_rank = fem.assemble_scalar(fem.form(L2_error))
-        error_L2 = np.sqrt(MPI.COMM_WORLD.allreduce(error_L2_rank, op=MPI.SUM))
+        L2_ = ufl.inner(d,d)*ufl.dx
+        L2_rank = fem.assemble_scalar(fem.form(L2_))
+        L2 = np.sqrt(MPI.COMM_WORLD.allreduce(L2_rank, op=MPI.SUM))
+
+        error_L2 = np.abs(L2 - L2_old)
         
-        d.x.petsc_vec.copy(d_old.x.petsc_vec)
+        
         print(f"iteration {i}, error {error_L2}")
 
-        if error_L2 < tol:
+        if i>0 and error_L2 < tol:
         # if i > 35:
             break
+
+        L2_old = L2
 
     return u,d
 

@@ -1,7 +1,7 @@
 #%%
 
 import numpy as np
-from dolfinx import mesh, fem, plot, io, default_scalar_type
+from dolfinx import mesh, fem, log, default_scalar_type
 from mpi4py import MPI
 import ufl
 import numpy as np
@@ -10,11 +10,9 @@ from material import MaterialProperties, Material_no_uc
 import invariants
 from boundaryconditions import get_zero_bc
 import stokes
-import poisson
-import phasefield
+import phasefield as pf
 import utilities
 import energybased as eb
-from common import *
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -27,7 +25,8 @@ true_length = 16e3
 true_height = 300
 
 material = Material_no_uc()
-material.L = true_height    
+material.τ = 365*24*3600/12
+# material.L = true_height    
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
@@ -57,51 +56,46 @@ no_bc = lambda V: []
 # vh,dh = monolithic.solve(msh,bc,material,H)
 # for i in range(1):
 #     vh = elasticity.solve(msh,symm_bc,material,dh)
-#     dh,H = phasefield.solve(msh,no_bc,vh,material)
+#     dh,H = pf.solve(msh,no_bc,vh,material)
 
+# material.ψcritstar = material.ψcritstar*5e4
 
-
-vh,dh = eb.fixed_point(msh, [clamped_bc,no_bc], material)
-
+vh,dh = eb.fixed_point(msh, [symm_bc,no_bc], material)
+# vh,dh = pf.minimisation(msh, [symm_bc,no_bc], material, max_its = 1)
+uh,ph = stokes.solve(msh,symm_bc,vh,material,1.0, d=dh)
 #%%
-dt = material.yrs2nondimt(1/365)
-uh = stokes.solve(msh,clamped_bc,vh,material,dt)
+# dt = 1.0
+# log.set_log_level(log.LogLevel.INFO)
+# # uh, ph = stokes.solve(msh,symm_bc,vh,material,dt)
 
-
+# uh = None
 # for i in range(5):
-#     vh,dh = eb.fixed_point(msh, [no_bc,no_bc], material)
-#     utilities.plot_damage_state(vh,dh)
-#     uh = stokes.solve(msh,no_bc,vh,material,dt)
-
-    
-#     utilities.plot_damage_state(uh,dh)
-
-
-
+#     vh,dh = eb.fixed_point(msh, [clamped_bc,no_bc], material)
+#     uh,ph = stokes.solve(msh,clamped_bc,vh,material,dt,u=uh)
+#     # utilities.move_mesh(msh,uh,dt)
 
 
 #%%
 
-σ_e = elasticity.stress(vh,material.ν)
-# σ_v = viscosity(uh,material.n,1e-8)*ε(uh)
+σ_e = ufl.dev(pf.stress(vh,material.ν))
+σ_v = stokes.viscosity(uh,material.n,1e-8)*pf.ε(uh)
 
 # ψ = free_energy(vh,material.ν)
-ψ = free_energy(vh,material.ν)
-ψplus = phasefield.free_energy_plus(vh,material.ν)
-ψplusp = phasefield.positive_part(phasefield.free_energy_plus(vh,material.ν)-material.ψcritstar)
+ψ = pf.free_energy(vh,material.ν)
+ψplus = pf.free_energy_plus(vh,material.ν)
+ψplusp = pf.positive_part(pf.free_energy_plus(vh,material.ν)-material.ψcritstar)
 
 
 from invariants import matrix_function
-λ,E = invariants.eigenstate(ε(vh)) 
+λ,E = invariants.eigenstate(pf.ε(vh)) 
 
 
 # if MPI.COMM_WORLD.rank == 0:
 #     utilities.plot_damage_state(vh,dh)
 
-
-utilities.write_vtk("outputs/phasefield.pvd",msh,\
-                    [vh,ψ,dh,λ[0],λ[1],σ_e,ψplus,ψplusp],\
-                    ["v","ψ","d","λ1","λ2","σ_e","ψplus","ψplusp"])
+utilities.write_vtk("outputs/pf.pvd",msh,\
+                    [vh,uh,ψ,dh,λ[0],λ[1],σ_e,σ_v,ψplus,ψplusp],\
+                    ["v","uh","ψ","d","λ1","λ2","σ_e","σ_v","ψplus","ψplusp"])
 
 
 

@@ -1,7 +1,7 @@
 #%%
 
 import numpy as np
-from dolfinx import mesh, fem, plot, io, default_scalar_type
+from dolfinx import mesh, fem, plot, io, default_scalar_type, log
 from mpi4py import MPI
 import ufl
 import numpy as np
@@ -10,11 +10,8 @@ from material import MaterialProperties, Material_no_uc
 import invariants
 from boundaryconditions import get_zero_bc, get_bc
 import stokes
-import poisson
-import phasefield
+import phasefield as pf
 import utilities
-import monolithic
-from common import *
 import energybased as eb
 
 
@@ -48,7 +45,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
                             [nx,ny], mesh.CellType.quadrilateral)
 
 
-material.set_l_from_mesh(msh)
+# material.set_l_from_mesh(msh)
 # 
 ubc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
                     get_bc(V.sub(0), right_boundary, default_scalar_type(1.0)) ]
@@ -56,12 +53,15 @@ ubc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
 dbc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
                  get_zero_bc(V, right_boundary, default_scalar_type)]
 
+# log.set_log_level(log.LogLevel.INFO)
 
 vh, dh = eb.fixed_point(msh, [ubc, dbc], material)
+uh, ph = stokes.solve(msh, ubc, vh, material, 1.0)
+# vh, dh = pf.minimisation(msh, [ubc, dbc], material)
 # vh, dh = monolithic.solve(msh, ubc, material)
 
 
 # utilities.plot_damage_state(vh,dh)
 utilities.write_vtk("outputs/newfrac.pvd",msh,\
-                    [vh,dh],\
-                    ["v","d"])
+                    [vh,dh,uh],\
+                    ["v","d","u"])

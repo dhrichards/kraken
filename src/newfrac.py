@@ -16,7 +16,7 @@ start_xvfb(wait=0.5)
 import utilities
 
 import dolfinx.fem.petsc
-import phasefield
+import pf
 from common import *
 
 
@@ -166,14 +166,14 @@ def γ(d):
 
 def ψ(u,d):
     """Elastic energy as a function of the displacement and the damage"""
-    return phasefield.degradation(d)*phasefield.free_energy(u,ν)
+    return pf.degradation(d)*pf.free_energy(u,ν)
 
 
 def ψ(u,d):
     """Elastic energy as a function of the displacement and the damage"""
-    ψplus = phasefield.free_energy_plus(u,ν)
-    ψminus = phasefield.free_energy(u,ν) - ψplus
-    return phasefield.degradation(d) * ψplus + ψminus
+    ψplus = pf.free_energy_plus(u,ν)
+    ψminus = pf.free_energy(u,ν) - ψplus
+    return pf.degradation(d) * ψplus + ψminus
 
 
 

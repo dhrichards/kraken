@@ -164,11 +164,12 @@ def block_solve(F, J , P, u, p, bcs, V, Q):
     is_p = PETSc.IS().createStride(Q_map.size_local, offset_p, 1, comm=PETSc.COMM_SELF)
 
     snes = PETSc.SNES().create(MPI.COMM_WORLD)
-    snes.setTolerances(rtol=1.0e-15, max_it=20)
-    snes.getKSP().setType("minres")
-    snes.getKSP().setTolerances(rtol=1e-12)
-    snes.getKSP().getPC().setType("fieldsplit")
-    snes.getKSP().getPC().setFieldSplitIS(("u", is_u), ("p", is_p))
+    snes.setTolerances(rtol=1.0e-10, max_it=50)
+    snes.getKSP().getPC().setType("lu")
+    snes.getKSP().setTolerances(rtol=1e-8)
+    snes.getKSP().getPC().setFactorSolverType("mumps")
+    # snes.getKSP().getPC().setType("fieldsplit")
+    # snes.getKSP().getPC().setFieldSplitIS(("u", is_u), ("p", is_p))
 
     problem = NonlinearPDE_SNESProblem(F, J, [u, p], bcs=bcs, P=P)
 
@@ -176,7 +177,7 @@ def block_solve(F, J , P, u, p, bcs, V, Q):
                         fem.petsc.create_vector_block(F))
     snes.setJacobian(problem.J_block,
                         J=fem.petsc.create_matrix_block(J),
-                        P=None)
+                        P=fem.petsc.create_matrix_block(P))
     x = fem.petsc.create_vector_block(F)
 
 
@@ -239,13 +240,8 @@ def nested_solve(F, J, u, p, bcs, P=None):
         x_sub.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
 
     # Solve nonlinear problem
-    snes.solve(None, x)
-    assert snes.getKSP().getConvergedReason() > 0
-
-    u.x.scatter_forward()
-    p.x.scatter_forward()
-
-    return u, p
+  
+    return snes, x
 
 
 

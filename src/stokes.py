@@ -6,7 +6,7 @@ import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 from phasefield import degradation, degraded_pressure, ε
-from elasticity import water_pressure
+import bodyforces as bf
 import nonlinear
 
 def viscosity(u, n, eps=1.e-8, A=1.0): 
@@ -42,11 +42,7 @@ def solve(msh, bc_func, vh, material, dt, d=None, u=None, p=None):
     def hat(p):
         return degraded_pressure(p, d)
     
-    if msh.geometry.dim == 2:
-        f = fem.Constant(msh, default_scalar_type((0, -ρratio)))
-    else:
-        f = fem.Constant(msh, default_scalar_type((0, 0, -ρratio)))
-
+    f = bf.body_force(msh, ρratio)
     # Outward-pointing unit normal to the boundary  
     n = ufl.FacetNormal(msh)           
 
@@ -55,32 +51,33 @@ def solve(msh, bc_func, vh, material, dt, d=None, u=None, p=None):
 
     # Water pressure
     def pw(u):
-        return water_pressure(msh,u*dt + vh)
+        return bf.water_pressure(msh,u*dt)
     
 
     # Phase field changes
     g = degradation(d)
-
     
     F = [((1/C2)*g*η(u)*ufl.inner(ε(u), ε(v)) \
         + ufl.inner(hat(-p), ufl.div(v))\
-        - C1 * g * ufl.inner(f, v) \
+        - C1 * ufl.inner(f, v) \
         + C1 * pw(u) * ufl.inner(ufl.grad(g), v)) * ufl.dx \
         + C1 * g * pw(u) * ufl.inner(n, v) * ds,
         - ufl.inner(ufl.div(u), q) * ufl.dx ]
     
-    # F = [((1/C2)*η(u)*ufl.inner(ufl.grad(u), ufl.grad(v))  \
-    #     - ufl.inner(p, ufl.div(v))  \
-    #     - C1 * ufl.inner(f, v)) * ufl.dx \
-    #     + C1*pw(u)*ufl.inner(n, v) * ds,
-    #     - ufl.inner(ufl.div(u), q) * ufl.dx ]
-    
-
     J = get_jacobian(F,u,p,du,dp)
     P = get_preconditioner(J, u, dp, q, η) 
 
+    snes, x = nonlinear.nested_solve(F, J, u, p, bcs, P)
 
-    return nonlinear.nested_solve(F, J, u, p, bcs, P)
+    snes.solve(None, x)
+    assert snes.getKSP().getConvergedReason() > 0
+
+    u.x.scatter_forward()
+    p.x.scatter_forward()
+
+
+    return u, p
+    # return nonlinear.block_solve(F, J, P, u, p, bcs, P2, P1)
 
 
 def solve_no_damage(mesh, bc_func, material, dt, u=None, p=None):
@@ -133,9 +130,6 @@ def solve_no_damage(mesh, bc_func, material, dt, u=None, p=None):
     # c2.scale(1 / c2.norm())
 
     # nullspace = PETSc.NullSpace().create(vectors=[c2], comm=mesh.comm)
-
-
-
     
     F = [(1/C2)*η(u)*ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx \
         - ufl.inner(p, ufl.div(v)) * ufl.dx \
