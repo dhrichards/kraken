@@ -17,7 +17,7 @@ import nonlinear
 
 
 
-def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
+def fixed_point(msh,bcfuncs,material, d_lb=None, u_old=None, pw=None, max_its = 100, tol=1e-4):
 
     
 
@@ -39,18 +39,26 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
 
 
     # Define the state
-    if u is None:
-        u = fem.Function(V_u, name="Displacement")
-    if d is None:
-        d = fem.Function(V_d, name="Damage")
+   
+    u = fem.Function(V_u, name="Displacement")
+    
+    d = fem.Function(V_d, name="Damage")
+    
+    if d_lb is not None:
+        d.x.array[:] = d_lb.x.array[:]
+
+    if u_old is not None:
+        u.x.array[:] = u_old.x.array[:]
 
 
 
     # need upper/lower bound for the damage field
-    d_lb = fem.Function(V_d, name="Lower bound")
+    if d_lb is None:
+        d_lb = fem.Function(V_d, name="Lower bound")
+        d_lb.x.array[:] = 0
     d_ub = fem.Function(V_d, name="Upper bound")
     d_ub.x.array[:] = 1
-    d_lb.x.array[:] = 0
+    
 
     g = lambda d: pf.degradation(d)
     f = bf.body_force(msh, ρratio)
@@ -60,7 +68,8 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
     
 
 
-    internal_energy = (pf.degraded_free_energy(u,d,ν,ψcrit) + (1/C3)*pf.γ(d,l)) * ufl.dx
+
+    internal_energy = (pf.degraded_free_energy(pf.ε(u),d,ν,ψcrit) + (1/C3)*pf.γ(d,l)) * ufl.dx
     # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
 
     external_energy =  C1 *( ufl.dot(f, u) - pw(u)*ufl.inner(ufl.grad(g(d)), u) )* ufl.dx \
@@ -137,7 +146,7 @@ def fixed_point(msh,bcfuncs,material, d=None, u=None, pw=None, max_its = 100):
     solver_d_snes.setVariableBounds(d_lb.x.petsc_vec,d_ub.x.petsc_vec)
 
 
-    u,d = minimisation(solver_u,solver_d_snes,u,d,max_its)
+    u,d = minimisation(solver_u,solver_d_snes,u,d,max_its,tol)
     return u,d
 
 

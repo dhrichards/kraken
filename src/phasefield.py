@@ -16,9 +16,9 @@ def stress(u,ν):
     return λoverμ*ufl.tr(ε(u))*ufl.Identity(len(u)) + 2*ε(u)
 
 
-def free_energy(u,ν):
+def free_energy(ε,ν):
     λoverμ = 2*ν/(1-2*ν)
-    return 0.5*λoverμ*ufl.tr(ε(u))**2 + ufl.inner(ε(u),ε(u))
+    return 0.5*λoverμ*ufl.tr(ε)**2 + ufl.inner(ε,ε)
 
 
 def positive_part(x):
@@ -37,18 +37,18 @@ def γ(d,l):
     return 0.5/l * (d**2 + l**2 * ufl.inner(ufl.grad(d), ufl.grad(d)))
 
 
-def free_energy_plus(u,ν):
+def free_energy_plus(ε,ν):
 # based on alternative formulation, equivalent to below
     λoverμ = 2*ν/(1-2*ν)
-    εplus = matrix_function(ε(u),positive_part)
-    return 0.5*λoverμ*positive_part(ufl.tr(ε(u)))**2 + \
+    εplus = matrix_function(ε,positive_part)
+    return 0.5*λoverμ*positive_part(ufl.tr(ε))**2 + \
             ufl.inner(εplus,εplus)
 
 
-def degraded_free_energy(u,d,ν,ψcritstar):
-    ψplus = free_energy_plus(u,ν)-ψcritstar
+def degraded_free_energy(ε,d,ν,ψcritstar):
+    ψplus = free_energy_plus(ε,ν)-ψcritstar
     # ψplus = free_energy_plus(u,ν)
-    ψminus = free_energy(u,ν) - ψplus
+    ψminus = free_energy(ε,ν) - ψplus
     return degradation(d)*(ψplus) + (ψminus)
     # return degradation(d)*(ψplus-ψcritstar) + (ψminus+ψcritstar)
 
@@ -78,8 +78,8 @@ def degraded_pressure(p,d):
     return degradation(d)*pplus + pminus
 
 
-def history_function(u,material,Hprev):
-    ψp = free_energy_plus(u,material.ν)
+def history_function(ε,material,Hprev):
+    ψp = free_energy_plus(ε,material.ν)
     return ufl.max_value(positive_part(ψp-material.ψcritstar),Hprev)
 
 
@@ -100,7 +100,7 @@ def solve(msh,bc_func,uh,material,Hprev=None):
     if Hprev is None:
         Hprev = fem.Constant(msh, default_scalar_type(0.0))
 
-    H = history_function(uh,material,Hprev)
+    H = history_function(ε(uh),material,Hprev)
 
     bcs = bc_func(V)
 
@@ -127,20 +127,18 @@ def solve(msh,bc_func,uh,material,Hprev=None):
 
 
 
-def minimisation(msh,bcfuncs,material,dh=None,uh=None,pw=None,Hprev=None,max_its=100):
+def minimisation(msh,bcfuncs,material,dh=0.0,uh=None,pw=None,Hprev=0.0,max_its=100,tol=1e-4):
 
 
-    Vd = fem.functionspace(msh, ("Lagrange", 1))
-    dh = fem.Function(Vd)
-
-
-    Vu = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim,)))
-    uh = fem.Function(Vu)
     
+
+
+
+
     L2_old = 0.0
     for i in range(max_its):
 
-        uh = el.solve(msh,bcfuncs[0],material,dh,None,pw)
+        uh = el.solve(msh,bcfuncs[0],material,dh,uh,pw)
         dh = solve(msh,bcfuncs[1],uh,material,Hprev)
 
         L2_ = ufl.inner(dh,dh)*ufl.dx
@@ -150,7 +148,7 @@ def minimisation(msh,bcfuncs,material,dh=None,uh=None,pw=None,Hprev=None,max_its
         error_L2 = np.abs(L2 - L2_old)
         print(f"iteration {i}, error {error_L2}")
         
-        if error_L2 < 1e-4:
+        if error_L2 < tol:
             break
 
         L2_old = L2

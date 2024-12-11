@@ -50,6 +50,38 @@ def write_vtk(filename,msh,functions,names,t=0.0):
 
 
 
+def write_xdmf(filename,msh,functions,names,t=0.0):
+
+    for idx,f in enumerate(functions):
+        # check if has function space
+        if hasattr(f,"ufl_function_space"):
+            if f.ufl_element().degree == 1:
+                functions[idx].name = names[idx]
+            else:
+                # Interpolate onto order 1
+                Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
+                temp = fem.Function(Q)
+                temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
+                temp.name = names[idx]
+                functions[idx] = temp
+
+        else:
+            Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
+            temp = fem.Function(Q)
+            temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
+            temp.name = names[idx]
+            functions[idx] = temp
+
+
+    with io.XDMFFile(MPI.COMM_WORLD, filename, "w") as file:
+        file.write_mesh(msh)
+        for f in functions:
+            file.write_function(f,t)
+
+
+
+
+
 
 def plot_damage_state(u, d):
     """
@@ -94,3 +126,5 @@ def plot_damage_state(u, d):
     plotter.view_xy()
     if not pyvista.OFF_SCREEN:
        plotter.show()
+
+

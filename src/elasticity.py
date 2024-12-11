@@ -16,12 +16,12 @@ import bodyforces as bf
 
 
 
-def solve(msh, bc_func, material, d=None, u=None, pw=None):
-    # V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
+def solve(msh, bc_func, material, d=None, u_old=None, pw=None):
+    V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
-    el = bufl.element("Lagrange", msh.basix_cell(), 1, shape=(msh.geometry.dim,), dtype=default_real_type)
+    # el = bufl.element("Lagrange", msh.basix_cell(), 1, shape=(msh.geometry.dim,), dtype=default_real_type)
     
-    V = fem.functionspace(msh, el)
+    # V = fem.functionspace(msh, el)
 
     bcs = bc_func(V)
 
@@ -48,14 +48,16 @@ def solve(msh, bc_func, material, d=None, u=None, pw=None):
     g = pf.degradation(d)
 
     # Can take u from previous timestep, or initialise to zero
-    if u is None:
-        u = fem.Function(V, name="elastic displacement")
+    
+    u = fem.Function(V, name="elastic displacement")
+    if u_old is not None:
+        u.x.array[:] = u_old.x.array[:]
 
 
-    internal_energy = pf.degraded_free_energy(u,d,ν,material.ψcritstar) * ufl.dx
+    internal_energy = pf.degraded_free_energy(pf.ε(u),d,ν,material.ψcritstar) * ufl.dx
     # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
 
-    external_energy =  C1 *( ufl.dot(f, u) - pw(u)*ufl.inner(ufl.grad(g), u) )* ufl.dx \
+    external_energy =  C1 *( g*ufl.dot(f, u) - pw(u)*ufl.inner(ufl.grad(g), u) )* ufl.dx \
         - C1 * g * pw(u) *  ufl.dot(n, u) * ds
     
 
@@ -111,10 +113,10 @@ def solve(msh, bc_func, material, d=None, u=None, pw=None):
 
 
 
-def solve_no_damage(msh, bc_func, material, vh_prev, pw=None):
+def solve_no_damage(msh, bc_func, material, pw=None):
     V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
-
+    
 
 
     bcs = bc_func(V)
@@ -128,7 +130,8 @@ def solve_no_damage(msh, bc_func, material, vh_prev, pw=None):
     pw = bf.water_pressure_static(msh)
 
     # if pw is None:
-    #     pw = lambda u: water_pressure(msh,u)
+    #     pw = lambda u: bf.water_pressure(msh,u)
+
 
     if msh.geometry.dim == 2:
         f = fem.Constant(msh, default_scalar_type((0, -ρratio)))
@@ -147,13 +150,43 @@ def solve_no_damage(msh, bc_func, material, vh_prev, pw=None):
     a = ufl.inner(σ(u), ε(v)) * ufl.dx
     L =   C1 *( ufl.dot(f, v) )* ufl.dx \
         - C1  * pw *  ufl.dot(n, v) * ds\
-        - ufl.inner(σ(vh_prev), ε(v)) * ufl.dx
     
 
     
     problem = LinearProblem(a, L, bcs=bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
     uh = problem.solve()
     return uh
+    # F = a - L
+    # problem = NonlinearProblem(F, u, bcs)
+
+    # solver = NewtonSolver(MPI.COMM_WORLD, problem)
+    # solver.convergence_criterion = "incremental"
+    # solver.rtol = 1e-8
+    # solver.atol = 1e-8
+    # solver.max_it = 100
+    # solver.report = True
+
+    
+
+    # ksp = solver.krylov_solver
+    # opts = PETSc.Options()
+    # option_prefix = ksp.getOptionsPrefix()
+    # opts[f"{option_prefix}ksp_type"] = "preonly"
+    # # opts[f"{option_prefix}ksp_rtol"] = 1.0e-8
+    # opts[f"{option_prefix}pc_type"] = "lu"
+    # # opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
+    # # opts[f"{option_prefix}pc_hypre_type"] = "boomeramg"
+    # # opts[f"{option_prefix}pc_hypre_boomeramg_max_iter"] = 1
+    # # opts[f"{option_prefix}pc_hypre_boomeramg_cycle_type"] = "v"
+    # ksp.setFromOptions()
+
+    # n, converged = solver.solve(u)
+    # assert (converged)
+    
+
+
+    
+    # return u
 
 
 
