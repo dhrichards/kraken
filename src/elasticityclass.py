@@ -19,9 +19,10 @@ def viscosity(u, n, eps=1.e-8, A=1.0):
 
 
 class viscoelastic_damage:
-    def __init__(self, msh, bc_funcs, material):
+    def __init__(self, msh, bc_funcs, material, dt):
         self.msh = msh
         self.material = material
+        self.dt = dt
 
         
         v_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,), dtype=default_real_type)
@@ -46,7 +47,7 @@ class viscoelastic_damage:
 
 
         self.v = fem.Function(self.V_e, name="elastic displacement")
-        self.d = fem.Function(self.V_d, name="Damage")
+        self.d = fem.Function(self.V_d, name="damage")
         self.u = fem.Function(self.P2, name="velocity")
         self.p = fem.Function(self.P1, name="pressure")
 
@@ -62,7 +63,7 @@ class viscoelastic_damage:
 
         pw = lambda u: bf.water_pressure(self.msh,u)
         g = lambda d: pf.degradation(d)
-        f = pf.body_force(self.msh, ρratio)
+        f = bf.body_force(self.msh, ρratio)
         
         internal_energy = pf.degraded_free_energy(ε(self.v),self.d,ν,ψcrit) * ufl.dx
         # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
@@ -75,12 +76,12 @@ class viscoelastic_damage:
 
         self.F = ufl.derivative(total_energy,self.v,ufl.TestFunction(self.V_e))
 
-        self.problem = NonlinearProblem(self.F, self.v, self.bcs_v)
+        self.elastic_problem = NonlinearProblem(self.F, self.v, self.bcs_v)
 
-        self.solver = Newton(self.problem)
+        self.elastic_solver = Newton(self.elastic_problem)
 
 
-        n, converged = self.solver.solve(self.v)
+        n, converged = self.elastic_solver.solve(self.v)
         assert(converged)
 
 
@@ -146,7 +147,7 @@ class viscoelastic_damage:
 
 
     
-    def minimisation(self, max_its=100, tol=1e-4):
+    def elastic_damage_fixed_point(self, max_its=100, tol=1e-4):
         L2_old = 0.0
 
         for i in range(max_its):
@@ -172,11 +173,11 @@ class viscoelastic_damage:
         self.Hprev = pf.history_function(ε(self.v),self.material,self.Hprev)
 
 
-    def update_mesh(self, k=1.0):
+    def update_mesh(self):
         V = fem.functionspace(self.msh, ("Lagrange", 1, (self.msh.geometry.dim, )))
         uhh = fem.Function(V)
         uhh.interpolate(self.u)
-        self.msh.geometry.x[:,:self.msh.geometry.dim] += k*uhh.x.array.reshape((-1, self.msh.geometry.dim))
+        self.msh.geometry.x[:,:self.msh.geometry.dim] += self.dt*uhh.x.array.reshape((-1, self.msh.geometry.dim))
 
 
 

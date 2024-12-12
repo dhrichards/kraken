@@ -15,6 +15,7 @@ import utilities
 import energybased as eb
 import icebergmesh
 import gmsh
+import elasticityclass as ec
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -23,16 +24,17 @@ def right_boundary(x):
     return np.isclose(x[0], nondim_length/2)
 
 
-true_length = 16e3
+true_length = 4e3
 true_height = 300
 
 material = Material_no_uc()
+material.L = true_height
 material.τ = 3600*24
 # material.L = true_height    
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 0.5/material.L
+material.l = 1.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
@@ -53,64 +55,58 @@ clamped_both = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
 clamped_bc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type)]
 symm_bc = lambda V: [get_zero_bc(V.sub(0), left_boundary, default_scalar_type)]
 no_bc = lambda V: []
-#%%
 
-# dh = None
-# vh,dh = monolithic.solve(msh,bc,material,H)
-# for i in range(1):
-#     vh = elasticity.solve(msh,symm_bc,material,dh)
-#     dh,H = pf.solve(msh,no_bc,vh,material)
-vh = None; dh = None
-uh = None; ph = None
-H = 0.0
+model = ec.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
 
-g0 = 6.6
-steps = 40
-for i in range(steps):
-    material.g = g0 + i*(9.81-g0)/(steps-1)
-    print(material.g)
-    # vh, dh = eb.fixed_point(msh, [symm_bc,no_bc], material, dh)
-    vh, dh = pf.minimisation(msh, [symm_bc,no_bc], material, dh, vh, Hprev=H,tol=1e-8)
-    H = pf.history_function(pf.ε(vh),material,H)
-    utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
-                    [vh,dh],\
+# g0 = 6.7
+g0=6.85
+model.material.g = g0
+steps = 10
+for i in range(2):
+    model.material.g = g0 + i*(9.81-g0)/(steps-1)
+    print(model.material.g)
+   
+    model.elastic_damage_fixed_point(tol=1e-6)
+    utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
+                    [model.v,model.d],\
                     ["v","d"],t=i)
-# material.ψcritstar = material.ψcritstar*5e4
-# for i in range(100):
-#     vh,dh = eb.fixed_point(msh, [symm_bc,no_bc], material, dh, max_its=2)
-#     # vh,dh = pf.minimisation(msh, [symm_bc,no_bc], material, max_its = 1)
-#     # uh,ph = stokes.solve(msh,symm_bc,vh,material,1.0,dh,u=uh,p=ph)
-#     uh = vh
-#     utilities.move_mesh(msh,uh,1.0)
+    
 
+model.material.g += (9.81-g0)/(steps-1)
+for i in range(2):
+    
+    
+    model.elastic_damage_fixed_point(tol=1e-6)
+    model.solve_stokes()
+    
 
+    utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
+                    [model.v,model.d,model.u],\
+                    ["v","u","d"],t=i)
 
-#     utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
-#                     [vh,uh,dh],\
-#                     ["v","u","d"],t=i)
-
+    model.update_mesh()
 
 #%%
+# vh = model.v
+# σ_e = ufl.dev(pf.stress(vh,material.ν))
+# # σ_v = stokes.viscosity(uh,material.n,1e-8)*pf.ε(uh)
 
-σ_e = ufl.dev(pf.stress(vh,material.ν))
-# σ_v = stokes.viscosity(uh,material.n,1e-8)*pf.ε(uh)
-
-# ψ = free_energy(vh,material.ν)
-ψ = pf.free_energy_plus(pf.ε(vh),material.ν)
-ψplus = pf.free_energy_plus(pf.stress(vh,material.ν),material.ν)
-ψplusp = pf.positive_part(pf.free_energy_plus(pf.ε(vh),material.ν)-material.ψcritstar)
-
-
-from invariants import matrix_function
-λ,E = invariants.eigenstate(pf.ε(vh)) 
+# # ψ = free_energy(vh,material.ν)
+# ψ = pf.free_energy_plus(pf.ε(vh),material.ν)
+# ψplus = pf.free_energy_plus(pf.stress(vh,material.ν),material.ν)
+# ψplusp = pf.positive_part(pf.free_energy_plus(pf.ε(vh),material.ν)-material.ψcritstar)
 
 
-# if MPI.COMM_WORLD.rank == 0:
-#     utilities.plot_damage_state(vh,dh)
+# from invariants import matrix_function
+# λ,E = invariants.eigenstate(pf.ε(vh)) 
+
+
+# # if MPI.COMM_WORLD.rank == 0:
+# #     utilities.plot_damage_state(vh,dh)
 
 utilities.write_vtk("outputs/pf.pvd",msh,\
-                    [vh,ψ,dh,λ[0],λ[1],σ_e,ψplus,ψplusp],\
-                    ["v","ψ","d","λ1","λ2","σ_e","ψplus","ψplusp"])
+                    [model.u,model.v,model.d],\
+                    ["u","v","d"],t=0)
 
 
 
