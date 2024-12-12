@@ -19,10 +19,11 @@ def viscosity(u, n, eps=1.e-8, A=1.0):
 
 
 class viscoelastic_damage:
-    def __init__(self, msh, bc_funcs, material, dt):
+    def __init__(self, msh, bc_funcs, material, dt, pw = bf.water_pressure):
         self.msh = msh
         self.material = material
         self.dt = dt
+        self.pw = pw
 
         
         v_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,), dtype=default_real_type)
@@ -61,7 +62,7 @@ class viscoelastic_damage:
 
         n = ufl.FacetNormal(self.msh)
 
-        pw = lambda u: bf.water_pressure(self.msh,u)
+        pw = lambda u: self.pw(self.msh,u)
         g = lambda d: pf.degradation(d)
         f = bf.body_force(self.msh, ρratio)
         
@@ -116,7 +117,7 @@ class viscoelastic_damage:
         def η(u):
             return g*viscosity(u, self.material.n, 1.e-8)
         
-        pw = lambda u: bf.water_pressure(self.msh,u*self.dt + self.v)
+        pw = lambda u: self.pw(self.msh,u*self.dt + self.v)
         
         n = ufl.FacetNormal(self.msh)
         ds = ufl.Measure("ds", domain=self.msh)

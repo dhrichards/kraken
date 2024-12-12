@@ -34,7 +34,7 @@ material.τ = 3600*24
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 1.0/material.L
+material.l = 2.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
@@ -82,7 +82,7 @@ for i in range(2):
 
     utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
                     [model.v,model.d,model.u],\
-                    ["v","u","d"],t=i)
+                    ["v","d","u"],t=i)
 
     model.update_mesh()
 
