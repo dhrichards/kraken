@@ -24,5 +24,12 @@ def get_zero_bc(V,boundary,dtype):
     return get_bc(V,boundary,get_zero_vec(V,dtype))
 
 
+def get_bc_func(V,boundary,bc_expr):
+    boundary_dofs_x = get_boundary_dofs(V,boundary)
+    bc_val = fem.Function(V)
+    bc_val.interpolate(bc_expr)
+    return lambda V: get_bc(V,boundary,bc_val)
+
+
 
         

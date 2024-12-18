@@ -23,11 +23,8 @@ def free_energy(ε,ν):
 
 def positive_part(x):
     return ufl.max_value(x,0)
+    # return 0.5*(x + ufl.algebra.Abs(x))
     # return ufl.conditional(ufl.ge(x,c),x,0.0)
-
-def negative_part(x):
-    return ufl.min_value(x,0)
-
 
 def degradation(d,k=1e-5):
     return (1-d)**2 + k
@@ -78,9 +75,17 @@ def degraded_pressure(p,d):
     return degradation(d)*pplus + pminus
 
 
-def history_function(ε,material,Hprev):
-    ψp = free_energy_plus(ε,material.ν)
-    return ufl.max_value(positive_part(ψp-material.ψcritstar),Hprev)
+def history_function(ε,Hprev,ν,ψcrit):
+    ψp = free_energy_plus(ε,ν) - ψcrit
+    return ufl.max_value(ψp,Hprev)
+    # return ufl.ln(ufl.exp(pp) + ufl.exp(Hprev))
+
+    # return ufl.conditional(ufl.gt(pp,Hprev),pp,Hprev)
+    # pp_f = fem.Function(V)
+    # pp_f.interpolate(pp)
+    # H = fem.Function(V)
+    # H.x.petsc_vec = np.maximum(pp.x.petsc_vec,Hprev.x.petsc_vec)
+    # return H
 
 
 # def initilise_history_function(msh):

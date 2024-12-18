@@ -11,7 +11,7 @@ from dolfinx.fem.petsc import (apply_lifting, apply_lifting_nest,
 from mpi4py import MPI
 from petsc4py import PETSc
 import ufl
-from dolfinx import fem
+from dolfinx import fem, la
 
 
 
@@ -164,12 +164,32 @@ def block_solve(F, J , P, u, p, bcs, V, Q):
     is_p = PETSc.IS().createStride(Q_map.size_local, offset_p, 1, comm=PETSc.COMM_SELF)
 
     snes = PETSc.SNES().create(MPI.COMM_WORLD)
-    snes.setTolerances(rtol=1.0e-10, max_it=50)
-    snes.getKSP().getPC().setType("lu")
+    ############ Direct
+    # snes.setTolerances(rtol=1.0e-10, max_it=50)
+    # snes.getKSP().getPC().setType("lu")
+    # snes.getKSP().setTolerances(rtol=1e-8)
+    # snes.getKSP().getPC().setFactorSolverType("mumps")
+
+
+
+    #### Iterative
+    snes.setTolerances(rtol=1.0e-10, max_it=100)
+    snes.getKSP().setType("minres")
     snes.getKSP().setTolerances(rtol=1e-8)
-    snes.getKSP().getPC().setFactorSolverType("mumps")
-    # snes.getKSP().getPC().setType("fieldsplit")
-    # snes.getKSP().getPC().setFieldSplitIS(("u", is_u), ("p", is_p))
+    snes.getKSP().getPC().setType("fieldsplit")
+    snes.getKSP().getPC().setFieldSplitType(PETSc.PC.CompositeType.ADDITIVE)
+    snes.getKSP().getPC().setFieldSplitIS(("u", is_u), ("p", is_p))
+
+    ksp_u, ksp_p = snes.getKSP().getPC().getFieldSplitSubKSP()
+    ksp_u.setType("preonly")
+    ksp_u.getPC().setType("gamg")
+    ksp_p.setType("preonly")
+    ksp_p.getPC().setType("jacobi")
+    # snes.getKSP().getPC().setUp()
+    # Pu, _ = ksp_u
+    # Pu.setBlockSize(2)
+
+
 
     problem = NonlinearPDE_SNESProblem(F, J, [u, p], bcs=bcs, P=P)
 
@@ -180,14 +200,7 @@ def block_solve(F, J , P, u, p, bcs, V, Q):
                         P=fem.petsc.create_matrix_block(P))
     x = fem.petsc.create_vector_block(F)
 
-
-    snes.solve(None, x)
-    assert snes.getKSP().getConvergedReason() > 0
-
-    u.x.scatter_forward()
-    p.x.scatter_forward()
-
-    return u, p
+    return snes, x
 
 
 def nested_solve(F, J, u, p, bcs, P=None):
@@ -204,7 +217,7 @@ def nested_solve(F, J, u, p, bcs, P=None):
     Fvec = fem.petsc.create_vector_nest(F)
 
     snes = PETSc.SNES().create(MPI.COMM_WORLD)
-    snes.setTolerances(rtol=1.0e-9, max_it=100)
+    snes.setTolerances(rtol=1.0e-9, max_it=200)
     nested_IS = Jmat.getNestISs()
     snes.getKSP().setType("minres")
     snes.getKSP().setTolerances(rtol=1e-7)
@@ -247,4 +260,132 @@ def nested_solve(F, J, u, p, bcs, P=None):
 
 
 
+
+def linear_nested_solver(a, L, u, p, bcs, P):
+    """Solve the Stokes problem using nest matrices and an iterative solver."""
+
+    # Assemble nested matrix operators
+    A = fem.petsc.assemble_matrix_nest(a, bcs=bcs)
+    A.assemble()
+
+    # Create a nested matrix P to use as the preconditioner. The
+    # top-left block of P is shared with the top-left block of A. The
+    # bottom-right diagonal entry is assembled from the form a_p11:
+    P11 = fem.petsc.assemble_matrix(P[1][1], [])
+    P = PETSc.Mat().createNest([[A.getNestSubMatrix(0, 0), None], [None, P11]])
+    P.assemble()
+
+    A00 = A.getNestSubMatrix(0, 0)
+    A00.setOption(PETSc.Mat.Option.SPD, True)
+
+    P00, P11 = P.getNestSubMatrix(0, 0), P.getNestSubMatrix(1, 1)
+    P00.setOption(PETSc.Mat.Option.SPD, True)
+    P11.setOption(PETSc.Mat.Option.SPD, True)
+
+    # Assemble right-hand side vector
+    b = fem.petsc.assemble_vector_nest(L)
+
+    # Modify ('lift') the RHS for Dirichlet boundary conditions
+    fem.petsc.apply_lifting_nest(b, a, bcs=bcs)
+
+    # Sum contributions for vector entries that are share across
+    # parallel processes
+    for b_sub in b.getNestSubVecs():
+        b_sub.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+
+    # Set Dirichlet boundary condition values in the RHS vector
+    bcs0 = fem.bcs_by_block(extract_function_spaces(L), bcs)
+    fem.petsc.set_bc_nest(b, bcs0)
+
+    # The pressure field is determined only up to a constant. We supply
+    # a vector that spans the nullspace to the solver, and any component
+    # of the solution in this direction will be eliminated during the
+    # solution process.
+    # null_vec = fem.petsc.create_vector_nest(L)
+
+    # # Set velocity part to zero and the pressure part to a non-zero
+    # # constant
+    # null_vecs = null_vec.getNestSubVecs()
+    # null_vecs[0].set(0.0), null_vecs[1].set(1.0)
+
+    # # Normalize the vector that spans the nullspace, create a nullspace
+    # # object, and attach it to the matrix
+    # null_vec.normalize()
+    # nsp = PETSc.NullSpace().create(vectors=[null_vec])
+    # assert nsp.test(A)
+    # A.setNullSpace(nsp)
+
+    # Create a MINRES Krylov solver and a block-diagonal preconditioner
+    # using PETSc's additive fieldsplit preconditioner
+    ksp = PETSc.KSP().create(MPI.COMM_WORLD)
+    ksp.setOperators(A, P)
+    ksp.setType("minres")
+    ksp.setTolerances(rtol=1e-8)
+    ksp.getPC().setType("fieldsplit")
+    ksp.getPC().setFieldSplitType(PETSc.PC.CompositeType.ADDITIVE)
+
+    # Define the matrix blocks in the preconditioner with the velocity
+    # and pressure matrix index sets
+    nested_IS = P.getNestISs()
+    ksp.getPC().setFieldSplitIS(("u", nested_IS[0][0]), ("p", nested_IS[0][1]))
+
+    # Set the preconditioners for each block. For the top-left
+    # Laplace-type operator we use algebraic multigrid. For the
+    # lower-right block we use a Jacobi preconditioner. By default, GAMG
+    # will infer the correct near-nullspace from the matrix block size.
+    ksp_u, ksp_p = ksp.getPC().getFieldSplitSubKSP()
+    ksp_u.setType("preonly")
+    ksp_u.getPC().setType("gamg")
+    ksp_p.setType("preonly")
+    ksp_p.getPC().setType("jacobi")
+
+    # Create finite element {py:class}`Function <dolfinx.fem.Function>`s
+    # for the velocity (on the space `V`) and for the pressure (on the
+    # space `Q`). The vectors for `u` and `p` are combined to form a
+    # nested vector and the system is solved.
+    x = PETSc.Vec().createNest([la.create_petsc_vector_wrap(u.x), la.create_petsc_vector_wrap(p.x)])
+    
+    return ksp, x, b
+
+
+
+def linear_block_solver(a, L, u, p, bcs, P, V, Q):
+
+    A = assemble_matrix_block(a, bcs=bcs)
+    A.assemble()
+    P = assemble_matrix_block(P, bcs=bcs)
+    P.assemble()
+    b = assemble_vector_block(L, a, bcs=bcs)
+
+    # Set the nullspace for pressure (since pressure is determined only
+    # up to a constant)
+    null_vec = A.createVecLeft()
+    offset = V.dofmap.index_map.size_local * V.dofmap.index_map_bs
+    null_vec.array[offset:] = 1.0
+    null_vec.normalize()
+    nsp = PETSc.NullSpace().create(vectors=[null_vec])
+    assert nsp.test(A)
+    A.setNullSpace(nsp)
+
+    ksp = PETSc.KSP().create(MPI.COMM_WORLD)
+    ksp.setOperators(A)
+    ksp.setType("preonly")
+
+    # Set the solver type to MUMPS (LU solver) and configure MUMPS to
+    # handle pressure nullspace
+    pc = ksp.getPC()
+    pc.setType("lu")
+
+    pc.setFactorSolverType("mumps")
+    pc.setFactorSetUpSolverType()
+    pc.getFactorMatrix().setMumpsIcntl(icntl=24, ival=1)
+    pc.getFactorMatrix().setMumpsIcntl(icntl=25, ival=0)
+
+    x = A.createVecLeft()
+    ksp.solve(b, x)
+
+    # Create Functions and scatter x solution
+    offset = V.dofmap.index_map.size_local * V.dofmap.index_map_bs
+    u.x.array[:offset] = x.array_r[:offset]
+    p.x.array[: (len(x.array_r) - offset)] = x.array_r[offset:]
 
