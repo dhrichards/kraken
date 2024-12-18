@@ -50,7 +50,7 @@ material.τ = 3600*24/2
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 2.0/material.L
+material.l = 3.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
@@ -81,24 +81,24 @@ no_bc = lambda V: []
 cliff_bc = lambda V: [get_zero_bc(V.sub(0), left_boundary, default_scalar_type),
                         get_zero_bc(V.sub(1), bottom_boundary, default_scalar_type)]
 
-model = ec.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_notch], material, 1.0)
+model = ec.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
 
-# g0 = 6.5
-# # g0=2.53
-# model.material.g = g0
-# steps = 60
-# for i in range(steps):
-#     model.material.g = g0 + i*(9.8-g0)/(steps-1)
-#     if MPI.COMM_WORLD.rank == 0:
-#         print(model.material.g)
+g0 = 6.5
+# g0=2.53
+model.material.g = g0
+steps = 80
+for i in range(steps):
+    model.material.g = g0 + i*(9.8-g0)/(steps-1)
+    if MPI.COMM_WORLD.rank == 0:
+        print(model.material.g)
    
-#     model.fixed_point(tol=1e-4,solve_stokes=False)
-#     ψp = pf.free_energy_plus(pf.ε(model.v),model.material.ν)
-#     pp = pf.positive_part(ψp-material.ψcritstar)
-#     pw = bf.water_pressure(msh,model.v)
-#     utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
-#                     [model.v,model.d,model.Hprev,pp,pw],\
-#                     ["v","d","H","pp","pw"],t=i)
+    model.fixed_point(tol=1e-4,solve_stokes=False)
+    ψp = pf.free_energy_plus(pf.ε(model.v),model.material.ν)
+    pp = pf.positive_part(ψp-material.ψcritstar)
+    pw = bf.water_pressure(msh,model.v)
+    utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
+                    [model.v,model.d,model.Hprev,pp,pw],\
+                    ["v","d","H","pp","pw"],t=i)
     
 
 # model.material.g += (9.81-g0)/(steps-1)
