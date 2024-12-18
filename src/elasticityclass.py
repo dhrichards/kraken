@@ -124,6 +124,9 @@ class viscoelastic_damage:
         d_ub = fem.Function(self.V_d, name="Upper bound")
         d_ub.x.array[:] = 1
 
+        d_lb = fem.Function(self.V_d, name="Lower bound")
+        self.d.x.petsc_vec.copy(d_lb.x.petsc_vec)
+
         F = (ufl.inner(self.d,v) + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
              - C3*l*2*(1-self.d)*ψp*v) * ufl.dx
 
