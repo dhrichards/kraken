@@ -79,6 +79,83 @@ def warp_msh(msh,L,xc,c):
     return a
 
 
+def create_iceberg_mesh2(true_length, true_height, material, factor=3.0):
+
+    model = gmsh.model()
+
+    model.add("iceberg")
+
+
+    # material.L = true_height    
+    nondim_length = true_length/material.L
+    nondim_height = true_height/material.L
+
+
+    Hw = material.ρi/material.ρw*nondim_height
+
+    large_size = nondim_height/5
+    small_size = material.l/factor
+    end_size = small_size*2
+    bottom_coarsening = 5.0
+    crack_x = nondim_length/2 - nondim_height*0.7
+
+    model.geo.addPoint(0, -Hw, 0, large_size, 1)
+    model.geo.addPoint(crack_x, -Hw, 0, bottom_coarsening*small_size, 2)
+    model.geo.addPoint(nondim_length/2, -Hw, 0, bottom_coarsening*end_size, 3)
+
+
+    model.geo.addPoint(nondim_length/2, nondim_height-Hw, 0, end_size, 4)
+    model.geo.addPoint(crack_x, nondim_height-Hw, 0, small_size, 5)
+    model.geo.addPoint(0, nondim_height-Hw, 0, large_size, 6)
+
+    model.geo.addPoint(nondim_length/2, 0, 0, end_size, 7)
+    model.geo.addPoint(crack_x, 0, 0, small_size, 8)
+
+
+    model.geo.addLine(1, 2, 1)
+    model.geo.addLine(2, 3, 2)
+    model.geo.addLine(3, 7, 3)
+    model.geo.addLine(7, 4, 4)
+    model.geo.addLine(4, 5, 5)
+    model.geo.addLine(5, 6, 6)
+    model.geo.addLine(6, 1, 7)
+    model.geo.addLine(7, 8, 8)
+    model.geo.addLine(8, 5, 9)
+
+    model.geo.addCurveLoop([1, 2, 3, 4, 5, 6, 7], 1)
+    model.geo.addCurveLoop([-8, 4, 5, -9], 2)
+    model.geo.addCurveLoop([1, 2, 3, 9, 8, 6, 7], 3)
+
+    # model.geo.mesh.setTransfiniteCurve(4, 10, "Progression", 1.0)
+    # model.geo.mesh.setTransfiniteCurve(9, 10, "Progression", 1.0)
+    # model.geo.mesh.setTransfiniteCurve(8, 10, "Progression", 1.0)
+    # model.geo.mesh.setTransfiniteCurve(5, 10, "Progression", 1.0)
+
+    #  model.geo.mesh.setTransfiniteSurface(1, "Left", [-8, 4, 5, -9])
+
+
+
+    # model.geo.addPlaneSurface([2], 1)
+    # model.geo.addPlaneSurface([3], 2)
+    model.geo.addPlaneSurface([1], 1)
+
+    model.geo.synchronize()
+
+    # model.addPhysicalGroup(1, [1, 2, 3, 4, 5, 6], 1)
+    # model.addPhysicalGroup(2, [1], 1)
+
+    # write geo
+    gmsh.write("iceberg.geo_unrolled")
+
+    model.mesh.generate(2)
+
+    return model
+
+    
+
+
+
+
 
 
 
