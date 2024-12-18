@@ -145,7 +145,7 @@ class viscoelastic_damage:
         solver.getKSP().getPC().setType("lu")
         solver.getKSP().getPC().setFactorSolverType("mumps")
         # We set the bound (Note: they are passed as reference and not as values)
-        solver.setVariableBounds(self.d.x.petsc_vec,d_ub.x.petsc_vec)
+        solver.setVariableBounds(d_lb.x.petsc_vec,d_ub.x.petsc_vec)
 
         solver.solve(None, self.d.x.petsc_vec)
 
