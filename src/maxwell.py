@@ -88,33 +88,33 @@ g0 = 6.5
 model.material.g = g0
 steps = 20
 for i in range(steps):
-    model.material.g = g0 + i*(8.0-g0)/(steps-1)
+    model.material.g = g0 + i*(9.8-g0)/(steps-1)
     if MPI.COMM_WORLD.rank == 0:
         print(model.material.g)
    
-    model.fixed_point(tol=1e-4,solve_stokes=False)
+    model.fixed_point(tol=1e-4,solve_stokes=False,max_its=100)
     ψp = pf.free_energy_plus(pf.ε(model.v),model.material.ν)
     pp = pf.positive_part(ψp-material.ψcritstar)
     pw = bf.water_pressure(msh,model.v)
     utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d,model.Hprev,pp,pw],\
-                    ["v","d","H","pp","pw"],t=i)
+                    [model.v,model.d,model.Hprev,pp],\
+                    ["v","d","H","pp"],t=i)
     
 
-# model.material.g += (9.81-g0)/(steps-1)
-for i in range(1000):
+# # model.material.g += (9.81-g0)/(steps-1)
+# for i in range(1000):
     
     
-    model.fixed_point(tol=1e-4,solve_stokes=False)
-    # log.set_log_level(log.LogLevel.INFO)
-    model.solve_stokes()
+#     model.fixed_point(tol=1e-4,solve_stokes=False)
+#     # log.set_log_level(log.LogLevel.INFO)
+#     model.solve_stokes()
     
 
-    utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d,model.u, pf.stress(model.v,material.ν)],\
-                    ["v","d","u", "σ"],t=i)
+#     utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
+#                     [model.v,model.d,model.u, pf.stress(model.v,material.ν)],\
+#                     ["v","d","u", "σ"],t=i)
 
-    model.update_mesh()
+#     model.update_mesh()
 
 #%%
 # vh = model.v

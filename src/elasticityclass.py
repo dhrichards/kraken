@@ -22,6 +22,9 @@ class viscoelastic_damage:
         self.dt = dt
         self.pw = bf.water_pressure
 
+        h_el = bufl.element("DG", self.msh.basix_cell(), 0, dtype=default_real_type)
+        self.Q_h = fem.functionspace(self.msh, h_el)
+
         
         v_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,), dtype=default_real_type)
         
@@ -54,7 +57,7 @@ class viscoelastic_damage:
 
         self.x = fem.Function(self.W)
 
-        self.init_damage_limits()
+        # self.init_damage_limits()
     
     
     def η(self, u):
@@ -99,6 +102,7 @@ class viscoelastic_damage:
 
     def solve_damage(self):
         H = pf.history_function(ε(self.v),self.Hprev,self.material.ν,self.material.ψcritstar)
+        # H = self.solve_history()
 
         d = ufl.TrialFunction(self.V_d)
         v = ufl.TestFunction(self.V_d)
@@ -126,6 +130,9 @@ class viscoelastic_damage:
         self.d_ub = fem.Function(self.V_d, name="Upper bound")
         self.d_ub.x.array[:] = 1
 
+        self.d_lb = fem.Function(self.V_d, name="Lower bound")
+        self.d_lb.x.array[:] = 0
+
 
         F = (ufl.inner(self.d,v) + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
              - C3*l*2*(1-self.d)*ψp*v) * ufl.dx
@@ -145,13 +152,32 @@ class viscoelastic_damage:
         self.solver_d.getKSP().getPC().setType("lu")
         self.solver_d.getKSP().getPC().setFactorSolverType("mumps")
         # We set the bound (Note: they are passed as reference and not as values)
-        # self.solver_d.setVariableBounds(self.d.x.petsc_vec,self.d_ub.x.petsc_vec)
+        self.solver_d.setVariableBounds(self.d_lb.x.petsc_vec,self.d_ub.x.petsc_vec)
 
         # self.solver_d.solve(None, self.d.x.petsc_vec)
 
     def solve_damage_limits(self):
-        self.solver_d.setVariableBounds(self.d.x.petsc_vec,self.d_ub.x.petsc_vec)
+        ψp = pf.positive_part(pf.free_energy_plus(ε(self.v),self.material.ν) - self.material.ψcritstar)
+
+        v = ufl.TestFunction(self.V_d)
+
+        C3 = self.material.C3; l = self.material.l
+
+        F = (ufl.inner(self.d,v) + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
+             - C3*l*2*(1-self.d)*ψp*v) * ufl.dx
+
+        J = ufl.derivative(F,self.d,ufl.TrialFunction(self.V_d))
+
+        problem = nonlinear.NonlinearPDE_SNESProblem(
+            fem.form(F), fem.form(J), self.d, self.bcs_d)
+        
+        self.solver_d.setFunction(problem.F_mono, fem.petsc.create_vector(fem.form(F)))
+        self.solver_d.setJacobian(problem.J_mono, fem.petsc.create_matrix(fem.form(J)),P=None)
+        
+
         self.solver_d.solve(None, self.d.x.petsc_vec)
+
+
 
     def solve_stokes(self):
 
@@ -324,7 +350,9 @@ class viscoelastic_damage:
             self.solve_elastic()
             if solve_stokes:
                 self.solve_stokes_linearised()
-            self.solve_damage_limits()
+            # self.solver_d.solve(None, self.d.x.petsc_vec)
+            # self.solve_damage_limits()
+            self.solve_damage()
 
             L2_ = ufl.inner(self.d,self.d)*ufl.dx
             L2_rank = fem.assemble_scalar(fem.form(L2_))
@@ -341,11 +369,29 @@ class viscoelastic_damage:
             L2_old = L2
 
         # Update history function as finished fixed point iteration
-        self.Hprev = pf.history_function(ε(self.v),
-                                        self.Hprev,
-                                        self.material.ν,
-                                        self.material.ψcritstar)
+        self.d_lb = self.d.copy()
+        self.Hprev = self.solve_history()
+        # self.Hprev = pf.history_function(ε(self.v),
+        #                                 self.Hprev,
+        #                                 self.material.ν,
+        #                                 self.material.ψcritstar)
+        
+    def solve_history(self):
 
+        h, v = ufl.TrialFunction(self.Q_h), ufl.TestFunction(self.Q_h)
+
+        H = pf.history_function(ε(self.v),self.Hprev,self.material.ν,self.material.ψcritstar)
+
+        a = ufl.inner(h,v) * ufl.dx
+        L = ufl.inner(H,v) * ufl.dx
+
+        problem = LinearProblem(a, L, [], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+
+        h = problem.solve()
+
+        return h
+
+    
 
 
     def update_mesh(self):
