@@ -17,10 +17,10 @@ def create_iceberg_mesh(true_length, true_height, material,filename = "iceberg.m
         Hw = material.ρi/material.ρw*nondim_height
 
     large_size = nondim_height/5
-    small_size = material.l/3
-    end_size = small_size*10
+    small_size = material.l/5
+    end_size = small_size*8
     bottom_coarsening = 10.0
-    crack_x = nondim_length/2 - nondim_height*0.7
+    crack_x = nondim_length/2 - nondim_height*1.1
 
     model.geo.addPoint(0, -Hw, 0, large_size, 1)
     model.geo.addPoint(crack_x, -Hw, 0, bottom_coarsening*small_size, 2)

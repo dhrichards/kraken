@@ -86,9 +86,9 @@ model = ec.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
 g0 = 6.5
 # g0=2.53
 model.material.g = g0
-steps = 80
+steps = 20
 for i in range(steps):
-    model.material.g = g0 + i*(9.8-g0)/(steps-1)
+    model.material.g = g0 + i*(8.0-g0)/(steps-1)
     if MPI.COMM_WORLD.rank == 0:
         print(model.material.g)
    
