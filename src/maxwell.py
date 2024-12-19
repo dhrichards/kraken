@@ -45,12 +45,12 @@ true_height = 300
 
 material = Material_no_uc()
 material.L = true_height
-material.τ = 3600*24/2
+material.τ = 3600*24
 # material.L = true_height    
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 3.0/material.L
+material.l = 1.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
@@ -102,19 +102,19 @@ for i in range(steps):
     
 
 # # model.material.g += (9.81-g0)/(steps-1)
-# for i in range(1000):
+for i in range(1000):
     
     
-#     model.fixed_point(tol=1e-4,solve_stokes=False)
-#     # log.set_log_level(log.LogLevel.INFO)
-#     model.solve_stokes()
+    model.fixed_point(tol=1e-4,solve_stokes=False)
+    # log.set_log_level(log.LogLevel.INFO)
+    model.solve_stokes()
     
 
-#     utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
-#                     [model.v,model.d,model.u, pf.stress(model.v,material.ν)],\
-#                     ["v","d","u", "σ"],t=i)
+    utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
+                    [model.v,model.d,model.u, pf.stress(model.v,material.ν)],\
+                    ["v","d","u", "σ"],t=i)
 
-#     model.update_mesh()
+    model.update_mesh()
 
 #%%
 # vh = model.v

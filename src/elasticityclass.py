@@ -119,65 +119,6 @@ class viscoelastic_damage:
         
         self.d = self.damage_problem.solve()
 
-    def init_damage_limits(self):
-        # H = pf.history_function(ε(self.v),self.Hprev,self.material.ν,self.material.ψcritstar)
-        ψp = pf.positive_part(pf.free_energy_plus(ε(self.v),self.material.ν) - self.material.ψcritstar)
-
-        v = ufl.TestFunction(self.V_d)
-
-        C3 = self.material.C3; l = self.material.l
-
-        self.d_ub = fem.Function(self.V_d, name="Upper bound")
-        self.d_ub.x.array[:] = 1
-
-        self.d_lb = fem.Function(self.V_d, name="Lower bound")
-        self.d_lb.x.array[:] = 0
-
-
-        F = (ufl.inner(self.d,v) + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
-             - C3*l*2*(1-self.d)*ψp*v) * ufl.dx
-
-        J = ufl.derivative(F,self.d,ufl.TrialFunction(self.V_d))
-
-        problem = nonlinear.NonlinearPDE_SNESProblem(
-            fem.form(F), fem.form(J), self.d, self.bcs_d)
-
-        self.solver_d = PETSc.SNES().create(MPI.COMM_WORLD)
-        self.solver_d.setType("vinewtonssls")
-        self.solver_d.setFunction(problem.F_mono, fem.petsc.create_vector(fem.form(F)))
-        self.solver_d.setJacobian(problem.J_mono, fem.petsc.create_matrix(fem.form(J)),P=None)
-        self.solver_d.setTolerances(rtol=1.0e-9, max_it=50)
-        self.solver_d.getKSP().setType("preonly")
-        self.solver_d.getKSP().setTolerances(rtol=1.0e-9)
-        self.solver_d.getKSP().getPC().setType("lu")
-        self.solver_d.getKSP().getPC().setFactorSolverType("mumps")
-        # We set the bound (Note: they are passed as reference and not as values)
-        self.solver_d.setVariableBounds(self.d_lb.x.petsc_vec,self.d_ub.x.petsc_vec)
-
-        # self.solver_d.solve(None, self.d.x.petsc_vec)
-
-    def solve_damage_limits(self):
-        ψp = pf.positive_part(pf.free_energy_plus(ε(self.v),self.material.ν) - self.material.ψcritstar)
-
-        v = ufl.TestFunction(self.V_d)
-
-        C3 = self.material.C3; l = self.material.l
-
-        F = (ufl.inner(self.d,v) + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
-             - C3*l*2*(1-self.d)*ψp*v) * ufl.dx
-
-        J = ufl.derivative(F,self.d,ufl.TrialFunction(self.V_d))
-
-        problem = nonlinear.NonlinearPDE_SNESProblem(
-            fem.form(F), fem.form(J), self.d, self.bcs_d)
-        
-        self.solver_d.setFunction(problem.F_mono, fem.petsc.create_vector(fem.form(F)))
-        self.solver_d.setJacobian(problem.J_mono, fem.petsc.create_matrix(fem.form(J)),P=None)
-        
-
-        self.solver_d.solve(None, self.d.x.petsc_vec)
-
-
 
     def solve_stokes(self):
 
@@ -282,60 +223,6 @@ class viscoelastic_damage:
         # nonlinear.linear_block_solver(a, L, P, self.u, self.p, self.bcs_u, self.P2, self.P1)
 
 
-    def solve_stokes_linearised_basic(self):
-
-        (u,p) = ufl.TrialFunctions(self.W)
-        (v,q) = ufl.TestFunctions(self.W)
-
-        C1 = self.material.C1; C2 = self.material.C2
-        ρratio = self.material.ρratio
-
-        g = pf.degradation(self.d)
-
-        pw = self.pw(self.msh,self.u*self.dt + self.v)
-        η = self.η(self.u)
-
-        n = ufl.FacetNormal(self.msh)
-        ds = ufl.Measure("ds", domain=self.msh)
-
-        f = bf.body_force(self.msh, ρratio)
-
-        a = fem.form(((1/C2)*g*η*ufl.inner(pf.ε(u), pf.ε(v))\
-                     +   ufl.inner(p, ufl.div(v))\
-                     + ufl.inner(ufl.div(u), q)) * ufl.dx)
-        
-        L = fem.form((C1*g*ufl.inner(f,v) \
-                     - C1*g*pw*ufl.inner(ufl.grad(g),v))*ufl.dx \
-                     - (g-1)*ufl.inner(pf.positive_part(-self.p), ufl.div(v))*ufl.dx\
-                     - C1*g*pw*ufl.inner(n,v)*ds)
-        
-        A = fem.petsc.assemble_matrix(a, bcs=self.bcs_u)
-        A.assemble()
-        b = fem.petsc.assemble_vector(L)
-
-        fem.petsc.apply_lifting(b, [a], [self.bcs_u])
-        b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-
-        for bc in self.bcs_u:
-            bc.set(b.array_w)
-
-        ksp = PETSc.KSP().create(MPI.COMM_WORLD)
-        ksp.setOperators(A)
-        ksp.setType("preonly")
-
-        pc = ksp.getPC()
-        pc.setType("lu")
-        pc.setFactorSolverType("mumps")
-        pc.setFactorSetUpSolverType()
-        pc.getFactorMatrix().setMumpsIcntl(icntl=24, ival=1)
-        pc.getFactorMatrix().setMumpsIcntl(icntl=25, ival=0)
-
-        ksp.solve(b, self.x.x.petsc_vec)
-
-        self.u, self.p = self.x.sub(0).collapse(), self.x.sub(1).collapse()
-
-
-
 
 
     
@@ -349,7 +236,7 @@ class viscoelastic_damage:
             
             self.solve_elastic()
             if solve_stokes:
-                self.solve_stokes_linearised()
+                self.solve_stokes()
             # self.solver_d.solve(None, self.d.x.petsc_vec)
             # self.solve_damage_limits()
             self.solve_damage()
@@ -369,13 +256,8 @@ class viscoelastic_damage:
             L2_old = L2
 
         # Update history function as finished fixed point iteration
-        self.d_lb = self.d.copy()
         self.Hprev = self.solve_history()
-        # self.Hprev = pf.history_function(ε(self.v),
-        #                                 self.Hprev,
-        #                                 self.material.ν,
-        #                                 self.material.ψcritstar)
-        
+
     def solve_history(self):
 
         h, v = ufl.TrialFunction(self.Q_h), ufl.TestFunction(self.Q_h)

@@ -14,13 +14,7 @@ def water_pressure_static(msh,ρw=1.0,g=1.0):
 def water_pressure(msh,vh):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1] + vh[msh.geometry.dim-1]#*material.uc/material.L
-
-
-    # pw = ufl.conditional(ufl.lt(z, 0),
-    #                      -z,
-    #                      0.0)
-    pw = ufl.max_value(0.0,-z)
-    return pw
+    return ufl.max_value(0.0,-z)
 
 
 def body_force(msh,ρratio):
