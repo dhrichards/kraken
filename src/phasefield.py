@@ -63,4 +63,6 @@ def history_function(ε,Hprev,ν,ψcrit):
     return ufl.max_value(ψp,Hprev)
 
 
+
+
      
