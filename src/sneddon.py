@@ -5,12 +5,11 @@ from dolfinx import mesh, fem, plot, io, default_scalar_type
 from mpi4py import MPI
 import ufl
 import numpy as np
-import elasticity
-import pf as pf
 from material import MaterialProperties, Material_no_uc
 from boundaryconditions import get_zero_bc
 import utilities
 import energybased as eb
+import elasticityclass as ec
 
 L = 1
 def boundary(x):
@@ -19,7 +18,7 @@ def boundary(x):
         np.isclose(x[1], -L) | \
         np.isclose(x[1], L)
 
-l = 0.05
+l = 0.025
 
 
 
@@ -32,7 +31,7 @@ material.l = l
 
 
 msh = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([-L, -L]), np.array([L, L])],
-                            [600,600], mesh.CellType.quadrilateral)
+                            [100,100], mesh.CellType.quadrilateral)
 
 #refine mesh
 
@@ -52,11 +51,11 @@ h = 0.01
 π = np.pi
 aeff = a + π*l/4
 
-aeff1 = a*(1 + (π*l/4) / (a*(3*h/(8*l) + 1)))
+# aeff1 = a*(1 + (π*l/4) / (a*(3*h/(8*l) + 1)))
 aeff2 = a*(1 + (π*l/4) / (a*(h/(2*l) + 1)))
 
 umax = 2*material.pwc*a*(1-material.ν**2)/material.E
-umax_eff = 2*material.pwc*aeff1*(1-material.ν**2)/material.E
+umax_eff = 2*material.pwc*aeff2*(1-material.ν**2)/material.E
 
 msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
 def bc_d_func(msh,V,crack):
@@ -70,10 +69,25 @@ def bc_d_func(msh,V,crack):
 crackk = lambda x: crack(x,a,h)
 bc_d = lambda V: [bc_d_func(msh,V,crackk)]
 
-vh,dh = eb.fixed_point(msh, [bc_v,bc_d], material, pw=lambda u: -1.0, max_its=2)
 
-utilities.write_vtk("output/sneddon.pvd",msh,[vh,dh],["v","d"])
 
-print(np.max(vh.x.array))
-print(umax_eff)
+model = ec.viscoelastic_damage(msh, [bc_v,bc_v,bc_d], material, 1.0)
+
+#overload water pressure
+model.pw = lambda msh,u: -1.0
+
+
+# model.fixed_point(1)
+
+model.solve_damage()
+model.solve_elastic()
+
+utilities.write_vtk("output/sneddon.pvd",msh,[model.v,model.d],["v","d"])
+
+v_max = MPI.COMM_WORLD.allreduce(np.max(model.v.x.array), op=MPI.MAX)
+if MPI.COMM_WORLD.rank == 0:
+    # print(np.max(model.d.x.array))
+    print(v_max)
+    print(umax_eff)
+
 # %%

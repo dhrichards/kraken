@@ -76,12 +76,15 @@ class viscoelastic_damage:
         n = ufl.FacetNormal(self.msh)
 
         pw = lambda v: self.pw(self.msh,v)# + self.dt*self.u)
+        # pw = lambda v: -1.0
         g = lambda d: pf.degradation(d)
 
         f = bf.body_force(self.msh, ρratio)
         
         internal_energy = pf.degraded_free_energy(ε(self.v),self.d,ν,ψcrit) * ufl.dx
-        # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
+
+        ### for sneddon only
+        # internal_energy = pf.degradation(self.d)*pf.free_energy(ε(self.v),ν) * ufl.dx
 
         external_energy =  C1 *( g(self.d)*ufl.dot(f, self.v) - pw(self.v)*ufl.inner(ufl.grad(g(self.d)), self.v) )* ufl.dx \
             - C1 * g(self.d) * pw(self.v) *  ufl.dot(n, self.v) * ds
@@ -226,20 +229,20 @@ class viscoelastic_damage:
 
 
     
-    def fixed_point(self, max_its=100, tol=1e-4, solve_stokes=True):
+    def fixed_point(self, max_its=100, tol=1e-4, solve_stokes=False):
         L2_old = 0.0
 
 
 
         for i in range(max_its):
 
-            
+            self.solve_damage()
             self.solve_elastic()
             if solve_stokes:
-                self.solve_stokes()
+                self.solve_stokes_linearised()
             # self.solver_d.solve(None, self.d.x.petsc_vec)
             # self.solve_damage_limits()
-            self.solve_damage()
+            
 
             L2_ = ufl.inner(self.d,self.d)*ufl.dx
             L2_rank = fem.assemble_scalar(fem.form(L2_))
