@@ -1,7 +1,5 @@
-import numpy as np
 from dolfinx import fem, default_scalar_type, la, default_real_type
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
-from dolfinx.log import LogLevel, set_log_level
 from dolfinx.nls.petsc import NewtonSolver
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -11,8 +9,7 @@ import phasefield as pf
 from phasefield import ε
 import basix.ufl as bufl
 import nonlinear
-import bodyforces as bf
-
+from kraken import bodyforces as bf
 
 
 class viscoelastic_damage:
@@ -284,16 +281,6 @@ class viscoelastic_damage:
         uhh = fem.Function(V)
         uhh.interpolate(self.u)
         self.msh.geometry.x[:,:self.msh.geometry.dim] += self.dt*uhh.x.array.reshape((-1, self.msh.geometry.dim))
-
-
-
-
-
-
-    
-
-
-
 
 
 

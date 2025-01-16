@@ -1,5 +1,5 @@
 import ufl
-from invariants import matrix_function, eigenstate
+from dolfiny.invariants import matrix_function, eigenstate
 
 
 def ε(u):

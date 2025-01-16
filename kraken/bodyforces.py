@@ -25,31 +25,3 @@ def body_force(msh,ρratio):
     return f
 
 
-# def body_forces(u, d, v, f, C1, pw = None):
-#     g = lambda d: pf.degradation(d)
-#     return C1 *( ufl.dot(f, u) - pw(u)*ufl.inner(ufl.grad(g(d)), v) )
-
-
-# def traction_forces(u, d, v, n, C1, pw):
-#     g = lambda d: pf.degradation(d)
-#     return C1*g(d)*pw(ufl)*ufl.inner(n,v)
-
-# def total_forces(msh, u, d, v, material, pw = None):
-
-#     n = ufl.FacetNormal(msh)
-#     ds = ufl.Measure("ds", domain=msh)
-
-#     if pw is None:
-#         pw = lambda u: water_pressure(msh,u)
-
-#     f = body_force(msh, material.ρratio)
-
-
-
-
-#     return body_forces(msh, u, d, v, f, material.C1, pw)*ufl.dx \
-#         + traction_forces(msh, u, d, v, n, material.C1, pw)*ds
-
-
-
-

@@ -6,7 +6,7 @@ import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 from phasefield import degradation, degraded_pressure, ε
-import bodyforces as bf
+from kraken import bodyforces as bf
 import nonlinear
 
 def viscosity(u, n, eps=1.e-8, A=1.0): 

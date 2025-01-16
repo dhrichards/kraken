@@ -14,7 +14,6 @@ import ufl
 from dolfinx import fem, la
 
 
-
 class NonlinearPDE_SNESProblem():
     def __init__(self, F, J, soln_vars, bcs, P=None):
         self.L = F
