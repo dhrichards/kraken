@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kraken"
+version = "0.0.1"
+requires-python = ">= 3.8"
+
+dependencies = [
+	"dolfiny"
+]
+
+[tool.setuptools]
+py-modules = ["kraken"]
