@@ -13,16 +13,15 @@ def solve(msh, bc_func, material, d=None, u_old=None, pw=None):
     V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
 
     # el = bufl.element("Lagrange", msh.basix_cell(), 1, shape=(msh.geometry.dim,), dtype=default_real_type)
-    
     # V = fem.functionspace(msh, el)
 
     bcs = bc_func(V)
 
     # Pull properties out
-    ρratio = material.ρratio; C1 = material.C1; ν = material.ν
-
+    ρratio = material.ρratio
+    C1 = material.C1
+    ν = material.ν
     ds = ufl.Measure("ds", domain=msh)
-
     n = ufl.FacetNormal(msh)
 
     # pw = water_pressure(msh)
@@ -78,10 +77,8 @@ def solve(msh, bc_func, material, d=None, u_old=None, pw=None):
     solver.convergence_criterion = "incremental"
     solver.rtol = 1e-8
     solver.atol = 1e-8
-    solver.max_it = 100
+    solver.max_it = 10000
     solver.report = True
-
-    
 
     ksp = solver.krylov_solver
     opts = PETSc.Options()
@@ -97,21 +94,12 @@ def solve(msh, bc_func, material, d=None, u_old=None, pw=None):
 
     n, converged = solver.solve(u)
     assert (converged)
-    
 
-
-    
     return u
-
-
 
 
 def solve_no_damage(msh, bc_func, material, pw=None):
     V = fem.functionspace(msh, ("Lagrange", 1, (msh.geometry.dim, )))
-
-    
-
-
     bcs = bc_func(V)
 
     # Pull properties out

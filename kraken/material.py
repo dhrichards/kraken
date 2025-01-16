@@ -1,4 +1,4 @@
-from utilities import mesh_sizes
+from kraken.utilities import mesh_sizes
 
 secperyr = 60*60*24*365.25
 

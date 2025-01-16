@@ -54,42 +54,6 @@ class SNESProblem:
 
 
 
-L = 1.; H = 0.3
-l_ = 0.1
-cell_size = l_/6
-
-nx = int(L/cell_size)
-ny = int(H/cell_size)
-
-comm = MPI.COMM_WORLD
-domain = mesh.create_rectangle(
-    comm, [(0.0, 0.0), (L, H)], [nx, ny], cell_type=mesh.CellType.quadrilateral
-)
-ndim = domain.geometry.dim
-
-
-
-
-V_u = fem.functionspace(domain, ("Lagrange", 1, (2,)))
-V_d = fem.functionspace(domain, ("Lagrange", 1))
-
-# Define the state
-u = fem.Function(V_u, name="Displacement")
-d = fem.Function(V_d, name="Damage")
-
-state = {"u": u, "d": d}
-
-# need upper/lower bound for the damage field
-d_lb = fem.Function(V_d, name="Lower bound")
-d_ub = fem.Function(V_d, name="Upper bound")
-d_ub.x.array[:] = 1
-d_lb.x.array[:] = 0
-
-# Measures
-dx = ufl.Measure("dx",domain=domain)
-ds = ufl.Measure("ds",domain=domain)
-
-
 
 def bottom(x):
     return np.isclose(x[1], 0.0)
@@ -102,38 +66,6 @@ def right(x):
 
 def left(x):
     return np.isclose(x[0], 0.0)
-
-fdim = domain.topology.dim-1
-
-left_facets = mesh.locate_entities_boundary(domain, fdim, left)
-right_facets = mesh.locate_entities_boundary(domain, fdim, right)
-bottom_facets = mesh.locate_entities_boundary(domain, fdim, bottom)
-top_facets = mesh.locate_entities_boundary(domain, fdim, top)
-left_boundary_dofs_ux = fem.locate_dofs_topological(V_u.sub(0), fdim, left_facets)
-right_boundary_dofs_ux = fem.locate_dofs_topological(V_u.sub(0), fdim, right_facets)
-bottom_boundary_dofs_uy = fem.locate_dofs_topological(V_u.sub(1), fdim, bottom_facets)
-top_boundary_dofs_uy = fem.locate_dofs_topological(V_u.sub(1), fdim, top_facets)
-
-
-u_D = fem.Constant(domain,PETSc.ScalarType(1.))
-bc_u_left = fem.dirichletbc(0.0, left_boundary_dofs_ux, V_u.sub(0))
-bc_u_right = fem.dirichletbc(u_D, right_boundary_dofs_ux, V_u.sub(0))
-bc_u_bottom = fem.dirichletbc(0.0, bottom_boundary_dofs_uy, V_u.sub(1))
-bc_u_top = fem.dirichletbc(0.0, top_boundary_dofs_uy, V_u.sub(1))
-bcs_u = [bc_u_left,bc_u_right]#,bc_u_bottom,bc_u_top]
-
-left_boundary_dofs_d = fem.locate_dofs_topological(V_d, fdim, left_facets)
-right_boundary_dofs_d = fem.locate_dofs_topological(V_d, fdim, right_facets)
-bc_d_left = fem.dirichletbc(0.0, left_boundary_dofs_d, V_d)
-bc_d_right = fem.dirichletbc(0.0, right_boundary_dofs_d, V_d)
-
-bcs_d = [bc_d_left,bc_d_right]
-
-
-
-E, ν = fem.Constant(domain, PETSc.ScalarType(100.0)), fem.Constant(domain, PETSc.ScalarType(0.3))
-Gc = fem.Constant(domain, PETSc.ScalarType(1.0))
-l = fem.Constant(domain, PETSc.ScalarType(l_)) 
 
 def w(d):
     """Dissipated energy function as a function of the damage """
@@ -172,73 +104,140 @@ def ψ(u,d):
     return pf.degradation(d) * ψplus + ψminus
 
 
+if __name__ == "__main__":
+    L = 1.; H = 0.3
+    l_ = 0.1
+    cell_size = l_/6
 
+    nx = int(L/cell_size)
+    ny = int(H/cell_size)
 
-μ = fem.Constant(domain,PETSc.ScalarType(E/(2*(1+ν))))
-f = fem.Constant(domain,PETSc.ScalarType((0.,0.)))
-
-total_energy = μ/Gc*ψ(u,d) * dx + γ(d) * dx - ufl.dot(f, u) * dx
-
-
-E_u = ufl.derivative(total_energy,u,ufl.TestFunction(V_u))
-v = ufl.TestFunction(V_u)
-# E_u = ufl.inner(σ(u,d), ε(v)) * dx
-E_u_u = ufl.derivative(E_u,u,ufl.TrialFunction(V_u))
-elastic_problem = SNESProblem(E_u, u, bcs_u, J=E_u_u)
-
-b_u = la.create_petsc_vector(V_u.dofmap.index_map, V_u.dofmap.index_map_bs)
-J_u = fem.petsc.create_matrix(elastic_problem.a)
-# Create Newton solver and solve
-solver_u_snes = PETSc.SNES().create()
-solver_u_snes.setType("ksponly")
-solver_u_snes.setFunction(elastic_problem.F, b_u)
-solver_u_snes.setJacobian(elastic_problem.J, J_u)
-solver_u_snes.setTolerances(rtol=1.0e-9, max_it=50)
-solver_u_snes.getKSP().setType("preonly")
-solver_u_snes.getKSP().setTolerances(rtol=1.0e-9)
-solver_u_snes.getKSP().getPC().setType("lu")
-# solver_u_snes.getKSP().getPC().setFactorSolverType("mumps")
-
-
-        
-load = 1.
-u_D.value = load
-u.x.array[:] = 0
-solver_u_snes.solve(None, u.x.petsc_vec)
-# plot_damage_state(state,load=load)
+    comm = MPI.COMM_WORLD
+    domain = mesh.create_rectangle(
+        comm, [(0.0, 0.0), (L, H)], [nx, ny], cell_type=mesh.CellType.quadrilateral
+    )
+    ndim = domain.geometry.dim
 
 
 
-E_d = ufl.derivative(total_energy,d,ufl.TestFunction(V_d))
-E_d_d = ufl.derivative(E_d,d,ufl.TrialFunction(V_d))
-damage_problem = SNESProblem(E_d, d, bcs_d,J=E_d_d)
+
+    V_u = fem.functionspace(domain, ("Lagrange", 1, (2,)))
+    V_d = fem.functionspace(domain, ("Lagrange", 1))
+
+    # Define the state
+    u = fem.Function(V_u, name="Displacement")
+    d = fem.Function(V_d, name="Damage")
+
+    state = {"u": u, "d": d}
+
+    # need upper/lower bound for the damage field
+    d_lb = fem.Function(V_d, name="Lower bound")
+    d_ub = fem.Function(V_d, name="Upper bound")
+    d_ub.x.array[:] = 1
+    d_lb.x.array[:] = 0
+
+    # Measures
+    dx = ufl.Measure("dx",domain=domain)
+    ds = ufl.Measure("ds",domain=domain)
 
 
-b_d = la.create_petsc_vector(V_d.dofmap.index_map, V_d.dofmap.index_map_bs)
-J_d = fem.petsc.create_matrix(damage_problem.a)
-# Create Newton solver and solve
-solver_d_snes = PETSc.SNES().create()
-solver_d_snes.setType("vinewtonrsls")
-solver_d_snes.setFunction(damage_problem.F, b_d)
-solver_d_snes.setJacobian(damage_problem.J, J_d)
-solver_d_snes.setTolerances(rtol=1.0e-9, max_it=50)
-solver_d_snes.getKSP().setType("preonly")
-solver_d_snes.getKSP().setTolerances(rtol=1.0e-9)
-solver_d_snes.getKSP().getPC().setType("lu")
-# We set the bound (Note: they are passed as reference and not as values)
-solver_d_snes.setVariableBounds(d_lb.x.petsc_vec,d_ub.x.petsc_vec)
+    fdim = domain.topology.dim-1
 
-solver_d_snes.solve(None, d.x.petsc_vec)
-# plot_damage_state(state,load=load)
+    left_facets = mesh.locate_entities_boundary(domain, fdim, left)
+    right_facets = mesh.locate_entities_boundary(domain, fdim, right)
+    bottom_facets = mesh.locate_entities_boundary(domain, fdim, bottom)
+    top_facets = mesh.locate_entities_boundary(domain, fdim, top)
+    left_boundary_dofs_ux = fem.locate_dofs_topological(V_u.sub(0), fdim, left_facets)
+    right_boundary_dofs_ux = fem.locate_dofs_topological(V_u.sub(0), fdim, right_facets)
+    bottom_boundary_dofs_uy = fem.locate_dofs_topological(V_u.sub(1), fdim, bottom_facets)
+    top_boundary_dofs_uy = fem.locate_dofs_topological(V_u.sub(1), fdim, top_facets)
 
-with d.x.petsc_vec.localForm() as d_local:
-    d_local.set(0)
 
-for i in range(20):
-    print(f"iteration {i}")
+    u_D = fem.Constant(domain,PETSc.ScalarType(1.))
+    bc_u_left = fem.dirichletbc(0.0, left_boundary_dofs_ux, V_u.sub(0))
+    bc_u_right = fem.dirichletbc(u_D, right_boundary_dofs_ux, V_u.sub(0))
+    bc_u_bottom = fem.dirichletbc(0.0, bottom_boundary_dofs_uy, V_u.sub(1))
+    bc_u_top = fem.dirichletbc(0.0, top_boundary_dofs_uy, V_u.sub(1))
+    bcs_u = [bc_u_left,bc_u_right]#,bc_u_bottom,bc_u_top]
+
+    left_boundary_dofs_d = fem.locate_dofs_topological(V_d, fdim, left_facets)
+    right_boundary_dofs_d = fem.locate_dofs_topological(V_d, fdim, right_facets)
+    bc_d_left = fem.dirichletbc(0.0, left_boundary_dofs_d, V_d)
+    bc_d_right = fem.dirichletbc(0.0, right_boundary_dofs_d, V_d)
+
+    bcs_d = [bc_d_left,bc_d_right]
+
+
+
+    E, ν = fem.Constant(domain, PETSc.ScalarType(100.0)), fem.Constant(domain, PETSc.ScalarType(0.3))
+    Gc = fem.Constant(domain, PETSc.ScalarType(1.0))
+    l = fem.Constant(domain, PETSc.ScalarType(l_))
+
+    μ = fem.Constant(domain,PETSc.ScalarType(E/(2*(1+ν))))
+    f = fem.Constant(domain,PETSc.ScalarType((0.,0.)))
+
+    total_energy = μ/Gc*ψ(u,d) * dx + γ(d) * dx - ufl.dot(f, u) * dx
+
+
+    E_u = ufl.derivative(total_energy,u,ufl.TestFunction(V_u))
+    v = ufl.TestFunction(V_u)
+    # E_u = ufl.inner(σ(u,d), ε(v)) * dx
+    E_u_u = ufl.derivative(E_u,u,ufl.TrialFunction(V_u))
+    elastic_problem = SNESProblem(E_u, u, bcs_u, J=E_u_u)
+
+    b_u = la.create_petsc_vector(V_u.dofmap.index_map, V_u.dofmap.index_map_bs)
+    J_u = fem.petsc.create_matrix(elastic_problem.a)
+    # Create Newton solver and solve
+    solver_u_snes = PETSc.SNES().create()
+    solver_u_snes.setType("ksponly")
+    solver_u_snes.setFunction(elastic_problem.F, b_u)
+    solver_u_snes.setJacobian(elastic_problem.J, J_u)
+    solver_u_snes.setTolerances(rtol=1.0e-9, max_it=50)
+    solver_u_snes.getKSP().setType("preonly")
+    solver_u_snes.getKSP().setTolerances(rtol=1.0e-9)
+    solver_u_snes.getKSP().getPC().setType("lu")
+    # solver_u_snes.getKSP().getPC().setFactorSolverType("mumps")
+
+
+
+    load = 1.
+    u_D.value = load
+    u.x.array[:] = 0
     solver_u_snes.solve(None, u.x.petsc_vec)
-    solver_d_snes.solve(None, d.x.petsc_vec)
-utilities.plot_damage_state(u, d, load)
+    # plot_damage_state(state,load=load)
 
-# utilities.write_vtk("outputs/newfracexample.pvd",domain,[u],["u"])
-# %%
+
+
+    E_d = ufl.derivative(total_energy,d,ufl.TestFunction(V_d))
+    E_d_d = ufl.derivative(E_d,d,ufl.TrialFunction(V_d))
+    damage_problem = SNESProblem(E_d, d, bcs_d,J=E_d_d)
+
+
+    b_d = la.create_petsc_vector(V_d.dofmap.index_map, V_d.dofmap.index_map_bs)
+    J_d = fem.petsc.create_matrix(damage_problem.a)
+    # Create Newton solver and solve
+    solver_d_snes = PETSc.SNES().create()
+    solver_d_snes.setType("vinewtonrsls")
+    solver_d_snes.setFunction(damage_problem.F, b_d)
+    solver_d_snes.setJacobian(damage_problem.J, J_d)
+    solver_d_snes.setTolerances(rtol=1.0e-9, max_it=50)
+    solver_d_snes.getKSP().setType("preonly")
+    solver_d_snes.getKSP().setTolerances(rtol=1.0e-9)
+    solver_d_snes.getKSP().getPC().setType("lu")
+    # We set the bound (Note: they are passed as reference and not as values)
+    solver_d_snes.setVariableBounds(d_lb.x.petsc_vec,d_ub.x.petsc_vec)
+
+    solver_d_snes.solve(None, d.x.petsc_vec)
+    # plot_damage_state(state,load=load)
+
+    with d.x.petsc_vec.localForm() as d_local:
+        d_local.set(0)
+
+    for i in range(20):
+        print(f"iteration {i}")
+        solver_u_snes.solve(None, u.x.petsc_vec)
+        solver_d_snes.solve(None, d.x.petsc_vec)
+    utilities.plot_damage_state(u, d, load)
+
+    # utilities.write_vtk("outputs/newfracexample.pvd",domain,[u],["u"])
+    # %%
