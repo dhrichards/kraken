@@ -1,3 +1,6 @@
 dolfiny
+gmsh
+ipython
+meshio[all]
 numba
 scipy
