@@ -1,18 +1,11 @@
 #%%
 
-import numpy as np
-from dolfinx import mesh, fem, plot, io, default_scalar_type, log
+from dolfinx import mesh, default_scalar_type
 from mpi4py import MPI
-import ufl
 import numpy as np
-import elasticity
-from material import MaterialProperties, Material_no_uc
-import invariants
-from boundaryconditions import get_zero_bc, get_bc
-import stokes
-import phasefield as pf
-import utilities
-import energybased as eb
+from kraken.material import Material_no_uc
+from kraken.boundaryconditions import get_zero_bc, get_bc
+from kraken import energybased as eb, stokes, utilities
 
 
 def left_boundary(x):
@@ -62,6 +55,6 @@ uh, ph = stokes.solve(msh, ubc, vh, material, 1.0, dh)
 
 
 # utilities.plot_damage_state(vh,dh)
-utilities.write_vtk("outputs/newfrac.pvd",msh,\
-                    [vh,dh,uh],\
+utilities.write_vtk("outputs/newfrac.pvd", msh, \
+                    [vh,dh,uh], \
                     ["v","d","u"])

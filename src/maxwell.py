@@ -1,22 +1,13 @@
 #%%
 
-import numpy as np
-from dolfinx import mesh, io, log, default_scalar_type, fem
+from dolfinx import mesh, io, default_scalar_type, fem
 from mpi4py import MPI
-import ufl
 import numpy as np
-import elasticity
-from material import MaterialProperties, Material_no_uc
-import invariants
-from boundaryconditions import get_zero_bc
-import stokes
-import phasefield as pf
-import bodyforces as bf
-import utilities
-import energybased as eb
-import meshes
+from kraken.material import Material_no_uc
+from kraken.boundaryconditions import get_zero_bc
+from kraken import bodyforces as bf, elasticityclass as ec, phasefield as pf, meshes, utilities
 import gmsh
-import elasticityclass as ec
+
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -96,9 +87,9 @@ for i in range(steps):
     ψp = pf.free_energy_plus(pf.ε(model.v),model.material.ν)
     pp = pf.positive_part(ψp-material.ψcritstar)
     pw = bf.water_pressure(msh,model.v)
-    utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d,model.Hprev,pp],\
-                    ["v","d","H","pp"],t=i)
+    utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf", msh, \
+                         [model.v,model.d,model.Hprev,pp], \
+                         ["v","d","H","pp"], t=i)
     
 
 # # model.material.g += (9.81-g0)/(steps-1)
@@ -110,9 +101,9 @@ for i in range(1000):
     model.solve_stokes()
     
 
-    utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d,model.u, pf.stress(model.v,material.ν)],\
-                    ["v","d","u", "σ"],t=i)
+    utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf", msh, \
+                         [model.v,model.d,model.u, pf.stress(model.v,material.ν)], \
+                         ["v","d","u", "σ"], t=i)
 
     model.update_mesh()
 

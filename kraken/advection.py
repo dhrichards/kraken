@@ -1,8 +1,6 @@
 from dolfinx import mesh, fem
-from mpi4py import MPI
 import numpy as np
 import ufl
-
 
 
 def transport(bcfunc, uh, fh, dt, k = 1e-4):

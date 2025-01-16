@@ -1,18 +1,12 @@
 #%%
 
-import numpy as np
-from dolfinx import mesh, fem, plot, io, default_scalar_type
+from dolfinx import mesh, io, default_scalar_type
 from mpi4py import MPI
-import ufl
 import numpy as np
-import elasticity
-from material import MaterialProperties
-import invariants
-from boundaryconditions import get_zero_bc
-import stokes
-import poisson
-import phasefield
-import utilities
+from kraken import elasticity, stokes, utilities
+from kraken.material import MaterialProperties
+from kraken.boundaryconditions import get_zero_bc
+
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -53,7 +47,7 @@ bc = symm_bc
 
 for i in range(1):
     print(i)
-    vh = elasticity.solve(msh,bc, material)
+    vh = elasticity.solve(msh, bc, material)
 
     # utilities.move_mesh(msh,vh,material.uc/material.L)
 
@@ -67,7 +61,7 @@ for i in range(1):
         file.write_mesh(msh, t=i*dt)
         file.write_function([uh],t=i*dt)
 
-    utilities.move_mesh(msh,uh,dt*material.uc/material.L)
+    utilities.move_mesh(msh, uh, dt * material.uc / material.L)
 
 
 

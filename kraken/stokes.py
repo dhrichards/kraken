@@ -1,15 +1,11 @@
-import dolfinx.nls.petsc
-import numpy as np
 from dolfinx import fem, default_real_type, default_scalar_type
 import basix.ufl as bufl
 import ufl
-from mpi4py import MPI
-from petsc4py import PETSc
-from phasefield import degradation, degraded_pressure, ε
-from kraken import bodyforces as bf
-import nonlinear
+from kraken.phasefield import degradation, degraded_pressure, ε
+from kraken import bodyforces as bf, nonlinear
 
-def viscosity(u, n, eps=1.e-8, A=1.0): 
+
+def viscosity(u, n, eps=1.e-8, A=1.0):
     return A**(-1/n) * (ufl.inner(ε(u), ε(u)) / 2 + eps)**((1 - n) / (2 * n))
 
 

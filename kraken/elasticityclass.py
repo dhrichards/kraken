@@ -5,10 +5,10 @@ from petsc4py import PETSc
 from mpi4py import MPI
 import ufl
 import numpy as np
-import phasefield as pf
-from phasefield import ε
+import kraken.phasefield as pf
+from kraken.phasefield import ε
 import basix.ufl as bufl
-import nonlinear
+import kraken.nonlinear as nonlinear
 from kraken import bodyforces as bf
 
 

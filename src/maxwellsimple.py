@@ -1,13 +1,14 @@
 #%%
 
-import numpy as np
-from dolfinx import mesh, fem, plot, io, default_scalar_type
+import kraken
+from dolfinx import mesh, fem, default_scalar_type
 from dolfinx.fem.petsc import LinearProblem
 from mpi4py import MPI
-import ufl
 import numpy as np
-from phasefield import *
-from material import MaterialProperties
+from kraken.phasefield import *
+from kraken.material import MaterialProperties
+from dolfinx.io import XDMFFile
+
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -61,30 +62,28 @@ def elasticity(msh, material):
 
     return uh
 
-L = 16e3
-H = 300
+if __name__ == "__main__":
+    L = 16e3
+    H = 300
 
-material = MaterialProperties()
-Hw = material.ρi/material.ρw*H
+    material = MaterialProperties()
+    Hw = material.ρi/material.ρw*H
 
-msh = mesh.create_rectangle(MPI.COMM_WORLD,
-                            [np.array([-L/2, -Hw]), np.array([L/2, H-Hw])],
-                            [200,50], mesh.CellType.triangle)
-
-
-uh = elasticity(msh, material)
+    msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                                [np.array([-L/2, -Hw]), np.array([L/2, H-Hw])],
+                                [200,50], mesh.CellType.triangle)
 
 
-Q = fem.functionspace(msh, ("Lagrange", 1))
-expr = fem.Expression(water_pressure(msh,material.ρw,material.g),Q.element.interpolation_points())
-ph = fem.Function(Q)
-ph.interpolate(expr)
+    uh = elasticity(msh, material)
 
+    Q = fem.functionspace(msh, ("Lagrange", 1))
+    expr = fem.Expression(water_pressure(msh,material.ρw,material.g),Q.element.interpolation_points())
+    ph = fem.Function(Q)
+    ph.interpolate(expr)
 
-from dolfinx.io import XDMFFile
-with XDMFFile(MPI.COMM_WORLD, "test.xdmf", "w") as ufile_xdmf:
-        ufile_xdmf.write_mesh(msh)
-        ufile_xdmf.write_function(uh)
-        # ufile_xdmf.write_function(ph)
+    with XDMFFile(MPI.COMM_WORLD, "test.xdmf", "w") as ufile_xdmf:
+            ufile_xdmf.write_mesh(msh)
+            ufile_xdmf.write_function(uh)
+            # ufile_xdmf.write_function(ph)
 
-# %%
+    # %%

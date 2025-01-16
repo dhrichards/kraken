@@ -1,12 +1,11 @@
-import numpy as np
 from dolfinx import fem, default_scalar_type, la, default_real_type
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
 from dolfinx.nls.petsc import NewtonSolver
 from petsc4py import PETSc
 from mpi4py import MPI
 import ufl
-import phasefield as pf
-from phasefield import ε
+import kraken.phasefield as pf
+from kraken.phasefield import ε
 from kraken import bodyforces as bf
 
 

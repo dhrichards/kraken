@@ -1,6 +1,6 @@
 import ufl
-import phasefield as pf
 from dolfinx import default_scalar_type, fem
+
 
 def water_pressure_static(msh,ρw=1.0,g=1.0):
     x = ufl.SpatialCoordinate(msh)

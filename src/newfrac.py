@@ -1,21 +1,17 @@
 #%%
 
-import matplotlib.pyplot as plt
 import numpy as np
 
-import dolfinx
-from dolfinx import mesh, fem, plot, io, la
+from dolfinx import mesh, fem, la
 import ufl
 
 from mpi4py import MPI
 from petsc4py import PETSc
 
-import pyvista
 from pyvista.utilities.xvfb import start_xvfb
 start_xvfb(wait=0.5)
-import utilities
+from kraken import utilities
 
-import dolfinx.fem.petsc
 import pf
 from common import *
 
@@ -242,7 +238,7 @@ for i in range(20):
     print(f"iteration {i}")
     solver_u_snes.solve(None, u.x.petsc_vec)
     solver_d_snes.solve(None, d.x.petsc_vec)
-utilities.plot_damage_state(u,d,load)
+utilities.plot_damage_state(u, d, load)
 
 # utilities.write_vtk("outputs/newfracexample.pvd",domain,[u],["u"])
 # %%
