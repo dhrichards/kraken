@@ -13,4 +13,8 @@ conda install -c conda-forge fenics-dolfinx mpich pyvista
 conda install cuda-cudart cuda-version=12           # If using an appropriate GPU
 ```
 
+Once this conda environment is set up, you can then install this from source (add `-e` if you want to hack on it for us!):
 
+```
+pip install .
+```
