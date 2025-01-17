@@ -3,6 +3,7 @@ import ufl
 from dolfinx import fem, default_real_type
 import maths_functions as mf
 from maths_functions import ε
+import advection_numerics
 
 
 class DamageSolver:
@@ -33,14 +34,14 @@ class DamageSolver:
         return self.problem.solve()
     
 class HistorySolver:
-    def __init__(self, msh, material):
+    def __init__(self, msh, material, dt=0.0):
         self.msh = msh
         self.material = material
+        self.dt = dt
         
 
         h_el = bufl.element("DG", self.msh.basix_cell(), 0, dtype=default_real_type)
         self.V = fem.functionspace(self.msh, h_el)
-
         
     def solve(self, Hprev, v):
 
@@ -55,6 +56,38 @@ class HistorySolver:
         self.problem = fem.petsc.LinearProblem(a, L, [], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 
         return self.problem.solve()
+    
+
+    def advect(self, Hprev, u, k=1e-4):
+
+        f = ufl.TrialFunction(self.V)
+        g = ufl.TestFunction(self.V)
+        
+        n = ufl.FacetNormal(self.msh)
+        h = ufl.CellDiameter(self.msh)
+
+        α = 3.0
+
+        Dt = lambda f: advection_numerics.backward_euler(f, Hprev, self.dt)
+        a_A = lambda f, g: advection_numerics.advection(f, g, u, n)
+        a_D = lambda f, g: advection_numerics.diffusion(f, g, k, α, n, h)
+
+        F = Dt(f)*g*ufl.dx + a_A(f,g)+ a_D(f,g)
+
+        a, L = ufl.lhs(F), ufl.rhs(F)
+
+        problem = fem.petsc.LinearProblem(a, L, [], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+
+        return problem.solve()
+
+
+
+
+
+        
+
+    
+
 
 
 
