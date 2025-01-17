@@ -10,7 +10,7 @@ import numpy as np
 import pf as pf
 from common import *
 import basix.ufl as bufl
-import nonlinear
+import solvers
 
 
 
@@ -73,7 +73,7 @@ def solve(msh, bc_func, material, pw=None):
     P = [[J[0][0], None],
             [None, None]]
     
-    u,d = nonlinear.nested_solve(F, J, u, d, bcs)
+    u,d = solvers.nested_solve(F, J, u, d, bcs)
     
 
 

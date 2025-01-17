@@ -10,8 +10,7 @@ from material import MaterialProperties
 import invariants
 from boundaryconditions import get_zero_bc
 import stokes
-import poisson
-import phasefield
+import maths_functions as mf
 import utilities
 
 def left_boundary(x):
@@ -25,6 +24,7 @@ true_length = 16e3
 true_height = 300
 
 material = MaterialProperties()
+material.τ = 365*24*3600
 
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
@@ -39,7 +39,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 
 material.set_l_from_mesh(msh)
 
-dt = 1e-9
+dt = 1/12
 # 
 clamped_both = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
                             get_zero_bc(V, right_boundary, default_scalar_type)]

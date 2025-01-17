@@ -7,10 +7,10 @@ from petsc4py import PETSc
 from mpi4py import MPI
 import ufl
 import numpy as np
-import phasefield as pf
+import maths_functions as mf
 import bodyforces as bf
 import basix.ufl as bufl
-import nonlinear
+import solvers
 
 
 
@@ -60,7 +60,7 @@ def fixed_point(msh,bcfuncs,material, d_lb=None, u_old=None, pw=None, max_its = 
     d_ub.x.array[:] = 1
     
 
-    g = lambda d: pf.degradation(d)
+    g = lambda d: mf.degradation(d)
     f = bf.body_force(msh, ρratio)
     n = ufl.FacetNormal(msh)
     ds = ufl.Measure("ds", domain=msh)
@@ -69,7 +69,7 @@ def fixed_point(msh,bcfuncs,material, d_lb=None, u_old=None, pw=None, max_its = 
 
 
 
-    internal_energy = (pf.degraded_free_energy(pf.ε(u),d,ν,ψcrit) + (1/C3)*pf.γ(d,l)) * ufl.dx
+    internal_energy = (mf.degraded_free_energy(mf.ε(u),d,ν,ψcrit) + (1/C3)*mf.γ(d,l)) * ufl.dx
     # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
 
     external_energy =  C1 *( ufl.dot(f, u) - pw(u)*ufl.inner(ufl.grad(g(d)), u) )* ufl.dx \
@@ -127,7 +127,7 @@ def fixed_point(msh,bcfuncs,material, d_lb=None, u_old=None, pw=None, max_its = 
 
     E_d = ufl.derivative(internal_energy,d,ufl.TestFunction(V_d))
     E_d_d = ufl.derivative(E_d,d,ufl.TrialFunction(V_d))
-    damage_problem = nonlinear.NonlinearPDE_SNESProblem(
+    damage_problem = solvers.NonlinearPDE_SNESProblem(
         fem.form(E_d), fem.form(E_d_d), d, bcs=bcs_d)
     
 

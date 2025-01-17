@@ -3,20 +3,17 @@
 import numpy as np
 from dolfinx import mesh, io, log, default_scalar_type, fem
 from mpi4py import MPI
-import ufl
 import numpy as np
-import elasticity
 from material import MaterialProperties, Material_no_uc
-import invariants
 from boundaryconditions import get_zero_bc
-import stokes
-import phasefield as pf
+import maths_functions as mf
 import bodyforces as bf
 import utilities
 import energybased as eb
 import meshes
 import gmsh
 import elasticityclass as ec
+import mainclass as mc
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -50,7 +47,7 @@ material.τ = 3600*24
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 2.0/material.L
+material.l = 3.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
@@ -81,28 +78,29 @@ no_bc = lambda V: []
 cliff_bc = lambda V: [get_zero_bc(V.sub(0), left_boundary, default_scalar_type),
                         get_zero_bc(V.sub(1), bottom_boundary, default_scalar_type)]
 
-model = ec.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
+model = mc.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
 
 g0 = 6.5
 # g0=2.53
 model.material.g = g0
 steps = 20
+#%%
 for i in range(steps):
     model.material.g = g0 + i*(9.8-g0)/(steps-1)
     if MPI.COMM_WORLD.rank == 0:
         print(model.material.g)
    
     model.fixed_point(tol=1e-4,solve_stokes=False,max_its=100)
-    ψp = pf.free_energy_plus(pf.ε(model.v),model.material.ν)
-    pp = pf.positive_part(ψp-material.ψcritstar)
+    ψp = mf.free_energy_plus(mf.ε(model.v),model.material.ν)
+    pp = mf.positive_part(ψp-material.ψcritstar)
     pw = bf.water_pressure(msh,model.v)
     utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
                     [model.v,model.d,model.Hprev,pp],\
                     ["v","d","H","pp"],t=i)
     
-
+# model.stokes.setup_solver(model.u,model.p,model.d,model.v)
 # # model.material.g += (9.81-g0)/(steps-1)
-for i in range(1000):
+for i in range(10):
     
     
     model.fixed_point(tol=1e-4,solve_stokes=False)
@@ -111,7 +109,7 @@ for i in range(1000):
     
 
     utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d,model.u, pf.stress(model.v,material.ν)],\
+                    [model.v,model.d,model.u, mf.stress(model.v,material.ν)],\
                     ["v","d","u", "σ"],t=i)
 
     model.update_mesh()

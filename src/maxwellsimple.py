@@ -6,7 +6,7 @@ from dolfinx.fem.petsc import LinearProblem
 from mpi4py import MPI
 import ufl
 import numpy as np
-from phasefield import *
+from pf import *
 from material import MaterialProperties
 
 def left_boundary(x):

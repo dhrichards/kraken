@@ -10,7 +10,7 @@ from material import MaterialProperties, Material_no_uc
 import invariants
 from boundaryconditions import get_zero_bc, get_bc
 import stokes
-import phasefield as pf
+import maths_functions as mf
 import utilities
 import energybased as eb
 

@@ -5,154 +5,132 @@ import basix.ufl as bufl
 import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
-from phasefield import degradation, degraded_pressure, ε
-import bodyforces as bf
-import nonlinear
+from maths_functions import ε
+import maths_functions as mf
 
-def viscosity(u, n, eps=1.e-8, A=1.0): 
-    return A**(-1/n) * (ufl.inner(ε(u), ε(u)) / 2 + eps)**((1 - n) / (2 * n))
+import solvers
+
+class StokesSolver:
+    def __init__(self, msh, bc_func, material, dt):
+        self.msh = msh
+        self.material = material
+        self.dt = dt
+
+        P2_el = bufl.element("Lagrange", self.msh.basix_cell(), 2, shape=(self.msh.geometry.dim,), dtype=default_real_type)
+        P1_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, dtype=default_real_type)
+
+        self.V = fem.functionspace(self.msh, P2_el)
+        self.Q = fem.functionspace(self.msh, P1_el)
+
+        self.bcs = bc_func(self.V)
+
+    def solve(self,u,p,d,v):
+        self.u = u
+        self.p = p
+        self.d = d
+        self.v = v
+
+        du, dp = ufl.TrialFunction(self.V), ufl.TrialFunction(self.Q)
+        v, q = ufl.TestFunction(self.V), ufl.TestFunction(self.Q)
+
+        C1 = self.material.C1; C2 = self.material.C2
+        ρratio = self.material.ρratio
 
 
-def solve(msh, bc_func, vh, material, dt, d=None, u=None, p=None):
+        # Phase field changes
+        g = mf.degradation(self.d)
 
-    C1 = material.C1; C2 = material.C2
-    ρratio = material.ρratio
+        def η(u):
+            return mf.viscosity(u, self.material.n, 1.e-8)
+        
+        
+        f = mf.body_force(self.msh, ρratio)
 
-    P2_el = bufl.element("Lagrange", msh.basix_cell(), 2, shape=(msh.geometry.dim,), dtype=default_real_type)
-    P1_el = bufl.element("Lagrange", msh.basix_cell(), 1, dtype=default_real_type)
 
-    P2 = fem.functionspace(msh, P2_el)
-    P1 = fem.functionspace(msh, P1_el)
+        n = ufl.FacetNormal(self.msh)           
+        ds = ufl.Measure("ds", domain=self.msh)
 
-    bcs = bc_func(P2)
+        # Water pressure
+        def pw(u):
+            return mf.water_pressure(self.msh,self.v + self.u*self.dt)
+        
 
-    if u is None:
-        u = fem.Function(P2, name="velocity")
-    if p is None:
-        p = fem.Function(P1, name="pressure")
-    du, dp = ufl.TrialFunction(P2), ufl.TrialFunction(P1)
-    v, q = ufl.TestFunction(P2), ufl.TestFunction(P1)
-
-    if d is None:
-        d = fem.Constant(msh, default_scalar_type(0.0))
-
-    # Phase field changes
-    g = degradation(d)
-
-    def η(u):
-        return g*viscosity(u, material.n, 1.e-8)
-    
-    def hat(p):
-        return degraded_pressure(p, d)
-    
-    f = bf.body_force(msh, ρratio)
-    # Outward-pointing unit normal to the boundary  
-    n = ufl.FacetNormal(msh)           
-
-    # Surface measure
-    ds = ufl.Measure("ds", domain=msh)
-
-    # Water pressure
-    def pw(u):
-        return bf.water_pressure(msh,vh + u*dt)
-    
-
-    
-    
-    F = [((1/C2)*η(u)*ufl.inner(ε(u), ε(v)) \
-        # + ufl.inner(hat(-p), ufl.div(v))\
-        - ufl.inner(p, ufl.div(v)) \
-        - C1 * ufl.inner(f, v) \
-        + C1 * pw(u) * ufl.inner(ufl.grad(g), v)) * ufl.dx \
-        + C1 * g * pw(u) * ufl.inner(n, v) * ds,
+        
+        
+        F = [((1/C2)*g*η(self.u)*ufl.inner(ε(self.u), ε(v)) \
+        - ufl.inner(self.p, ufl.div(v)) \
+        - C1 * g * ufl.inner(f, v) \
+        + C1 * pw(self.u) * ufl.inner(ufl.grad(g), v)) * ufl.dx \
+        + C1 * g * pw(self.u) * ufl.inner(n, v) * ds,
         # )*ufl.dx,
-        - ufl.inner(ufl.div(u), q) * ufl.dx ]
-    
-    J = get_jacobian(F,u,p,du,dp)
-    P = get_preconditioner(J, u, dp, q, η) 
+        - ufl.inner(ufl.div(self.u), q) * ufl.dx ]
+        
+        J = [[ufl.derivative(F[0], self.u, du), ufl.derivative(F[0], self.p, dp)],
+            [ufl.derivative(F[1], self.u, du), ufl.derivative(F[1], self.p, dp)]]
+        
+        P = [[J[0][0], None],
+            [None, (2 * g*η(self.u))**-1 * dp * q * ufl.dx]]
 
-    snes, x = nonlinear.nested_solve(F, J, u, p, bcs, P)
+        self.snes, self.x = solvers.nested_solve(F, J, u, p, self.bcs, P)
 
-    snes.solve(None, x)
-    assert snes.getKSP().getConvergedReason() > 0
+        self.snes.solve(None, self.x)
+        assert self.snes.getKSP().getConvergedReason() > 0
 
-    u.x.scatter_forward()
-    p.x.scatter_forward()
-
-
-    return u, p
-    # return nonlinear.block_solve(F, J, P, u, p, bcs, P2, P1)
-
-
-def solve_no_damage(mesh, bc_func, material, dt, u=None, p=None):
-
-    C1 = material.C1; C2 = material.C2
-    ρw = material.ρw; ρi = material.ρi
-
-    P2_el = bufl.element("Lagrange", mesh.basix_cell(), 2, shape=(mesh.geometry.dim,), dtype=default_real_type)
-    P1_el = bufl.element("Lagrange", mesh.basix_cell(), 1, dtype=default_real_type)
-
-    P2 = fem.functionspace(mesh, P2_el)
-    P1 = fem.functionspace(mesh, P1_el)
-
-    bcs = bc_func(P2)
-
-    if u is None:
-        u = fem.Function(P2)
-    if p is None:
-        p = fem.Function(P1)
-
-    du, dp = ufl.TrialFunction(P2), ufl.TrialFunction(P1)
-    v, q = ufl.TestFunction(P2), ufl.TestFunction(P1)
-
-    def η(u):
-        return viscosity(u, material.n, 1.e-8)
-    
-
-    if mesh.geometry.dim == 2:
-        f = fem.Constant(mesh, default_scalar_type((0, -ρi/ρw)))
-    else:
-        f = fem.Constant(mesh, default_scalar_type((0, 0, -ρi/ρw)))
+        self.u.x.scatter_forward()
+        self.p.x.scatter_forward()
 
 
-    # Outward-pointing unit normal to the boundary  
-    n = ufl.FacetNormal(mesh)           
+    def solve_linearised(self,u_prev,p_prev,d,v):
+        self.u = u_prev
+        self.p = p_prev
 
-    # Surface measure
-    ds = ufl.Measure("ds", domain=mesh)
 
-    # Water pressure
-    # pw = water_pressure(mesh,vh,material)
-    def pw(u):
-        return water_pressure(mesh,u*dt,material)
-    # pw = water_pressure_static(mesh)
+        u, p = ufl.TrialFunction(self.P2), ufl.TrialFunction(self.P1)
+        v, q = ufl.TestFunction(self.P2), ufl.TestFunction(self.P1)
 
-    # Create nullspace
-    # c = fem.Function(P2)
-    # c.interpolate(lambda x: np.array([[0],[1]])) # Constraint $v[1]$ averaged to zero.
-    # c2 = c.x.petsc_vec
-    # c2.scale(1 / c2.norm())
+        C1 = self.material.C1; C2 = self.material.C2
+        ρratio = self.material.ρratio
 
-    # nullspace = PETSc.NullSpace().create(vectors=[c2], comm=mesh.comm)
-    
-    F = [(1/C2)*η(u)*ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx \
-        - ufl.inner(p, ufl.div(v)) * ufl.dx \
-        - C1 * ufl.inner(f, v) * ufl.dx \
-        + C1*pw(u)*ufl.inner(n, v) * ds,
-        - ufl.inner(ufl.div(u), q) * ufl.dx ]
+        g = mf.degradation(d)
+
+        pw = self.pw(self.msh,self.u*self.dt + v)
+
+       
+        η = mf.viscosity(self.u, self.material.n)
+
+        n = ufl.FacetNormal(self.msh)
+        ds = ufl.Measure("ds", domain=self.msh)
+
+        f = mf.body_force(self.msh, ρratio)
+
+        a = fem.form([[(1/C2)*g*η*ufl.inner(mf.ε(u), mf.ε(v)) * ufl.dx,
+                    #    + C1*δpw(u)*ufl.inner(n,v)*ds,
+                        ufl.inner(p, ufl.div(v))*ufl.dx],
+
+                    [ufl.inner(ufl.div(u), q) * ufl.dx,
+                        None]])
+        
+        L = fem.form([(C1*g*ufl.inner(f,v) \
+                     - C1*g*pw*ufl.inner(ufl.grad(g),v))*ufl.dx \
+                    #  - (g-1)*ufl.inner(pf.positive_part(-self.p), ufl.div(v))*ufl.dx\
+                     - C1*g*pw*ufl.inner(n,v)*ds,
+                    ufl.inner(fem.Constant(self.msh, default_scalar_type(0.0)),q)*ufl.dx])
+        
+        P11 = fem.form((2*g*η)**-1 * p*q  * ufl.dx)
+        P = [[a[0][0], None],
+            [None, P11]]
+        
+        ksp, x, b = solvers.linear_nested_solver(a, L, self.u, self.p, self.bcs_u, P)
+
+        ksp.solve(b, x)
+        assert ksp.getConvergedReason() > 0
+
+        self.u.x.scatter_forward()
+        self.p.x.scatter_forward()
+        # nonlinear.linear_block_solver(a, L, P, self.u, self.p, self.bcs_u, self.P2, self.P1)
+
+
+
     
 
-    J = get_jacobian(F,u,p,du,dp)
-    P = get_preconditioner(J, u, dp, q, η) 
-    
-    
-    return nonlinear.nested_solve(F, J, u, p, bcs, P)
-    
 
-def get_jacobian(F,u,p,du,dp):
-    return [[ufl.derivative(F[0], u, du), ufl.derivative(F[0], p, dp)],
-            [ufl.derivative(F[1], u, du), ufl.derivative(F[1], p, dp)]]
-
-def get_preconditioner(J, u, dp, q, η):
-    return [[J[0][0], None],
-            [None, (2 * η(u))**-1 * dp * q * ufl.dx]]

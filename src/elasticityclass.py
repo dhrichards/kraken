@@ -7,10 +7,10 @@ from petsc4py import PETSc
 from mpi4py import MPI
 import ufl
 import numpy as np
-import phasefield as pf
-from phasefield import ε
+import maths_functions as mf
+from maths_functions import ε
 import basix.ufl as bufl
-import nonlinear
+import solvers
 import bodyforces as bf
 
 
@@ -77,11 +77,11 @@ class viscoelastic_damage:
 
         pw = lambda v: self.pw(self.msh,v)# + self.dt*self.u)
         # pw = lambda v: -1.0
-        g = lambda d: pf.degradation(d)
+        g = lambda d: mf.degradation(d)
 
         f = bf.body_force(self.msh, ρratio)
         
-        internal_energy = pf.degraded_free_energy(ε(self.v),self.d,ν,ψcrit) * ufl.dx
+        internal_energy = mf.degraded_free_energy(ε(self.v),self.d,ν,ψcrit) * ufl.dx
 
         ### for sneddon only
         # internal_energy = pf.degradation(self.d)*pf.free_energy(ε(self.v),ν) * ufl.dx
@@ -104,7 +104,7 @@ class viscoelastic_damage:
 
 
     def solve_damage(self):
-        H = pf.history_function(ε(self.v),self.Hprev,self.material.ν,self.material.ψcritstar)
+        H = mf.history_function(ε(self.v),self.Hprev,self.material.ν,self.material.ψcritstar)
         # H = self.solve_history()
 
         d = ufl.TrialFunction(self.V_d)
@@ -131,7 +131,7 @@ class viscoelastic_damage:
         C1 = self.material.C1; C2 = self.material.C2
         ρratio = self.material.ρratio
 
-        g = pf.degradation(self.d)
+        g = mf.degradation(self.d)
 
         
         pw = lambda u: self.pw(self.msh,u*self.dt + self.v)
@@ -143,7 +143,7 @@ class viscoelastic_damage:
         
         p_v = -((self.material.λ/self.material.μ)+(2/self.msh.geometry.dim))*ufl.div(self.v)
 
-        F = [((1/C2)*g*self.η(self.u)*ufl.inner(pf.ε(self.u), pf.ε(v)) \
+        F = [((1/C2)*g*self.η(self.u)*ufl.inner(mf.ε(self.u), mf.ε(v)) \
         # + ufl.inner(hat(-self.p), ufl.div(v))\
         - ufl.inner(self.p, ufl.div(v)) \
         # + (g-1)*ufl.inner(pf.positive_part(-p_v), ufl.div(v)) \
@@ -156,7 +156,7 @@ class viscoelastic_damage:
         J = get_jacobian(F,self.u,self.p,du,dp)
         P = get_preconditioner(J, self.u, dp, q, lambda u: g*self.η(u))
 
-        snes, x = nonlinear.nested_solve(F, J, self.u, self.p, self.bcs_u, P)
+        snes, x = solvers.nested_solve(F, J, self.u, self.p, self.bcs_u, P)
         # snes, x = nonlinear.block_solve(F, J, P, self.u, self.p, self.bcs_u, self.P2, self.P1)
 
         snes.solve(None, x)
@@ -175,7 +175,7 @@ class viscoelastic_damage:
         C1 = self.material.C1; C2 = self.material.C2
         ρratio = self.material.ρratio
 
-        g = pf.degradation(self.d)
+        g = mf.degradation(self.d)
 
         pw = self.pw(self.msh,self.u*self.dt + self.v)
 
@@ -199,7 +199,7 @@ class viscoelastic_damage:
         #         # )*ufl.dx,
         #         - ufl.inner(ufl.div(u), q) * ufl.dx ]
         
-        a = fem.form([[(1/C2)*g*η*ufl.inner(pf.ε(u), pf.ε(v)) * ufl.dx,
+        a = fem.form([[(1/C2)*g*η*ufl.inner(mf.ε(u), mf.ε(v)) * ufl.dx,
                     #    + C1*δpw(u)*ufl.inner(n,v)*ds,
                         ufl.inner(p, ufl.div(v))*ufl.dx],
 
@@ -216,7 +216,7 @@ class viscoelastic_damage:
         P = [[a[0][0], None],
             [None, P11]]
         
-        ksp, x, b = nonlinear.linear_nested_solver(a, L, self.u, self.p, self.bcs_u, P)
+        ksp, x, b = solvers.linear_nested_solver(a, L, self.u, self.p, self.bcs_u, P)
 
         ksp.solve(b, x)
         assert ksp.getConvergedReason() > 0
@@ -265,7 +265,7 @@ class viscoelastic_damage:
 
         h, v = ufl.TrialFunction(self.Q_h), ufl.TestFunction(self.Q_h)
 
-        H = pf.history_function(ε(self.v),self.Hprev,self.material.ν,self.material.ψcritstar)
+        H = mf.history_function(ε(self.v),self.Hprev,self.material.ν,self.material.ψcritstar)
 
         a = ufl.inner(h,v) * ufl.dx
         L = ufl.inner(H,v) * ufl.dx
