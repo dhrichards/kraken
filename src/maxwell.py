@@ -112,7 +112,7 @@ for i in range(10):
                     [model.v,model.d,model.u, mf.stress(model.v,material.ν)],\
                     ["v","d","u", "σ"],t=i)
 
-    model.update_mesh()
+    model.lagrangian_update()
 
 #%%
 # vh = model.v

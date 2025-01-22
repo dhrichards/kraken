@@ -45,14 +45,13 @@ def degraded_free_energy(ε,d,ν,ψcritstar):
     return degradation(d)*(ψplus) + (ψminus)
 
 
+
 def degraded_stress(u,d,ν):
     λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
     σ = λoverμ*ufl.tr(ε(u))*I + 2*ε(u)   
     σplus = λoverμ*positive_part(ufl.tr(ε(u)))*I + \
         2*matrix_function(ε(u),positive_part)
-    σminus = λoverμ*negative_part(ufl.tr(ε(u)))*I + \
-        2*matrix_function(ε(u),negative_part)
-
+    σminus = σ - σplus
     return degradation(d)*σplus + σminus
 
 def degraded_pressure(p,d):

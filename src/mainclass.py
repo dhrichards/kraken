@@ -9,11 +9,12 @@ import maths_functions as mf
 import stokes
 import damage
 import elasticity
+import surface
 
 
 
 class viscoelastic_damage:
-    def __init__(self, msh, bc_funcs, material, dt):
+    def __init__(self, msh, bc_funcs, material, dt, eulerian_surfaces=False):
         self.msh = msh
         self.material = material
         self.dt = dt
@@ -33,13 +34,14 @@ class viscoelastic_damage:
         self.u = fem.Function(self.stokes.V, name="velocity")
         self.p = fem.Function(self.stokes.Q, name="pressure")
 
-        # self.elastic.setup_solver(self.v, self.d)
-        # self.damage.setup_solver(self.v)
-        # self.stokes.setup_solver(self.u, self.p, self.d, self.v)
-        
 
-        
-        
+        if eulerian_surfaces:
+            self.surface = surface.SurfaceSolver(self.msh, bc_funcs[3], self.material, self.dt, eulerian_surfaces)
+            self.z = fem.Function(self.surface.V, name="z")
+            self.move_mesh = self.eulerian_update
+        else:
+            self.move_mesh = self.lagrangian_update
+ 
 
     def solve_elastic(self):
         self.elastic.solve(self.v, self.d)
@@ -85,10 +87,16 @@ class viscoelastic_damage:
 
 
     
-    def update_mesh(self):
+    def lagrangian_update(self):
         V = fem.functionspace(self.msh, ("Lagrange", 1, (self.msh.geometry.dim, )))
         uhh = fem.Function(V)
         uhh.interpolate(self.u)
         self.msh.geometry.x[:,:self.msh.geometry.dim] += self.dt*uhh.x.array.reshape((-1, self.msh.geometry.dim))
+
+
+    def eulerian_update(self):
+        self.z = self.surface.solve(self.u)
+
+        self.msh.geometry.x[:,self.msh.geometry.dim-1] = self.z.x.array
 
 
