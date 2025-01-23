@@ -1,5 +1,5 @@
 import ufl
-from invariants import matrix_function
+from .invariants import matrix_function
 from dolfinx import fem, default_scalar_type
 
 def viscosity(u, n, eps=1.e-8, A=1.0): 

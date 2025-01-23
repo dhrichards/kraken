@@ -1,9 +1,9 @@
 from dolfinx import fem, default_real_type, default_scalar_type
 import basix.ufl as bufl
 import ufl
-from ..numerics import maths_functions as mf
-from ..numerics.maths_functions import ε
-from ..numerics import solvers
+from numerics import maths_functions as mf
+from numerics.maths_functions import ε
+from numerics import solvers
 
 class StokesSolver:
     def __init__(self, msh, bc_func, material, dt):

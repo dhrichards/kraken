@@ -1,8 +1,8 @@
 #%%
 import sys
-import gmsh
 sys.path.append("src")
-
+import gmsh
+from dolfinx import io
 from material import Material_no_uc
 
 
@@ -66,5 +66,4 @@ model.addPhysicalGroup(2, [1], 1)
 model.mesh.generate(2)
 
 
-#save mesh
 gmsh.write("iceberg.msh")

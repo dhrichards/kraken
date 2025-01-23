@@ -11,8 +11,6 @@ from material import MaterialProperties, Material_no_uc
 from boundaryconditions import get_zero_bc
 import numerics.maths_functions as mf
 import utilities
-import meshes.iceberg as meshes
-import gmsh
 import mainclass as mc
 
 def left_boundary(x):
@@ -24,17 +22,6 @@ def right_boundary(x):
 def bottom_boundary(x):
     return np.isclose(x[1], -Hw)
 
-def notch(x):
-    xc = nondim_length/2 - nondim_height*0.7
-    w = material.l*2.5
-    d = (nondim_height-Hw)*-0.7
-    return (x[0]>xc-w/2)*(x[0]<xc+w/2)*(x[1]>d)
-
-def bc_notch(V):
-    deactivate_cells = mesh.locate_entities(msh, msh.topology.dim, notch)
-    deactivate_dofs = fem.locate_dofs_topological(V, msh.topology.dim, deactivate_cells)
-    return [fem.dirichletbc(default_scalar_type(1.0), deactivate_dofs, V)]
-
 true_length = 4e3
 true_height = 300
 
@@ -42,8 +29,7 @@ true_height = 300
 
 material = Material_no_uc()
 material.L = true_height
-material.τ = 3600*24
-# material.L = true_height    
+material.τ = 3600*24  
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
@@ -51,13 +37,9 @@ material.l = 3.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
-# true_water_depth = 100
-# Hw = true_water_depth/material.L
 
-model = meshes.create_iceberg_mesh(true_length, true_height, material)
-msh,ct,ft = io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, rank=0, gdim=2)
-
-gmsh.finalize()
+msh,ct,ft = io.gmshio.read_from_msh("../meshes/iceberg.msh", MPI.COMM_WORLD, rank=0, gdim=2)
+msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
 # cell_size = material.l/3
 # nx = int(nondim_length/cell_size/2)
 # nz = int(nondim_height/cell_size)
@@ -66,7 +48,7 @@ gmsh.finalize()
 #                             [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
 #                             [nx,nz], mesh.CellType.quadrilateral)
 
-msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
+
 #%%
 clamped_both = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
                             get_zero_bc(V, right_boundary, default_scalar_type)]
@@ -93,7 +75,7 @@ for i in range(steps):
     model.fixed_point(tol=1e-4,solve_stokes=False,max_its=100)
     ψp = mf.free_energy_plus(mf.ε(model.v),model.material.ν)
     pp = mf.positive_part(ψp-material.ψcritstar)
-    pw = bf.water_pressure(msh,model.v)
+    pw = mf.water_pressure(msh,model.v)
     utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
                     [model.v,model.d,model.Hprev,pp],\
                     ["v","d","H","pp"],t=i)
