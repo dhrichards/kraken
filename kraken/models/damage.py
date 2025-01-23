@@ -1,9 +1,9 @@
 import basix.ufl as bufl
 import ufl
 from dolfinx import fem, default_real_type
-from numerics import maths_functions as mf
-from numerics.maths_functions import ε
-from numerics import advection_numerics
+from kraken.numerics import maths_functions as mf
+from kraken.numerics.maths_functions import ε
+from kraken.numerics import advection_numerics
 
 
 class DamageSolver:

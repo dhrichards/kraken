@@ -5,8 +5,8 @@ from petsc4py import PETSc
 from mpi4py import MPI
 import ufl
 import numpy as np
-from numerics import maths_functions as mf
-from numerics.maths_functions import ε
+from kraken.numerics import maths_functions as mf
+from kraken.numerics.maths_functions import ε
 import basix.ufl as bufl
 
 

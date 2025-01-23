@@ -4,8 +4,7 @@ from mpi4py import MPI
 import ufl
 import numpy as np
 import basix.ufl as bufl
-import numerics.maths_functions as mf
-from models import stokes, damage, elasticity, surface
+from kraken.models import stokes, damage, elasticity, surface
 
 
 class viscoelastic_damage:
