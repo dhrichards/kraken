@@ -3,7 +3,8 @@ import sys
 sys.path.append("src")
 import gmsh
 from dolfinx import io
-from material import Material_no_uc
+from kraken.material import Material_no_uc
+from mpi4py import MPI
 
 
 true_length = 4e3
@@ -66,4 +67,13 @@ model.addPhysicalGroup(2, [1], 1)
 model.mesh.generate(2)
 
 
+
+
+
 gmsh.write("iceberg.msh")
+
+mesh, ct, ft = io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, rank=0, gdim=2)
+
+with io.XDMFFile(MPI.COMM_WORLD,"iceberg.xdmf","w") as file:
+    file.write_mesh(mesh)
+    # file.write_meshtags(model.mesh)
