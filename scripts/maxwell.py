@@ -1,17 +1,13 @@
 #%%
-# add src folder to path
-import sys
-sys.path.append("src")
-
 import numpy as np
 from dolfinx import mesh, io, log, default_scalar_type, fem
 from mpi4py import MPI
 import numpy as np
-from material import MaterialProperties, Material_no_uc
-from boundaryconditions import get_zero_bc
-import numerics.maths_functions as mf
-import utilities
-import mainclass as mc
+from kraken.material import MaterialProperties, Material_no_uc
+from kraken.boundaryconditions import get_zero_bc
+import kraken.numerics.maths_functions as mf
+import kraken.utilities as utilities
+import kraken.mainclass as mc
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -24,6 +20,7 @@ def bottom_boundary(x):
 
 true_length = 4e3
 true_height = 300
+
 
 
 
