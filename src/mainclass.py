@@ -4,13 +4,8 @@ from mpi4py import MPI
 import ufl
 import numpy as np
 import basix.ufl as bufl
-import maths_functions as mf
-
-import stokes
-import damage
-import elasticity
-import surface
-
+import numerics.maths_functions as mf
+from models import stokes, damage, elasticity, surface
 
 
 class viscoelastic_damage:

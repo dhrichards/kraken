@@ -1,16 +1,13 @@
-import numpy as np
 from dolfinx import fem, default_scalar_type, la, default_real_type
 from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
-from dolfinx.log import LogLevel, set_log_level
 from dolfinx.nls.petsc import NewtonSolver
 from petsc4py import PETSc
 from mpi4py import MPI
 import ufl
 import numpy as np
-import maths_functions as mf
-from maths_functions import ε
+from ..numerics import maths_functions as mf
+from ..numerics.maths_functions import ε
 import basix.ufl as bufl
-import bodyforces as bf
 
 
 class ElasticitySolver:
@@ -33,9 +30,9 @@ class ElasticitySolver:
         n = ufl.FacetNormal(self.msh)
 
     
-        pw = lambda u: bf.water_pressure(self.msh,u)
+        pw = lambda u: mf.water_pressure(self.msh,u)
 
-        f = bf.body_force(self.msh, ρratio)
+        f = mf.body_force(self.msh, ρratio)
         g = mf.degradation(d)
 
         

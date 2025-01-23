@@ -1,7 +1,7 @@
 import numpy as np
 from dolfinx import fem, io, plot
 from mpi4py import MPI
-import pyvista
+
 
 
 def move_mesh(msh,uh,k=1.0):
@@ -83,48 +83,49 @@ def write_xdmf(filename,msh,functions,names,t=0.0):
 
 
 
-def plot_damage_state(u, d):
-    """
-    Plot the displacement and damage field with pyvista
-    """
+# import pyvista
+# def plot_damage_state(u, d):
+#     """
+#     Plot the displacement and damage field with pyvista
+#     """
 
-    mesh = u.function_space.mesh
+#     mesh = u.function_space.mesh
 
 
 
-    topology, cell_types, geometry = plot.vtk_mesh(mesh)
-    grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
-    plotter = pyvista.Plotter()
-    plotter.add_mesh(grid, show_edges=True, show_scalar_bar=True)
-    plotter.view_xy()
-    plotter.add_axes()
-    plotter.set_scale(5,5)
+#     topology, cell_types, geometry = plot.vtk_mesh(mesh)
+#     grid = pyvista.UnstructuredGrid(topology, cell_types, geometry)
+#     plotter = pyvista.Plotter()
+#     plotter.add_mesh(grid, show_edges=True, show_scalar_bar=True)
+#     plotter.view_xy()
+#     plotter.add_axes()
+#     plotter.set_scale(5,5)
 
-    plotter = pyvista.Plotter(
-        title="Damage state", window_size=[800, 300], shape=(1, 2)
-    )
+#     plotter = pyvista.Plotter(
+#         title="Damage state", window_size=[800, 300], shape=(1, 2)
+#     )
 
-    topology, cell_types, x = plot.vtk_mesh(mesh)
-    grid = pyvista.UnstructuredGrid(topology, cell_types, x)
+#     topology, cell_types, x = plot.vtk_mesh(mesh)
+#     grid = pyvista.UnstructuredGrid(topology, cell_types, x)
     
-    plotter.subplot(0, 0)
-    plotter.add_text("Displacement", font_size=11)
-    vals = np.zeros((x.shape[0], 3))
-    vals[:,:len(u)] = u.x.array.reshape((x.shape[0], len(u)))
-    grid["u"] = vals
-    warped = grid.warp_by_vector("u", factor=0.1)
-    actor_1 = plotter.add_mesh(warped, show_edges=False)
-    plotter.view_xy()
+#     plotter.subplot(0, 0)
+#     plotter.add_text("Displacement", font_size=11)
+#     vals = np.zeros((x.shape[0], 3))
+#     vals[:,:len(u)] = u.x.array.reshape((x.shape[0], len(u)))
+#     grid["u"] = vals
+#     warped = grid.warp_by_vector("u", factor=0.1)
+#     actor_1 = plotter.add_mesh(warped, show_edges=False)
+#     plotter.view_xy()
 
-    plotter.subplot(0, 1)
+#     plotter.subplot(0, 1)
 
-    plotter.add_text("Damage", font_size=11)
+#     plotter.add_text("Damage", font_size=11)
 
-    grid.point_data["alpha"] = d.x.array
-    grid.set_active_scalars("alpha")
-    plotter.add_mesh(grid, show_edges=False, show_scalar_bar=True, clim=[0, 1])
-    plotter.view_xy()
-    if not pyvista.OFF_SCREEN:
-       plotter.show()
+#     grid.point_data["alpha"] = d.x.array
+#     grid.set_active_scalars("alpha")
+#     plotter.add_mesh(grid, show_edges=False, show_scalar_bar=True, clim=[0, 1])
+#     plotter.view_xy()
+#     if not pyvista.OFF_SCREEN:
+#        plotter.show()
 
 

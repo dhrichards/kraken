@@ -2,7 +2,7 @@ import basix.ufl as bufl
 import ufl
 from dolfinx import fem, default_real_type, mesh
 import numpy as np
-import integrators
+from ..numerics import integrators
 
 
 
