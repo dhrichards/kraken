@@ -12,6 +12,8 @@
 #SBATCH --mail-type=begin,end,fail,requeue
 #SBATCH --mail-user=dancha@bas.ac.uk
 
+
+module load mpich/4.2.1/gcc-14.1.0-toyd
 . /users/dancha/spack/share/spack/setup-env.sh
 spack env activate fenicsx
 cd /users/dancha/kraken3/scripts
