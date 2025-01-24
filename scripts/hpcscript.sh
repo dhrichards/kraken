@@ -19,4 +19,7 @@ spack env activate fenicsx
 cd /users/dancha/kraken3/scripts
 
 
+mpirun --version
+
+
 srun -n 4 python3 iceberg_hpc.py
