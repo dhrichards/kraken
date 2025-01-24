@@ -23,6 +23,7 @@ true_height = 300
 
 ## check mpi size is correct
 print(MPI.COMM_WORLD.size)
+print(MPI.COMM_WORLD.rank)
 
 
 
