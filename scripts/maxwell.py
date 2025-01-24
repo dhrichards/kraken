@@ -35,8 +35,11 @@ material.l = 3.0/material.L
 
 Hw = material.ρi/material.ρw*nondim_height
 
+
+filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(int(material.l*material.L)) + ".xdmf"
+
 # msh,ct,ft = io.gmshio.read_from_msh("../meshes/iceberg.msh", MPI.COMM_WORLD, rank=0, gdim=2)
-with io.XDMFFile(MPI.COMM_WORLD,"../meshes/iceberg.xdmf","r") as infile:
+with io.XDMFFile(MPI.COMM_WORLD,"../meshes/" + filename,"r") as infile:
     msh = infile.read_mesh()
 
 msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)

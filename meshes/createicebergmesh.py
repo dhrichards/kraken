@@ -70,10 +70,12 @@ model.mesh.generate(2)
 
 
 
-gmsh.write("iceberg.msh")
+# gmsh.write("iceberg.msh")
 
 mesh, ct, ft = io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, rank=0, gdim=2)
 
-with io.XDMFFile(MPI.COMM_WORLD,"iceberg.xdmf","w") as file:
+filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(int(material.l*material.L)) + ".xdmf"
+
+with io.XDMFFile(MPI.COMM_WORLD,filename,"w") as file:
     file.write_mesh(mesh)
     # file.write_meshtags(model.mesh)
