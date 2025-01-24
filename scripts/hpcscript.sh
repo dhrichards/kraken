@@ -1,7 +1,7 @@
 #!/bin/bash ​
 #SBATCH --output=/users/dancha/jobs/myfirstjob.%j.%N.out ​
 #SBATCH --error=/users/dancha/jobs/myfirstjob.%j.%N.err ​
-#SBATCH --job-name=test      ​
+#SBATCH --job-name=icebergtest      ​
 #SBATCH --mem=4gb ​
 #SBATCH --nodes=1 ​
 #SBATCH --ntasks=4 ​
@@ -12,7 +12,8 @@
 #SBATCH --mail-type=begin,end,fail,requeue ​
 #SBATCH --mail-user=dancha@bas.ac.uk 
 
-source .bashrc
+. /users/dancha/spack/share/spack/setup-env.sh
+spack env activate fenicsx
 cd /users/dancha/kraken3/scripts
 
 mpirun -n 4 python3 iceberg_hpc.py
