@@ -16,8 +16,5 @@
 spack env activate fenicsx
 cd /users/dancha/kraken3/scripts
 
-echo "SLURM Job Details:"
-scontrol show job $SLURM_JOB_ID
 
-
-mpirun -n 4 python3 iceberg_hpc.py
+srun -n 4 python3 iceberg_hpc.py

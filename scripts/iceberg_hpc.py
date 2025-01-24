@@ -21,6 +21,8 @@ def bottom_boundary(x):
 true_length = 4e3
 true_height = 300
 
+## check mpi size is correct
+print(MPI.COMM_WORLD.size)
 
 
 
