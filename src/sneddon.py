@@ -64,8 +64,6 @@ if __name__ == "__main__":
     crackk = lambda x: crack(x,a,h)
     bc_d = lambda V: [bc_d_func(msh,V,crackk)]
 
-
-
     model = ec.viscoelastic_damage(msh, [bc_v,bc_v,bc_d], material, 1.0)
 
     #overload water pressure
