@@ -32,6 +32,7 @@ class viscoelastic_damage:
         if eulerian_surfaces:
             self.surface = surface.SurfaceSolver(self.msh, bc_funcs[3], self.material, self.dt, eulerian_surfaces)
             self.z = fem.Function(self.surface.V, name="z")
+            self.z.interpolate(lambda x: x[self.msh.geometry.dim-1])
             self.move_mesh = self.eulerian_update
         else:
             self.move_mesh = self.lagrangian_update
@@ -89,7 +90,7 @@ class viscoelastic_damage:
 
 
     def eulerian_update(self):
-        self.z = self.surface.solve(self.u)
+        self.z = self.surface.solve(self.u,self.z)
 
         self.msh.geometry.x[:,self.msh.geometry.dim-1] = self.z.x.array
 

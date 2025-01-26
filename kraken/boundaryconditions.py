@@ -1,6 +1,5 @@
 import numpy as np
-from dolfinx import fem, mesh
-
+from dolfinx import fem, mesh, default_scalar_type
 
 
 def get_boundary_dofs(V,boundary):
@@ -12,24 +11,26 @@ def get_boundary_dofs(V,boundary):
 
     return boundary_dofs_x
 
-def get_zero_vec(V,dtype):
-    return dtype(np.array([0]*V.value_size))
+def get_zero_vec(V,dtype=default_scalar_type):
+    if V.value_size == 1:
+        return dtype(0.0)
+    else:
+        return dtype(np.array([0]*V.value_size))
 
 
 def get_bc(V,boundary,bc_val):
     boundary_dofs_x = get_boundary_dofs(V,boundary)
     return fem.dirichletbc(bc_val, boundary_dofs_x, V)
 
-def get_zero_bc(V,boundary,dtype):
-    return get_bc(V,boundary,get_zero_vec(V,dtype))
+def get_zero_bc(V,boundary):
+    return get_bc(V,boundary,get_zero_vec(V))
 
 
 def get_bc_func(V,boundary,bc_expr):
     boundary_dofs_x = get_boundary_dofs(V,boundary)
     bc_val = fem.Function(V)
     bc_val.interpolate(bc_expr)
-    return lambda V: get_bc(V,boundary,bc_val)
-
+    return fem.dirichletbc(bc_val, boundary_dofs_x)
 
 
         
