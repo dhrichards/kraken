@@ -13,10 +13,10 @@
 #SBATCH --mail-user=dancha@bas.ac.uk
 
 module purge
-module load mpi/openmpi-x86_64  
+module load mpi/mpich-x86_64
 
 . /users/dancha/spack/share/spack/setup-env.sh
-spack env activate fenicsx
+spack env activate fenicsx2
 cd /users/dancha/kraken3/scripts
 
 
