@@ -56,15 +56,15 @@ msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
 
 
 #%%
-clamped_both = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
-                            get_zero_bc(V, right_boundary, default_scalar_type)]
+clamped_both = lambda V: [get_zero_bc(V, left_boundary),
+                            get_zero_bc(V, right_boundary)]
 
-clamped_bc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type)]
-symm_bc = lambda V: [get_zero_bc(V.sub(0), left_boundary, default_scalar_type)]
+clamped_bc = lambda V: [get_zero_bc(V, left_boundary)]
+symm_bc = lambda V: [get_zero_bc(V.sub(0), left_boundary)]
 no_bc = lambda V: []
 
-cliff_bc = lambda V: [get_zero_bc(V.sub(0), left_boundary, default_scalar_type),
-                        get_zero_bc(V.sub(1), bottom_boundary, default_scalar_type)]
+cliff_bc = lambda V: [get_zero_bc(V.sub(0), left_boundary),
+                        get_zero_bc(V.sub(1), bottom_boundary)]
 
 model = mc.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
 
