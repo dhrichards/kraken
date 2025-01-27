@@ -21,6 +21,9 @@ def bottom_boundary(x):
 true_length = 4e3
 true_height = 300
 
+## check mpi size is correct
+print(MPI.COMM_WORLD.size)
+print(MPI.COMM_WORLD.rank)
 
 
 
@@ -35,8 +38,11 @@ material.l = 3.0/material.L
 
 Hw = material.ρi/material.ρw*nondim_height
 
+
+filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(int(material.l*material.L)) + ".xdmf"
+
 # msh,ct,ft = io.gmshio.read_from_msh("../meshes/iceberg.msh", MPI.COMM_WORLD, rank=0, gdim=2)
-with io.XDMFFile(MPI.COMM_WORLD,"../meshes/iceberg.xdmf","r") as infile:
+with io.XDMFFile(MPI.COMM_WORLD,"../meshes/" + filename,"r") as infile:
     msh = infile.read_mesh()
 
 msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
@@ -76,7 +82,7 @@ for i in range(steps):
     ψp = mf.free_energy_plus(mf.ε(model.v),model.material.ν)
     pp = mf.positive_part(ψp-material.ψcritstar)
     pw = mf.water_pressure(msh,model.v)
-    utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
+    utilities.write_xdmf("/data/hpcdata/users/dancha/iceberginitial" + str(i) + ".xdmf",msh,\
                     [model.v,model.d,model.Hprev,pp],\
                     ["v","d","H","pp"],t=i)
     
@@ -90,7 +96,7 @@ for i in range(10):
     model.solve_stokes()
     
 
-    utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
+    utilities.write_xdmf("/data/hpcdata/users/dancha/iceberg" + str(i) + ".xdmf",msh,\
                     [model.v,model.d,model.u, mf.stress(model.v,material.ν)],\
                     ["v","d","u", "σ"],t=i)
 
