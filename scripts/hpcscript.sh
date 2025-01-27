@@ -16,7 +16,7 @@ module purge
 module load mpi/mpich-x86_64
 
 . /users/dancha/spack/share/spack/setup-env.sh
-spack env activate fenicsx2
+spack env activate fenicsx3
 cd /users/dancha/kraken3/scripts
 
 
