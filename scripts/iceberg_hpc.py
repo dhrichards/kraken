@@ -36,26 +36,26 @@ material.τ = 3600*24
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 0.5/material.L
+material.l = 2.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
 
 
-filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(material.l*material.L) + ".xdmf"
+# filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(material.l*material.L) + ".xdmf"
 
-# msh,ct,ft = io.gmshio.read_from_msh("../meshes/iceberg.msh", MPI.COMM_WORLD, rank=0, gdim=2)
-with io.XDMFFile(MPI.COMM_WORLD,"../meshes/" + filename,"r") as infile:
-    msh = infile.read_mesh()
+# # msh,ct,ft = io.gmshio.read_from_msh("../meshes/iceberg.msh", MPI.COMM_WORLD, rank=0, gdim=2)
+# with io.XDMFFile(MPI.COMM_WORLD,"../meshes/" + filename,"r") as infile:
+#     msh = infile.read_mesh()
 
-msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-# cell_size = material.l/3
-# nx = int(nondim_length/cell_size/2)
-# nz = int(nondim_height/cell_size)
+# msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
+cell_size = material.l/2
+nx = int(nondim_length/cell_size/2)
+nz = int(nondim_height/cell_size)
 
-# msh = mesh.create_rectangle(MPI.COMM_WORLD,
-#                             [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
-#                             [nx,nz], mesh.CellType.quadrilateral)
+msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                            [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
+                            [nx,nz], mesh.CellType.quadrilateral)
 
 
 #%%
