@@ -25,6 +25,9 @@ true_height = 300
 print(MPI.COMM_WORLD.size)
 print(MPI.COMM_WORLD.rank)
 
+print(MPI.Get_library_version())
+
+
 
 
 material = Material_no_uc()
