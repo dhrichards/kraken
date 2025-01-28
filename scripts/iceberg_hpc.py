@@ -36,13 +36,13 @@ material.τ = 3600*24
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 1.0/material.L
+material.l = 0.5/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
 
 
-filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(int(material.l*material.L)) + ".xdmf"
+filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(material.l*material.L) + ".xdmf"
 
 # msh,ct,ft = io.gmshio.read_from_msh("../meshes/iceberg.msh", MPI.COMM_WORLD, rank=0, gdim=2)
 with io.XDMFFile(MPI.COMM_WORLD,"../meshes/" + filename,"r") as infile:
