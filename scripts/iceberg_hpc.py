@@ -36,7 +36,7 @@ material.τ = 3600*24
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 2.0/material.L
+material.l = 4.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
