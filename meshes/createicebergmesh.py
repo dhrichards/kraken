@@ -1,6 +1,4 @@
 #%%
-import sys
-sys.path.append("src")
 import gmsh
 from dolfinx import io
 from kraken.material import Material_no_uc
@@ -15,7 +13,7 @@ material.L = true_height
 material.τ = 3600*24  
 
 
-material.l = 3.0/material.L
+material.l = 0.5/material.L
 
 gmsh.initialize()
 model = gmsh.model()
@@ -30,9 +28,9 @@ nondim_height = true_height/material.L
 Hw = material.ρi/material.ρw*nondim_height
 
 large_size = nondim_height/5
-small_size = material.l/5
-end_size = small_size*8
-bottom_coarsening = 10.0
+small_size = material.l/4
+end_size = small_size*2
+bottom_coarsening = 3.0
 crack_x = nondim_length/2 - nondim_height*1.1
 
 model.geo.addPoint(0, -Hw, 0, large_size, 1)
@@ -74,8 +72,9 @@ model.mesh.generate(2)
 
 mesh, ct, ft = io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, rank=0, gdim=2)
 
-filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(int(material.l*material.L)) + ".xdmf"
+filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(material.l*material.L) + ".xdmf"
 
 with io.XDMFFile(MPI.COMM_WORLD,filename,"w") as file:
     file.write_mesh(mesh)
     # file.write_meshtags(model.mesh)
+# %%
