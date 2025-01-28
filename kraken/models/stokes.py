@@ -46,8 +46,7 @@ class StokesSolver:
         ds = ufl.Measure("ds", domain=self.msh)
 
         # Water pressure
-        def pw(u):
-            return mf.water_pressure(self.msh,self.v + self.u*self.dt)
+        pw = lambda u : mf.water_pressure(self.msh,self.v + u*self.dt)
         
 
         
