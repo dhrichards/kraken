@@ -3,15 +3,17 @@ import ufl
 from dolfinx import fem, default_real_type, mesh
 import numpy as np
 from kraken.numerics import integrators
+import kraken.boundaryconditions as bc
 
 
 
 class SurfaceSolver:
-    def __init__(self, msh, bc_func, material, dt, eulerian_surfaces, k = 1e-4):
+    def __init__(self, msh, bc_func, material, dt, eulerian_surfaces, acc):
         self.msh = msh
         self.material = material
         self.dt = dt
-        self.k = k
+        self.k = 1e-4
+        self.acc = acc
         self.eulerian_surfaces = eulerian_surfaces
 
         z_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, dtype=default_real_type)
@@ -21,24 +23,24 @@ class SurfaceSolver:
 
         self.bcs = bc_func(self.V)
 
-        facet_indices = []; facet_markers = []
-        for i in range(len(eulerian_surfaces)):
-            facets = mesh.locate_entities_boundary(self.msh, self.msh.topology.dim - 1, eulerian_surfaces[i])
-            facet_indices.append(facets)
-            facet_markers.append(np.full_like(facets, i+1))
+        # facet_indices = []; facet_markers = []
+        # for i in range(len(eulerian_surfaces)):
+        #     facets = mesh.locate_entities_boundary(self.msh, self.msh.topology.dim - 1, eulerian_surfaces[i])
+        #     facet_indices.append(facets)
+        #     facet_markers.append(np.full_like(facets, i+1))
 
-        facet_indices = np.hstack(facet_indices).astype(np.int32)
-        facet_markers = np.hstack(facet_markers).astype(np.int32)
-        sorted_facets = np.argsort(facet_indices)
+        # facet_indices = np.hstack(facet_indices).astype(np.int32)
+        # facet_markers = np.hstack(facet_markers).astype(np.int32)
+        # sorted_facets = np.argsort(facet_indices)
 
-        mesh_tags = mesh.meshtags(self.msh, self.msh.topology.dim - 1,
-                 facet_indices[sorted_facets], facet_markers[sorted_facets])
+        # mesh_tags = mesh.meshtags(self.msh, self.msh.topology.dim - 1,
+        #          facet_indices[sorted_facets], facet_markers[sorted_facets])
         
-        self.ds = ufl.Measure("ds", domain=self.msh, subdomain_data=mesh_tags)
+        # self.ds = ufl.Measure("ds", domain=self.msh, subdomain_data=mesh_tags)
 
-        # top_facets = mesh.locate_entities_boundary(msh, msh.topology.dim - 1, self.eulerian_surfaces[0])
-        # mesh_tags = mesh.meshtags(msh, msh.topology.dim - 1, top_facets, 1)
-        # self.ds = ufl.Measure("ds", domain=msh, subdomain_data=mesh_tags)
+        facets = mesh.locate_entities_boundary(msh, msh.topology.dim - 1, self.eulerian_surfaces)
+        mesh_tags = mesh.meshtags(msh, msh.topology.dim - 1, facets, 1)
+        self.ds = ufl.Measure("ds", domain=msh, subdomain_data=mesh_tags)
 
 
     def solve(self, u, z_old):
@@ -51,12 +53,12 @@ class SurfaceSolver:
         ds = self.ds(1)# + self.ds(2) # top and bottom boundary
         # ds = sum([self.ds(i+1) for i in range(len(self.eulerian_surfaces))])
         
-        # acc = self.params.acc(ufl.SpatialCoordinate(self.msh)) # accumulation rate
+        acc = self.acc(ufl.SpatialCoordinate(self.msh)) # accumulation rate
         # acc = 0.0
 
         if D == 2:
             rh = integrators.RK4(
-                lambda z: u[D-1] - ufl.dot(u[0], ufl.grad(z)[0]),
+                lambda z: u[D-1] + acc - ufl.dot(u[0], ufl.grad(z)[0]),
                 z_old, self.dt)
         else:
             rh = integrators.RK4(
@@ -86,12 +88,14 @@ class SurfaceSolver:
         ds = self.ds(1)
         n = ufl.FacetNormal(self.msh)
 
-        γ = 1e3
+        γ = 1e9
         h = ufl.CellDiameter(self.msh)
+
+        acc = self.acc(ufl.SpatialCoordinate(self.msh)) # accumulation rate
 
         if D == 2:
             rh = integrators.RK4(
-                lambda z: u[D-1] - ufl.dot(u[0], ufl.grad(z)[0]),
+                lambda z: u[D-1] + acc - ufl.dot(u[0], ufl.grad(z)[0]),
                 z_old, self.dt)
             
         else:

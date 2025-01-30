@@ -8,7 +8,7 @@ from kraken.models import stokes, damage, elasticity, surface
 
 
 class viscoelastic_damage:
-    def __init__(self, msh, bc_funcs, material, dt, eulerian_surfaces=False):
+    def __init__(self, msh, bc_funcs, material, dt, eulerian_surfaces=False,acc=lambda x: 0.0):
         self.msh = msh
         self.material = material
         self.dt = dt
@@ -29,8 +29,9 @@ class viscoelastic_damage:
         self.p = fem.Function(self.stokes.Q, name="pressure")
 
 
+
         if eulerian_surfaces:
-            self.surface = surface.SurfaceSolver(self.msh, bc_funcs[3], self.material, self.dt, eulerian_surfaces)
+            self.surface = surface.SurfaceSolver(self.msh, bc_funcs[3], self.material, self.dt, eulerian_surfaces, acc)
             self.z = fem.Function(self.surface.V, name="z")
             self.z.interpolate(lambda x: x[self.msh.geometry.dim-1])
             self.move_mesh = self.eulerian_update
@@ -39,9 +40,11 @@ class viscoelastic_damage:
  
 
     def solve_elastic(self):
+        # self.v = self.elastic.solve_linearised(self.v, self.d)
         self.elastic.solve(self.v, self.d)
 
     def solve_damage(self):
+        # self.damage.solve_nonlinear(self.v, self.Hprev, self.d)
         self.d = self.damage.solve(self.v, self.Hprev)
 
     def solve_stokes(self):
@@ -71,14 +74,15 @@ class viscoelastic_damage:
             if MPI.COMM_WORLD.rank == 0:
                 print(f"iteration {i}, error {error_L2}")
             
-            if error_L2 < tol:
-                
-                break
+            if i>0:
+                if error_L2 < tol:
+                    break
 
             L2_old = L2
 
         # Update history function as finished fixed point iteration
         self.Hprev = self.history.solve(self.Hprev, self.v)
+        # self.damage.d_lb = self.d
 
 
     
@@ -90,7 +94,7 @@ class viscoelastic_damage:
 
 
     def eulerian_update(self):
-        self.z = self.surface.solve(self.u,self.z)
+        self.z = self.surface.solve_nitshe(self.u,self.z)
 
         self.msh.geometry.x[:,self.msh.geometry.dim-1] = self.z.x.array
 

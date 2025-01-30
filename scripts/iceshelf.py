@@ -57,13 +57,13 @@ u_in_bc = lambda V: [bc.get_bc(V, left_boundary, np.array([1.0,0.0]))]
 
 
 model = mc.viscoelastic_damage(msh, [clamped_bc,u_in_bc,no_bc,no_bc], material,
-                                10.0,
-                               [top_boundary])
+                                1.0,
+                               lambda x: top_boundary(x) + bottom_boundary(x))
 
 
 #%%
 
-for i in range(1):
+for i in range(1000):
     
     # log.set_log_level(log.LogLevel.INFO)
     # model.solve_elastic()

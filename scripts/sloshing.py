@@ -65,7 +65,7 @@ warp_mesh(msh,top,bottom)
 
 
 material = Material_no_uc()
-material.τ = 60*60*24*365.25
+material.τ = 1.0
 material.L = 1.0
 material.A = 1e-16
 
@@ -78,7 +78,7 @@ bc_f = lambda V: []
 bc_z = lambda V: [bc.get_zero_bc(V, bottom_boundary)]
 
 
-dt = 0.01
+dt = 40
 
 model = mc.viscoelastic_damage(msh, [bc_f,bc_u,bc_f,bc_z], material,
                                 dt,
@@ -92,16 +92,17 @@ utilities.write_xdmf("outputs/slosh.xdmf", msh, [model.u,model.z], ["u","z"])
 
 
 #%%
-for i in range(100):
+for i in range(500):
     if MPI.COMM_WORLD.rank == 0:
         print(i)
     model.solve_stokes()
+    model.move_mesh()
 
     utilities.write_xdmf("outputs/slosh" + str(i) + ".xdmf", 
-                         msh, [model.u, model.z], ["u", "z"], t=i*dt)
+                         msh, [model.u, model.z], ["u", "z"], t=i)
     
     # model.solve_fabric_complex()
-    model.move_mesh()
+    
     # a2 = ot.a2calc(model.f)
 
     # model.msh.geometry.x[:,model.msh.geometry.dim-1] = model.z_original.x.array.real

@@ -18,7 +18,7 @@ def right_boundary(x):
 def bottom_boundary(x):
     return np.isclose(x[1], -Hw)
 
-true_length = 4e3
+true_length = 2e3
 true_height = 300
 
 
@@ -30,26 +30,26 @@ material.τ = 3600*24
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 3.0/material.L
+material.l = 10.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
 
 
-filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(int(material.l*material.L)) + ".xdmf"
+# filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(int(material.l*material.L)) + ".xdmf"
 
-# msh,ct,ft = io.gmshio.read_from_msh("../meshes/iceberg.msh", MPI.COMM_WORLD, rank=0, gdim=2)
-with io.XDMFFile(MPI.COMM_WORLD,"../meshes/" + filename,"r") as infile:
-    msh = infile.read_mesh()
+# # msh,ct,ft = io.gmshio.read_from_msh("../meshes/iceberg.msh", MPI.COMM_WORLD, rank=0, gdim=2)
+# with io.XDMFFile(MPI.COMM_WORLD,"../meshes/" + filename,"r") as infile:
+#     msh = infile.read_mesh()
 
-msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-# cell_size = material.l/3
-# nx = int(nondim_length/cell_size/2)
-# nz = int(nondim_height/cell_size)
+# msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
+cell_size = material.l/2
+nx = int(nondim_length/cell_size/2)
+nz = int(nondim_height/cell_size)
 
-# msh = mesh.create_rectangle(MPI.COMM_WORLD,
-#                             [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
-#                             [nx,nz], mesh.CellType.quadrilateral)
+msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                            [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
+                            [nx,nz], mesh.CellType.quadrilateral)
 
 
 #%%
@@ -68,9 +68,9 @@ model = mc.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
 g0 = 6.5
 # g0=2.53
 model.material.g = g0
-steps = 20
+steps = 10
 #%%
-for i in range(steps):
+for i in range(steps-1):
     model.material.g = g0 + i*(9.8-g0)/(steps-1)
     if MPI.COMM_WORLD.rank == 0:
         print(model.material.g)
@@ -80,9 +80,10 @@ for i in range(steps):
     pp = mf.positive_part(ψp-material.ψcritstar)
     pw = mf.water_pressure(msh,model.v)
     utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d,model.Hprev,pp],\
-                    ["v","d","H","pp"],t=i)
+                    [model.v,model.d],\
+                    ["v","d"],t=i)
     
+model.material.g = 9.8
 # model.stokes.setup_solver(model.u,model.p,model.d,model.v)
 # # model.material.g += (9.81-g0)/(steps-1)
 for i in range(10):

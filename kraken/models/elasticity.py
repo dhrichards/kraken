@@ -7,6 +7,7 @@ import ufl
 import numpy as np
 from kraken.numerics import maths_functions as mf
 from kraken.numerics.maths_functions import ε
+from kraken.numerics import solvers
 import basix.ufl as bufl
 
 
@@ -19,6 +20,19 @@ class ElasticitySolver:
         self.V = fem.functionspace(self.msh, v_el)
 
         self.bcs = bc_func(self.V)
+
+    def internal_energy(self,v,d):
+        ρratio = self.material.ρratio
+        ν = self.material.ν
+        return mf.degraded_free_energy(mf.ε(v),d,ν,self.material.ψcritstar) * ufl.dx
+        # return mf.degradation(d)*mf.free_energy(mf.ε(v),ν) * ufl.dx
+    
+    def external_energy(self,v,d):
+        f = mf.body_force(self.msh, self.material.ρratio)
+        g = mf.degradation(d)
+        pw = lambda u: mf.water_pressure(self.msh,u)
+        return  self.material.C1 *( g*ufl.dot(f, v) - pw(v)*ufl.inner(ufl.grad(g), v) )* ufl.dx \
+            - self.material.C1 * g * pw(v) *  ufl.dot(ufl.FacetNormal(self.msh), v) * ufl.ds
 
     def solve(self,v,d):
 
@@ -39,16 +53,18 @@ class ElasticitySolver:
     
 
 
-        internal_energy = mf.degraded_free_energy(mf.ε(v),d,ν,self.material.ψcritstar) * ufl.dx
-        # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
+        # internal_energy = mf.degraded_free_energy(mf.ε(v),d,ν,self.material.ψcritstar) * ufl.dx
+        # # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
 
-        external_energy =  self.material.C1 *( g*ufl.dot(f, v) - pw(v)*ufl.inner(ufl.grad(g), v) )* ufl.dx \
-            - self.material.C1 * g * pw(v) *  ufl.dot(n, v) * ds
+        # external_energy =  self.material.C1 *( g*ufl.dot(f, v) - pw(v)*ufl.inner(ufl.grad(g), v) )* ufl.dx \
+        #     - self.material.C1 * g * pw(v) *  ufl.dot(n, v) * ds
         
 
-        total_energy = internal_energy - external_energy
+        # total_energy = internal_energy - external_energy
+        total_energy = self.internal_energy(v,d) - self.external_energy(v,d)
 
         F = ufl.derivative(total_energy,v,ufl.TestFunction(self.V))
+        J = ufl.derivative(F,v,ufl.TrialFunction(self.V))
 
 
 
@@ -56,10 +72,11 @@ class ElasticitySolver:
         
         self.solver = NewtonSolver(MPI.COMM_WORLD, self.problem)
         self.solver.convergence_criterion = "incremental"
-        self.solver.rtol = 1e-8
-        self.solver.atol = 1e-8
+        self.solver.rtol = 1e-7
+        self.solver.atol = 1e-7
         self.solver.max_it = 100
-        self.solver.report = True
+        # self.solver.report = True
+        # self.solver.error_on_nonconvergence = False
 
         
 
@@ -76,9 +93,54 @@ class ElasticitySolver:
         ksp.setFromOptions()
 
         n, converged = self.solver.solve(v)
-        assert(converged)
+        # assert(converged)
+
+        # self.problem = solvers.NonlinearPDE_SNESProblem(F, J, v, bcs=self.bcs)
+
+        # self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
+        # self.solver.setType("ksponly")
+        # self.solver.setFunction(self.problem.F_mono, fem.petsc.create_vector(fem.form(F)))
+        # self.solver.setJacobian(self.problem.J_mono, fem.petsc.create_matrix(fem.form(J)),P=None)
+        # self.solver.setTolerances(rtol=1.0e-7, max_it=50)
+        # self.solver.getKSP().setType("preonly")
+        # self.solver.getKSP().setTolerances(rtol=1.0e-7)
+        # self.solver.getKSP().getPC().setType("lu")
+
+        # self.solver.solve(None, v.x.petsc_vec)
 
         # return v
+
+    def solve_linearised(self,uprev,d):
+
+        u = ufl.TrialFunction(self.V)
+        v = ufl.TestFunction(self.V)
+
+        ρratio = self.material.ρratio; ν = self.material.ν
+        C1 = self.material.C1
+
+        f = mf.body_force(self.msh, self.material.ρratio)
+        g = mf.degradation(d)
+        n = ufl.FacetNormal(self.msh)
+        
+        pw = mf.water_pressure(self.msh,uprev) #-u[self.msh.geometry.dim-1]
+
+
+        F = ( ufl.inner(g*mf.stress(u,ν),mf.ε(v)) \
+             - C1*g*ufl.inner(f,v) \
+             + C1*pw*ufl.inner(ufl.grad(g),v) ) * ufl.dx \
+             + C1*g*pw*ufl.inner(n,v)*ufl.ds
+
+        
+        a, L = ufl.lhs(F), ufl.rhs(F)
+
+        problem = LinearProblem(a, L, self.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+
+        u = problem.solve()
+
+        return u
+
+
+
 
 
 

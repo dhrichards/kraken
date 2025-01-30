@@ -39,7 +39,7 @@ class StokesSolver:
             return mf.viscosity(u, self.material.n, 1.e-8)
         
         
-        f = mf.body_force(self.msh, ρratio)
+        f = mf.body_force(self.msh, ρratio, self.material.slope_angle)
 
 
         n = ufl.FacetNormal(self.msh)           
@@ -95,7 +95,7 @@ class StokesSolver:
         n = ufl.FacetNormal(self.msh)
         ds = ufl.Measure("ds", domain=self.msh)
 
-        f = mf.body_force(self.msh, ρratio)
+        f = mf.body_force(self.msh, ρratio, self.material.slope_angle)
 
         a = fem.form([[(1/C2)*g*η*ufl.inner(mf.ε(u), mf.ε(v)) * ufl.dx,
                     #    + C1*δpw(u)*ufl.inner(n,v)*ds,
