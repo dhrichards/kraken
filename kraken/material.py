@@ -98,6 +98,7 @@ class Material_no_uc:
         self.n = n # Flow law exponent
         self.Gc = Gc # Fracture toughness
         self.ψcrit = ψcrit 
+        self.slope_angle = 0.0
 
         # Choose L, τ such that C1, C2, C3*l = 1 by default
         self.L = self.μ/(self.ρw*self.g)

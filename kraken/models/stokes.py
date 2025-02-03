@@ -79,15 +79,15 @@ class StokesSolver:
         self.p = p_prev
 
 
-        u, p = ufl.TrialFunction(self.P2), ufl.TrialFunction(self.P1)
-        v, q = ufl.TestFunction(self.P2), ufl.TestFunction(self.P1)
+        u, p = ufl.TrialFunction(self.V), ufl.TrialFunction(self.Q)
+        v, q = ufl.TestFunction(self.V), ufl.TestFunction(self.Q)
 
         C1 = self.material.C1; C2 = self.material.C2
         ρratio = self.material.ρratio
 
         g = mf.degradation(d)
 
-        pw = self.pw(self.msh,self.u*self.dt + v)
+        pw = mf.water_pressure(self.msh,self.u*self.dt + v)
 
        
         η = mf.viscosity(self.u, self.material.n)

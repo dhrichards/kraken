@@ -19,25 +19,27 @@ class DamageSolver:
 
         d_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, dtype=default_real_type)
         self.V = fem.functionspace(self.msh, d_el)
+        
 
 
         self.bcs = bc_func(self.V)
 
-    def solve(self,v,Hprev):
+    def solve(self,v,Hprev,d_old):
 
         H = mf.history_function(ε(v),Hprev,self.material.ν,self.material.ψcritstar)
 
         C3 = self.material.C3; l = self.material.l
 
         d, g = ufl.TrialFunction(self.V), ufl.TestFunction(self.V)
+        
 
-        # only for g = (1-d)**2, w=d**2
+        # only for w=d**2
         F = (ufl.inner(d,g) + l**2*ufl.inner(ufl.grad(d), ufl.grad(g)) \
-                - C3*l*2*(1-d)*H*g) * ufl.dx
+                + C3*l*mf.deriv_deg_wrt_damage(d,d_old)*H*g) * ufl.dx
         
         #only for g = (1-d)**2, w=d
-        F = (ufl.inner(fem.Constant(self.msh,3/8),g) + (3/4)*l**2*ufl.inner(ufl.grad(d), ufl.grad(g)) \
-                - C3*l*2*(1-d)*H*g) * ufl.dx
+        # F = (g*3/8 + (3/4)*l**2*ufl.inner(ufl.grad(d), ufl.grad(g)) \
+        #         - C3*l*2*(1-d)*H*g) * ufl.dx
         
         
         a, L = ufl.lhs(F), ufl.rhs(F)
@@ -48,24 +50,28 @@ class DamageSolver:
     
     def solve_nonlinear(self,v,Hprev,d):
 
-        s = 200
 
         H = mf.history_function(ε(v),Hprev,self.material.ν,self.material.ψcritstar)
 
         C3 = self.material.C3; l = self.material.l
 
+        free_energy = (mf.crack_density_function(d,l,self.w, self.c0) \
+                       + C3*mf.degradation(d)*H)*ufl.dx
+
+        F = ufl.derivative(free_energy,d,ufl.TestFunction(self.V))
+
         g = ufl.TestFunction(self.V)
 
-        free_energy = (mf.γ(d,l) + C3*mf.degradation(d)*H)*ufl.dx
-
-        F = ufl.derivative(free_energy,d,g)
+        # only for g = (1-d)**2, w=d**2
+        # F = (ufl.inner(d,g) + l**2*ufl.inner(ufl.grad(d), ufl.grad(g)) \
+        #         - C3*l*2*(1-d)*H*g) * ufl.dx
         
         self.problem = fem.petsc.NonlinearProblem(F, d, self.bcs)
         
         self.solver = nls.petsc.NewtonSolver(MPI.COMM_WORLD, self.problem)
         self.solver.convergence_criterion = "incremental"
-        self.solver.rtol = 1e-6
-        self.solver.atol = 1e-6
+        self.solver.rtol = 1e-14
+        self.solver.atol = 1e-14 
         self.solver.max_it = 50
         # self.solver.report = True
 
@@ -81,6 +87,8 @@ class DamageSolver:
         ksp.setFromOptions()
 
         n, converged = self.solver.solve(d)
+
+        # d.x.array[:][d.x.array[:] > 1.0] = 1.0
 
 
     
@@ -154,7 +162,7 @@ class BoundedSolver:
         self.d = d
         
         energy = (mf.degraded_free_energy(ε(self.v),self.d,self.material.ν,self.material.ψcritstar)\
-                    + (1/self.material.C3)*mf.γ(self.d,self.material.l,2))*ufl.dx
+                    + (1/self.material.C3)*mf.crack_density_function(self.d,self.material.l,2))*ufl.dx
             
         E_d = ufl.derivative(energy,self.d,ufl.TestFunction(self.V))
         E_d_d = ufl.derivative(E_d,self.d,ufl.TrialFunction(self.V))

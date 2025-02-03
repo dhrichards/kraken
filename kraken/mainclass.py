@@ -45,7 +45,7 @@ class viscoelastic_damage:
 
     def solve_damage(self):
         # self.damage.solve_nonlinear(self.v, self.Hprev, self.d)
-        self.d = self.damage.solve(self.v, self.Hprev)
+        self.d = self.damage.solve(self.v, self.Hprev, self.d)
 
     def solve_stokes(self):
         self.stokes.solve(self.u, self.p, self.d, self.v)
@@ -58,8 +58,8 @@ class viscoelastic_damage:
 
         for i in range(max_its):
 
-            self.solve_damage()
             self.solve_elastic()
+            self.solve_damage()
             if solve_stokes:
                 self.stokes.solve_linearised(self.u,self.p,self.d,self.v)
             # self.solver_d.solve(None, self.d.x.petsc_vec)

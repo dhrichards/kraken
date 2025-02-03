@@ -25,18 +25,20 @@ def positive_part(x):
 def degradation(d,k=1e-5):
     return (1-d)**2 + k
 
-# def deriv_deg_wrt_damage(d,k=1e-5):
-#     return -2*(1-d) + k
+def deriv_deg_wrt_damage(d,dlin):
+    return -2*(1-d)
 
-# def degradation(d,s=200):
+# def degradation(d,q=200):
 #     ϕ = 1-d
-#     return s*(1 - ((s-1)/s)**(ϕ**2) )
+#     return (q+1)*(1 - (q/(q+1))**(ϕ**2) )
 
-# def deriv_deg_wrt_damage(d,dlin,s=200):
+# def deriv_deg_wrt_damage(d,dlin,q=200):
 #     ϕ = 1-dlin
-#     return -2*s*(1-d)*((s-1)/s)**(ϕ**2)*ufl.ln((s-1)/s)
+#     a = q/(q+1)
+#     # return 2*(q+1)*(1-d)*ufl.ln(a)*(1+ϕ**2*ufl.ln(a)) # last term is taylor series of a**ϕ**2
+#     return 2*(q+1)*(1-d)*ufl.ln(a)*a**(ϕ**2)
 
-def γ(d,l,w=lambda d: d**2,cw=2):
+def crack_density_function(d,l,w=lambda d: d**2,cw=2):
     return  (w(d)/l + l * ufl.inner(ufl.grad(d), ufl.grad(d)))/cw
 
 
@@ -47,27 +49,42 @@ def free_energy_plus(ε,ν):
     return 0.5*λoverμ*positive_part(ufl.tr(ε))**2 + \
             ufl.inner(εplus,εplus)
 
+def free_energy_plus_P(ε,ε_prev,ν):
+    i,j,k,l = ufl.indices(4)
+    λoverμ = 2*ν/(1-2*ν)
+    P = projection_tensor(ε_prev)
+    εplus = ufl.as_tensor(P[i,j,k,l]*ε[k,l],(i,j))
+    return 0.5*λoverμ*(heaviside(ufl.tr(ε_prev))*ufl.tr(ε))**2 + \
+            ufl.inner(εplus,εplus)
 
-def degraded_free_energy(ε,d,ν,ψcritstar):
+
+def degraded_free_energy(ε,g,ν,ψcritstar):
     ψplus = free_energy_plus(ε,ν)-ψcritstar
     # ψplus = free_energy_plus(u,ν)
     ψminus = free_energy(ε,ν) - ψplus
-    return degradation(d)*(ψplus) + (ψminus)
+    return g*(ψplus) + (ψminus)
+
+
+def degraded_free_energy_P(ε,ε_prev,g,ν,ψcritstar):
+    ψplus = free_energy_plus_P(ε,ε_prev,ν)-ψcritstar
+    # ψplus = free_energy_plus(u,ν)
+    ψminus = free_energy(ε,ν) - ψplus
+    return g*(ψplus) + (ψminus)
 
 
 
-def degraded_stress(u,d,ν):
+def degraded_stress(u,g,ν):
     λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
     σ = λoverμ*ufl.tr(ε(u))*I + 2*ε(u)   
     σplus = λoverμ*positive_part(ufl.tr(ε(u)))*I + \
         2*matrix_function(ε(u),positive_part)
     σminus = σ - σplus
-    return degradation(d)*σplus + σminus
+    return g*σplus + σminus
 
-def degraded_pressure(p,d):
+def degraded_pressure(p,g):
     pplus = positive_part(p)
     pminus = p - pplus
-    return degradation(d)*pplus + pminus
+    return g*pplus + pminus
 
 
 def history_function(ε,Hprev,ν,ψcrit):
@@ -106,15 +123,16 @@ def heaviside(x):
     return ufl.conditional(ufl.gt(x,0),1,0)
 
 
-def projection_split(ε,ε_prev):
-
+def degraded_stress_P(u,u_prev,g,ν):
+    λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
     i,j,k,l = ufl.indices(4)
-    Pplus = projection_tensor(ε_prev)
+    σ = λoverμ*ufl.tr(ε(u))*I + 2*ε(u)
+    P = projection_tensor(ε(u_prev))
+    σplus = λoverμ*heaviside(ufl.tr(ε(u_prev)))*ufl.tr(ε(u))*I + \
+        2*ufl.as_tensor(P[i,j,k,l]*ε(u)[k,l],(i,j))
+    σminus = σ - σplus
+    return g*σplus + σminus
 
-    εplus = ufl.as_tensor(Pplus[i,j,k,l]*ε[k,l],(i,j))
-    εminus = ε - εplus
-
-    return εplus,εminus
     
 
 

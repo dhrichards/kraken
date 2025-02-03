@@ -4,7 +4,7 @@ from dolfinx import mesh, io, log, default_scalar_type, fem
 from mpi4py import MPI
 import numpy as np
 from kraken.material import MaterialProperties, Material_no_uc
-from kraken.boundaryconditions import get_zero_bc
+import kraken.boundaryconditions as bc
 import kraken.numerics.maths_functions as mf
 import kraken.utilities as utilities
 import kraken.mainclass as mc
@@ -18,7 +18,12 @@ def right_boundary(x):
 def bottom_boundary(x):
     return np.isclose(x[1], -Hw)
 
-true_length = 2e3
+def crack(x):
+    x_c = nondim_length/2 - nondim_height
+    l = material.l
+    return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
+
+true_length = 1.5e3
 true_height = 300
 
 
@@ -43,7 +48,7 @@ Hw = material.ρi/material.ρw*nondim_height
 #     msh = infile.read_mesh()
 
 # msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-cell_size = material.l/2
+cell_size = material.l/3.1
 nx = int(nondim_length/cell_size/2)
 nz = int(nondim_height/cell_size)
 
@@ -53,41 +58,47 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 
 
 #%%
-clamped_both = lambda V: [get_zero_bc(V, left_boundary),
-                            get_zero_bc(V, right_boundary)]
+clamped_both = lambda V: [bc.get_zero_bc(V, left_boundary),
+                            bc.get_zero_bc(V, right_boundary)]
 
-clamped_bc = lambda V: [get_zero_bc(V, left_boundary)]
-symm_bc = lambda V: [get_zero_bc(V.sub(0), left_boundary)]
+clamped_bc = lambda V: [bc.get_zero_bc(V, left_boundary)]
+symm_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 no_bc = lambda V: []
+bc_d = lambda V: [bc.internal_bc(V, crack, 1.0)]
 
-cliff_bc = lambda V: [get_zero_bc(V.sub(0), left_boundary),
-                        get_zero_bc(V.sub(1), bottom_boundary)]
+cliff_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1), bottom_boundary)]
 
-model = mc.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
+model = mc.viscoelastic_damage(msh, [symm_bc,clamped_bc,no_bc], material, 1.0)
 
-g0 = 6.5
-# g0=2.53
-model.material.g = g0
-steps = 10
 #%%
-for i in range(steps-1):
-    model.material.g = g0 + i*(9.8-g0)/(steps-1)
+import ufl
+gs = [0.1, 6.6, 6.7, 6.9, 9.0,9.3,9.5]
+i =0
+for g in gs:
+    model.material.g = g
     if MPI.COMM_WORLD.rank == 0:
         print(model.material.g)
    
     model.fixed_point(tol=1e-4,solve_stokes=False,max_its=100)
-    ψp = mf.free_energy_plus(mf.ε(model.v),model.material.ν)
-    pp = mf.positive_part(ψp-material.ψcritstar)
-    pw = mf.water_pressure(msh,model.v)
+
+
+    ψ = mf.free_energy_plus(mf.ε(model.v),material.ν)
+    ψP = mf.free_energy_plus_P(mf.ε(model.v),mf.ε(model.v),material.ν)
     utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d],\
-                    ["v","d"],t=i)
+                    [model.v,model.d,ψ,ψP],\
+                    ["v","d","eps","epsP"],t=i)
+    i+=1
     
 model.material.g = 9.8
+if MPI.COMM_WORLD.rank == 0:
+    print("Starting visco-elasto-damage loop")
 # model.stokes.setup_solver(model.u,model.p,model.d,model.v)
 # # model.material.g += (9.81-g0)/(steps-1)
 for i in range(10):
     
+    if MPI.COMM_WORLD.rank == 0:
+        print(str(i))
     
     model.fixed_point(tol=1e-4,solve_stokes=False)
     # log.set_log_level(log.LogLevel.INFO)
