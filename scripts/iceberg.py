@@ -69,7 +69,7 @@ bc_d = lambda V: [bc.internal_bc(V, crack, 1.0)]
 cliff_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(1), bottom_boundary)]
 
-model = mc.viscoelastic_damage(msh, [symm_bc,clamped_bc,no_bc], material, 1.0)
+model = mc.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
 
 #%%
 import ufl
@@ -95,14 +95,13 @@ if MPI.COMM_WORLD.rank == 0:
     print("Starting visco-elasto-damage loop")
 # model.stokes.setup_solver(model.u,model.p,model.d,model.v)
 # # model.material.g += (9.81-g0)/(steps-1)
-for i in range(10):
+for i in range(300):
     
     if MPI.COMM_WORLD.rank == 0:
         print(str(i))
     
-    model.fixed_point(tol=1e-4,solve_stokes=False)
+    model.fixed_point(tol=1e-4,solve_stokes=True)
     # log.set_log_level(log.LogLevel.INFO)
-    model.solve_stokes()
     
 
     utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\

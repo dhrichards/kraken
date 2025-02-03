@@ -12,9 +12,10 @@ import basix.ufl as bufl
 
 
 class ElasticitySolver:
-    def __init__(self, msh, bc_func, material):
+    def __init__(self, msh, bc_func, material,dt):
         self.msh = msh
         self.material = material
+        self.dt = dt
 
         v_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,), dtype=default_real_type)
         self.V = fem.functionspace(self.msh, v_el)
@@ -23,7 +24,7 @@ class ElasticitySolver:
 
         self.bcs = bc_func(self.V)
 
-    def solve(self,v,d):
+    def solve(self,v,d,u):
 
         ρratio = self.material.ρratio
         ν = self.material.ν
@@ -33,7 +34,7 @@ class ElasticitySolver:
         n = ufl.FacetNormal(self.msh)
 
     
-        pw = lambda u: mf.water_pressure(self.msh,u)
+        pw = lambda v: mf.water_pressure(self.msh,v+u*self.dt)
 
         f = mf.body_force(self.msh, ρratio)
         g = mf.degradation(d)

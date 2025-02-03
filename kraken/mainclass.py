@@ -19,7 +19,7 @@ class viscoelastic_damage:
         self.Hprev = 0.0
 
         self.history = damage.HistorySolver(self.msh, self.material)
-        self.elastic = elasticity.ElasticitySolver(self.msh, bc_funcs[0], self.material)
+        self.elastic = elasticity.ElasticitySolver(self.msh, bc_funcs[0], self.material, self.dt)
         self.damage = damage.DamageSolver(self.msh, bc_funcs[2], self.material)
         self.stokes = stokes.StokesSolver(self.msh, bc_funcs[1], self.material, self.dt)
 
@@ -27,6 +27,8 @@ class viscoelastic_damage:
         self.d = fem.Function(self.damage.V, name="damage")
         self.u = fem.Function(self.stokes.V, name="velocity")
         self.p = fem.Function(self.stokes.Q, name="pressure")
+
+        self.stokes.setup(self.u, self.p, self.d, self.v)
 
 
 
@@ -41,14 +43,15 @@ class viscoelastic_damage:
 
     def solve_elastic(self):
         # self.v = self.elastic.solve_linearised(self.v, self.d)
-        self.elastic.solve(self.v, self.d)
+        self.elastic.solve(self.v, self.d, self.u)
 
     def solve_damage(self):
-        # self.damage.solve_nonlinear(self.v, self.Hprev, self.d)
-        self.d = self.damage.solve(self.v, self.Hprev, self.d)
+        self.damage.solve_nonlinear(self.v, self.Hprev, self.d)
+        # self.d = self.damage.solve(self.v, self.Hprev, self.d)
 
     def solve_stokes(self):
-        self.stokes.solve(self.u, self.p, self.d, self.v)
+        # self.stokes.solve(self.u, self.p, self.d, self.v)
+        self.stokes.solve()
 
     
     def fixed_point(self, max_its=100, tol=1e-4, solve_stokes=False):
@@ -61,7 +64,8 @@ class viscoelastic_damage:
             self.solve_elastic()
             self.solve_damage()
             if solve_stokes:
-                self.stokes.solve_linearised(self.u,self.p,self.d,self.v)
+                # self.stokes.solve_linearised(self.u,self.p,self.d,self.v)
+                self.solve_stokes()
             # self.solver_d.solve(None, self.d.x.petsc_vec)
             # self.solve_damage_limits()
             
