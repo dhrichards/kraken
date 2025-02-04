@@ -23,9 +23,21 @@ def crack(x):
     l = material.l
     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
 
+## check mpi size is correct
+print(MPI.COMM_WORLD.size)
+print(MPI.COMM_WORLD.rank)
+
+print(MPI.Get_library_version())
+
 true_length = 1.5e3
 true_height = 300
 
+hpc = True
+
+if hpc:
+    path = '/data/hpcdata/users/dancha/'
+else:
+    path = 'outputs/'
 
 
 
@@ -49,13 +61,30 @@ Hw = material.ρi/material.ρw*nondim_height
 
 # msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
 cell_size = material.l/3.1
-nx = int(nondim_length/cell_size/2)
+
+
+
+aspect_ratio = 2.0
+x_change = nondim_length/2 - 1.5*nondim_height
+
+new_length = x_change/aspect_ratio + (nondim_length/2 - x_change)
+
+nx = int(new_length/cell_size)
 nz = int(nondim_height/cell_size)
 
 msh = mesh.create_rectangle(MPI.COMM_WORLD,
-                            [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
+                            [np.array([0, -Hw]), np.array([new_length, nondim_height-Hw])],
                             [nx,nz], mesh.CellType.quadrilateral)
 
+
+x = msh.geometry.x[:,0]
+
+x[x>x_change/aspect_ratio] = x_change + x[x>x_change/aspect_ratio] - x_change/aspect_ratio
+x[x<=x_change/aspect_ratio] = x[x<=x_change/aspect_ratio]*aspect_ratio
+
+msh.geometry.x[:,0] = x
+
+utilities.write_xdmf("outputs/icebergmesh.xdmf",msh,[],[],t=0)
 
 #%%
 clamped_both = lambda V: [bc.get_zero_bc(V, left_boundary),
@@ -74,6 +103,7 @@ model = mc.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
 #%%
 import ufl
 gs = [0.1, 6.6, 6.7, 6.9, 9.0,9.3,9.5]
+# gs = np.linspace(6.6,9.6,30)
 i =0
 for g in gs:
     model.material.g = g
@@ -85,7 +115,7 @@ for g in gs:
 
     ψ = mf.free_energy_plus(mf.ε(model.v),material.ν)
     ψP = mf.free_energy_plus_P(mf.ε(model.v),mf.ε(model.v),material.ν)
-    utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",msh,\
+    utilities.write_xdmf(path + "iceberginitial" + str(i) + ".xdmf",msh,\
                     [model.v,model.d,ψ,ψP],\
                     ["v","d","eps","epsP"],t=i)
     i+=1
@@ -104,9 +134,9 @@ for i in range(300):
     # log.set_log_level(log.LogLevel.INFO)
     
 
-    utilities.write_xdmf("outputs/iceberg" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d,model.u, mf.stress(model.v,material.ν)],\
-                    ["v","d","u", "σ"],t=i)
+    utilities.write_xdmf(path +"iceberg" + str(i) + ".xdmf",msh,\
+                    [model.v,model.d,model.u, mf.principal_stress(mf.ε(model.v),material.ν)],\
+                    ["v","d","u", "λ"],t=i)
 
     model.lagrangian_update()
 
