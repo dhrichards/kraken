@@ -52,52 +52,64 @@ class ElasticitySolver:
         # total_energy = self.internal_energy(v,d) - self.external_energy(v,d)
 
         F = ufl.derivative(total_energy,v,ufl.TestFunction(self.V))
-        # J = ufl.derivative(F,v,ufl.TrialFunction(self.V))
-
-
-
-        self.problem = NonlinearProblem(F, v, self.bcs)
+        J = ufl.derivative(F,v,ufl.TrialFunction(self.V))
+        # self.problem = NonlinearProblem(F, v, self.bcs)
         
-        self.solver = NewtonSolver(MPI.COMM_WORLD, self.problem)
-        self.solver.convergence_criterion = "incremental"
+        # self.solver = NewtonSolver(MPI.COMM_WORLD, self.problem)
+        # self.solver.convergence_criterion = "incremental"
         # self.solver.nonlinearity_solver = "snes"
-        self.solver.rtol = 1e-7
-        self.solver.atol = 1e-7
-        self.solver.max_it = 50
-        # self.solver.report = True
-        # self.solver.error_on_nonconvergence = False
+        # self.solver.rtol = 1e-7
+        # self.solver.atol = 1e-7
+        # self.solver.max_it = 50
+
+        # opts = PETSc.Options()
+
+        # opts_s_prefix = self.solver.getOptionsPrefix()
+        # opts[f"{opts_s_prefix}snes_linesearch_type"] = "bt"
+        # self.solver.setFromOptions()
+        # # self.solver.report = True
+        # # self.solver.error_on_nonconvergence = False
 
         
 
-        ksp = self.solver.krylov_solver
-        opts = PETSc.Options()
-        option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly"
-        # opts[f"{option_prefix}ksp_rtol"] = 1.0e-8
-        opts[f"{option_prefix}pc_type"] = "lu"
-        opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
+        # ksp = self.solver.krylov_solver
+        
+        # option_prefix = ksp.getOptionsPrefix()
+        # opts[f"{option_prefix}ksp_type"] = "preonly"
+        # # opts[f"{option_prefix}ksp_rtol"] = 1.0e-8
+        # opts[f"{option_prefix}pc_type"] = "lu"
+        # opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
         # opts[f"{option_prefix}pc_hypre_type"] = "boomeramg"
         # opts[f"{option_prefix}pc_hypre_boomeramg_max_iter"] = 1
         # opts[f"{option_prefix}pc_hypre_boomeramg_cycle_type"] = "v"
-        ksp.setFromOptions()
+        # ksp.setFromOptions()
 
-        n, converged = self.solver.solve(v)
+        # n, converged = self.solver.solve(v)
 
     
         # assert(converged)
 
         # self.problem = solvers.NonlinearPDE_SNESProblem(F, J, v, bcs=self.bcs)
+        self.problem = solvers.SNESProblem(F, v, bcs=self.bcs)
 
-        # self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
-        # self.solver.setType("ksponly")
-        # self.solver.setFunction(self.problem.F_mono, fem.petsc.create_vector(fem.form(F)))
-        # self.solver.setJacobian(self.problem.J_mono, fem.petsc.create_matrix(fem.form(J)),P=None)
-        # self.solver.setTolerances(rtol=1.0e-7, max_it=50)
-        # self.solver.getKSP().setType("preonly")
-        # self.solver.getKSP().setTolerances(rtol=1.0e-7)
-        # self.solver.getKSP().getPC().setType("lu")
+        self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
+        # self.solver.setType("newtonls")
+        opts = PETSc.Options()
+        opts["snes_type"] = "newtonls"
+        opts["snes_linesearch_type"] = "bt"
+        
+        # opts["snes_rtol"] = 1.0e-7
+        self.solver.setFromOptions()
 
-        # self.solver.solve(None, v.x.petsc_vec)
+        self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(F)))
+        self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(J)),P=None)
+        self.solver.setTolerances(rtol=1.0e-7, max_it=50)
+        self.solver.getKSP().setType("preonly")
+        self.solver.getKSP().setTolerances(rtol=1.0e-7)
+        self.solver.getKSP().getPC().setType("lu")
+        self.solver.getKSP().getPC().setFactorSolverType("mumps")
+
+        self.solver.solve(None, v.x.petsc_vec)
 
         # return v
 
