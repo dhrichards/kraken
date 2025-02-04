@@ -19,7 +19,9 @@ class StokesSolver:
 
         self.bcs = bc_func(self.V)
 
-    def solve(self,u,p,d,v):
+
+
+    def setup(self,u,p,d,v):
         self.u = u
         self.p = p
         self.d = d
@@ -67,11 +69,70 @@ class StokesSolver:
 
         self.snes, self.x = solvers.nested_solve(F, J, u, p, self.bcs, P)
 
+    def solve(self):
+
         self.snes.solve(None, self.x)
         assert self.snes.getKSP().getConvergedReason() > 0
 
         self.u.x.scatter_forward()
         self.p.x.scatter_forward()
+
+    def solve_semi_linearised(self,u,p,d,v):
+
+        self.u = u
+        self.p = p
+        self.d = d
+        self.v = v
+
+        du, dp = ufl.TrialFunction(self.V), ufl.TrialFunction(self.Q)
+        v, q = ufl.TestFunction(self.V), ufl.TestFunction(self.Q)
+
+        C1 = self.material.C1; C2 = self.material.C2
+        ρratio = self.material.ρratio
+
+
+        # Phase field changes
+        g = mf.degradation(self.d)
+
+        def η(u):
+            return mf.viscosity(u, self.material.n, 1.e-8)
+        
+        
+        f = mf.body_force(self.msh, ρratio, self.material.slope_angle)
+
+
+        n = ufl.FacetNormal(self.msh)           
+        ds = ufl.Measure("ds", domain=self.msh)
+
+        # Water pressure
+        pw = lambda u : mf.water_pressure(self.msh,self.v + u*self.dt)
+        
+
+        η = mf.viscosity(u, self.material.n)
+
+        F = [((1/C2)*g*η*ufl.inner(ε(self.u), ε(v)) \
+        - ufl.inner(self.p, ufl.div(v)) \
+        - C1 * g * ufl.inner(f, v) \
+        + C1 * pw(self.u) * ufl.inner(ufl.grad(g), v)) * ufl.dx \
+        + C1 * g * pw(self.u) * ufl.inner(n, v) * ds,
+        # )*ufl.dx,
+        - ufl.inner(ufl.div(self.u), q) * ufl.dx ]
+        
+        J = [[ufl.derivative(F[0], self.u, du), ufl.derivative(F[0], self.p, dp)],
+            [ufl.derivative(F[1], self.u, du), ufl.derivative(F[1], self.p, dp)]]
+        
+        P = [[J[0][0], None],
+            [None, (2 * g*η(self.u))**-1 * dp * q * ufl.dx]]
+
+        self.snes, self.x = solvers.nested_solve(F, J, u, p, self.bcs, P)
+
+        self.snes.solve(None, self.x)
+        assert self.snes.getKSP().getConvergedReason() > 0
+
+        self.u.x.scatter_forward()
+        self.p.x.scatter_forward()
+
+        
 
 
     def solve_linearised(self,u_prev,p_prev,d,v):

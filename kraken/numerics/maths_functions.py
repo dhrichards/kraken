@@ -8,9 +8,19 @@ def viscosity(u, n, eps=1.e-8, A=1.0):
 def ε(u):
     return ufl.sym(ufl.grad(u))
 
-def stress(u,ν):
+def cauchy_stress(ε,ν):
     λoverμ = 2*ν/(1-2*ν)
-    return λoverμ*ufl.tr(ε(u))*ufl.Identity(len(u)) + 2*ε(u)
+    D = ufl.shape(ε)[0]
+    return λoverμ*ufl.tr(ε)*ufl.Identity(D) + 2*ε
+
+
+def largest_eigenvalue(A):
+    λ, M = eigenstate(A)
+    return λ[-1]
+
+def principal_stress(ε,ν):
+    return largest_eigenvalue(cauchy_stress(ε,ν))
+
 
 
 def free_energy(ε,ν):
