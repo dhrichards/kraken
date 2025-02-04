@@ -24,6 +24,23 @@ class ElasticitySolver:
 
         self.bcs = bc_func(self.V)
 
+
+        self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
+        # self.solver.setType("newtonls")
+        opts = PETSc.Options()
+        opts["snes_type"] = "newtonls"
+        opts["snes_linesearch_type"] = "bt"
+        
+        # opts["snes_rtol"] = 1.0e-7
+        self.solver.setFromOptions()
+
+        self.solver.setTolerances(rtol=1.0e-7, max_it=50)
+        self.solver.getKSP().setType("preonly")
+        self.solver.getKSP().setTolerances(rtol=1.0e-7)
+        self.solver.getKSP().getPC().setType("lu")
+        self.solver.getKSP().getPC().setFactorSolverType("mumps")
+
+
     def solve(self,v,d,u):
 
         ρratio = self.material.ρratio
@@ -92,22 +109,10 @@ class ElasticitySolver:
         # self.problem = solvers.NonlinearPDE_SNESProblem(F, J, v, bcs=self.bcs)
         self.problem = solvers.SNESProblem(F, v, bcs=self.bcs)
 
-        self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
-        # self.solver.setType("newtonls")
-        opts = PETSc.Options()
-        opts["snes_type"] = "newtonls"
-        opts["snes_linesearch_type"] = "bt"
-        
-        # opts["snes_rtol"] = 1.0e-7
-        self.solver.setFromOptions()
-
+       
         self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(F)))
         self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(J)),P=None)
-        self.solver.setTolerances(rtol=1.0e-7, max_it=50)
-        self.solver.getKSP().setType("preonly")
-        self.solver.getKSP().setTolerances(rtol=1.0e-7)
-        self.solver.getKSP().getPC().setType("lu")
-        self.solver.getKSP().getPC().setFactorSolverType("mumps")
+        
 
         self.solver.solve(None, v.x.petsc_vec)
 

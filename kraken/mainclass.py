@@ -5,6 +5,7 @@ import ufl
 import numpy as np
 import basix.ufl as bufl
 from kraken.models import stokes, damage, elasticity, surface
+from kraken import utilities
 
 
 class viscoelastic_damage:
@@ -28,6 +29,8 @@ class viscoelastic_damage:
         self.u = fem.Function(self.stokes.V, name="velocity")
         self.p = fem.Function(self.stokes.Q, name="pressure")
 
+
+        # self.elastic.setup(self.v, self.d, self.u)
         self.stokes.setup(self.u, self.p, self.d, self.v)
 
 
@@ -65,7 +68,7 @@ class viscoelastic_damage:
             self.solve_damage()
             if solve_stokes:
                 # self.stokes.solve_linearised(self.u,self.p,self.d,self.v)
-                self.solve_stokes()
+                self.stokes.solve()
             # self.solver_d.solve(None, self.d.x.petsc_vec)
             # self.solve_damage_limits()
             
@@ -87,6 +90,9 @@ class viscoelastic_damage:
         # Update history function as finished fixed point iteration
         self.Hprev = self.history.solve(self.Hprev, self.v)
         # self.damage.d_lb = self.d
+
+  
+         
 
 
     
