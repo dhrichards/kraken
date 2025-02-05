@@ -57,10 +57,12 @@ class viscoelastic_damage:
         self.stokes.solve()
 
     
-    def fixed_point(self, max_its=100, tol=1e-4, solve_stokes=False):
+    def fixed_point(self, max_its=50, tol=1e-4, solve_stokes=False):
         L2_old = 0.0
 
-
+        self.converged = False
+        d_old = self.d.copy()
+        v_old = self.v.copy()
 
         for i in range(max_its):
 
@@ -80,16 +82,74 @@ class viscoelastic_damage:
             error_L2 = np.abs(L2 - L2_old)
             if MPI.COMM_WORLD.rank == 0:
                 print(f"iteration {i}, error {error_L2}")
+
+            if error_L2 > 1.0: # this is a test for the whole region being damaged
+                break
             
             if i>0:
                 if error_L2 < tol:
+                    self.converged = True
                     break
 
             L2_old = L2
 
         # Update history function as finished fixed point iteration
-        self.Hprev = self.history.solve(self.Hprev, self.v)
-        # self.damage.d_lb = self.d
+        if self.converged:
+            self.Hprev = self.history.solve(self.Hprev, self.v)
+        else:
+            self.d = d_old
+            self.v = v_old
+
+        
+
+    def gravity_loop(self, g0=6.6, step=0.3, save=False):
+
+        self.material.g = g0
+
+        done_final = False
+    
+        i=0
+        g_end = 9.7
+        
+        # while self.material.g<9.8:
+        while done_final == False:
+            if MPI.COMM_WORLD.rank == 0:
+                print(f"gravity: {self.material.g}")
+            
+            
+            self.fixed_point()
+
+            if self.converged:
+                if save:
+                    utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",self.msh,\
+                            [self.v,self.d],\
+                            ["v","d"],t=i)
+                i+=1
+
+
+                if self.material.g == g_end:
+                    done_final = True
+                else:
+                    self.material.g += step
+                    step = step*1.5
+                    if self.material.g > g_end:
+                        self.material.g = g_end
+
+                
+
+            else:
+                step = step/2.0
+                self.material.g -= step
+
+
+                
+
+
+
+        
+
+
+
 
   
          
