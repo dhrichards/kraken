@@ -23,6 +23,10 @@ def crack(x):
     l = material.l
     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
 
+def fixed(x):
+    return x[0]<(nondim_length/2 - 1.4*nondim_height)
+
+
 ## check mpi size is correct
 print(MPI.COMM_WORLD.size)
 print(MPI.COMM_WORLD.rank)
@@ -32,7 +36,7 @@ print(MPI.Get_library_version())
 true_length = 1.5e3
 true_height = 300
 
-hpc = True
+hpc = False
 
 if hpc:
     path = '/data/hpcdata/users/dancha/'
@@ -60,11 +64,11 @@ Hw = material.ρi/material.ρw*nondim_height
 #     msh = infile.read_mesh()
 
 # msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-cell_size = material.l/3.1
+cell_size = material.l/3.2
 
 
 
-aspect_ratio = 2.0
+aspect_ratio = 20.0
 x_change = nondim_length/2 - 1.5*nondim_height
 
 new_length = x_change/aspect_ratio + (nondim_length/2 - x_change)
@@ -84,7 +88,6 @@ x[x<=x_change/aspect_ratio] = x[x<=x_change/aspect_ratio]*aspect_ratio
 
 msh.geometry.x[:,0] = x
 
-utilities.write_xdmf("outputs/icebergmesh.xdmf",msh,[],[],t=0)
 
 #%%
 clamped_both = lambda V: [bc.get_zero_bc(V, left_boundary),
@@ -93,33 +96,35 @@ clamped_both = lambda V: [bc.get_zero_bc(V, left_boundary),
 clamped_bc = lambda V: [bc.get_zero_bc(V, left_boundary)]
 symm_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 no_bc = lambda V: []
-bc_d = lambda V: [bc.internal_bc(V, crack, 1.0)]
+bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0)]
+# bc_d = lambda V: [bc.internal_bc(V, lambda x: x<(x_change+0.1), 0.0)]
 
 cliff_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(1), bottom_boundary)]
 
-model = mc.viscoelastic_damage(msh, [symm_bc,symm_bc,no_bc], material, 1.0)
+model = mc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], material, 1.0)
 
 #%%
 import ufl
-gs = [0.1, 6.6, 6.7, 6.9, 9.0,9.3,9.5]
-# gs = np.linspace(6.6,9.6,30)
-i =0
-for g in gs:
-    model.material.g = g
-    if MPI.COMM_WORLD.rank == 0:
-        print(model.material.g)
+# gs = [0.1, 6.6, 6.7, 6.9, 7.0, 7.02, 7.3, 9.0,9.2,9.3,9.5]
+# gs = [9.5]
+# gs = np.linspace(6.9,9.8,40)
+# i =0
+# for g in gs:
+#     model.material.g = g
+#     if MPI.COMM_WORLD.rank == 0:
+#         print(model.material.g)
    
-    model.fixed_point(tol=1e-4,solve_stokes=False,max_its=100)
+#     model.fixed_point(tol=1e-4,solve_stokes=False,max_its=100)
 
 
-    ψ = mf.free_energy_plus(mf.ε(model.v),material.ν)
-    ψP = mf.free_energy_plus_P(mf.ε(model.v),mf.ε(model.v),material.ν)
-    utilities.write_xdmf(path + "iceberginitial" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d,ψ,ψP],\
-                    ["v","d","eps","epsP"],t=i)
-    i+=1
-    
+#     ψ = mf.free_energy_plus(mf.ε(model.v),material.ν)
+#     ψP = mf.free_energy_plus_P(mf.ε(model.v),mf.ε(model.v),material.ν)
+#     utilities.write_xdmf(path + "iceberginitial" + str(i) + ".xdmf",msh,\
+#                     [model.v,model.d,ψ,ψP],\
+#                     ["v","d","eps","epsP"],t=i)
+#     i+=1
+model.gravity_loop(save=True)
 model.material.g = 9.8
 if MPI.COMM_WORLD.rank == 0:
     print("Starting visco-elasto-damage loop")
