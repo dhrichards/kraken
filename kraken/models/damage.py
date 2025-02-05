@@ -70,8 +70,8 @@ class DamageSolver:
         
         self.solver = nls.petsc.NewtonSolver(MPI.COMM_WORLD, self.problem)
         self.solver.convergence_criterion = "incremental"
-        self.solver.rtol = 1e-14
-        self.solver.atol = 1e-14 
+        self.solver.rtol = 1e-9
+        self.solver.atol = 1e-9 
         self.solver.max_it = 50
         # self.solver.report = True
 
@@ -141,9 +141,12 @@ class HistorySolver:
 
 
 class BoundedSolver:
-    def __init__(self, msh, bc_func, material):
+    def __init__(self, msh, bc_func, material, w=lambda d: d**2):
         self.msh = msh
         self.material = material
+        self.w = w
+        self.c0 = np.trapz(np.sqrt(self.w(np.linspace(0,1,100))),np.linspace(0,1,100))
+
 
         d_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, dtype=default_real_type)
         self.V = fem.functionspace(self.msh, d_el)
@@ -157,36 +160,35 @@ class BoundedSolver:
         self.d_lb.x.array[:] = 0.0
         self.d_ub.x.array[:] = 1.0
 
-    def setup_solver(self, v, d):
-        self.v = v
-        self.d = d
+    def solve(self, v, Hprev, d):
+   
+
+        C3 = self.material.C3; l = self.material.l
+
+        H = mf.history_function(ε(v),Hprev,self.material.ν,self.material.ψcritstar)
         
-        energy = (mf.degraded_free_energy(ε(self.v),self.d,self.material.ν,self.material.ψcritstar)\
-                    + (1/self.material.C3)*mf.crack_density_function(self.d,self.material.l,2))*ufl.dx
-            
-        E_d = ufl.derivative(energy,self.d,ufl.TestFunction(self.V))
-        E_d_d = ufl.derivative(E_d,self.d,ufl.TrialFunction(self.V))
+        energy = (mf.crack_density_function(d,l,self.w, self.c0) \
+                       + C3*mf.degradation(d)*H)*ufl.dx
+
+        F = ufl.derivative(energy,d,ufl.TestFunction(self.V))
+        J = ufl.derivative(F,d,ufl.TrialFunction(self.V))
 
         self.problem = solvers.NonlinearPDE_SNESProblem(
-            fem.form(E_d), fem.form(E_d_d), self.d, bcs=self.bcs)
+            fem.form(F), fem.form(J), d, bcs=self.bcs)
         
-        self.solver_d_snes = PETSc.SNES().create(MPI.COMM_WORLD)
-        self.solver_d_snes.setType("vinewtonrsls")
-        self.solver_d_snes.setFunction(self.problem.F_mono, fem.petsc.create_vector(fem.form(E_d)))
-        self.solver_d_snes.setJacobian(self.problem.J_mono, fem.petsc.create_matrix(fem.form(E_d_d)),P=None)
-        self.solver_d_snes.setTolerances(rtol=1.0e-9, max_it=50)
-        self.solver_d_snes.getKSP().setType("preonly")
-        self.solver_d_snes.getKSP().setTolerances(rtol=1.0e-9)
-        self.solver_d_snes.getKSP().getPC().setType("lu")
+        self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
+        self.solver.setType("vinewtonrsls")
+        self.solver.setFunction(self.problem.F_mono, fem.petsc.create_vector(fem.form(F)))
+        self.solver.setJacobian(self.problem.J_mono, fem.petsc.create_matrix(fem.form(J)),P=None)
+        self.solver.setTolerances(rtol=1.0e-9, max_it=50)
+        self.solver.getKSP().setType("preonly")
+        self.solver.getKSP().setTolerances(rtol=1.0e-9)
+        self.solver.getKSP().getPC().setType("lu")
         # We set the bound (Note: they are passed as reference and not as values)
-        self.solver_d_snes.setVariableBounds(self.d_lb.x.petsc_vec,self.d_ub.x.petsc_vec)
+        self.solver.setVariableBounds(self.d_lb.x.petsc_vec,self.d_ub.x.petsc_vec)
 
-    def solve(self,v):
+        self.solver.solve(None, d.x.petsc_vec)
 
-        self.v = v
-        self.solver_d_snes.solve(None, self.d.x.petsc_vec)
-
-        return self.d
 
 
 

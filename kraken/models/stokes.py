@@ -4,6 +4,7 @@ import ufl
 from kraken.numerics import maths_functions as mf
 from kraken.numerics.maths_functions import ε
 from kraken.numerics import solvers
+from petsc4py import PETSc
 
 class StokesSolver:
     def __init__(self, msh, bc_func, material, dt):
@@ -67,12 +68,20 @@ class StokesSolver:
         P = [[J[0][0], None],
             [None, (2 * g*η(self.u))**-1 * dp * q * ufl.dx]]
 
-        self.snes, self.x = solvers.nested_solve(F, J, u, p, self.bcs, P)
+        self.solver, self.x = solvers.nested_solve(F, J, u, p, self.bcs, P)
+
+        opts = PETSc.Options()
+        opts["snes_type"] = "newtonls"
+        opts["snes_linesearch_type"] = "bt"
+        
+        # opts["snes_rtol"] = 1.0e-7
+        self.solver.setFromOptions()
+
 
     def solve(self):
 
-        self.snes.solve(None, self.x)
-        assert self.snes.getKSP().getConvergedReason() > 0
+        self.solver.solve(None, self.x)
+        assert self.solver.getKSP().getConvergedReason() > 0
 
         self.u.x.scatter_forward()
         self.p.x.scatter_forward()
@@ -104,7 +113,7 @@ class StokesSolver:
         n = ufl.FacetNormal(self.msh)           
         ds = ufl.Measure("ds", domain=self.msh)
 
-        # Water pressure
+        # Water presure
         pw = lambda u : mf.water_pressure(self.msh,self.v + u*self.dt)
         
 
@@ -124,10 +133,10 @@ class StokesSolver:
         P = [[J[0][0], None],
             [None, (2 * g*η(self.u))**-1 * dp * q * ufl.dx]]
 
-        self.snes, self.x = solvers.nested_solve(F, J, u, p, self.bcs, P)
+        self.solver, self.x = solvers.nested_solve(F, J, u, p, self.bcs, P)
 
-        self.snes.solve(None, self.x)
-        assert self.snes.getKSP().getConvergedReason() > 0
+        self.solver.solve(None, self.x)
+        assert self.solver.getKSP().getConvergedReason() > 0
 
         self.u.x.scatter_forward()
         self.p.x.scatter_forward()

@@ -35,10 +35,10 @@ def positive_part(x):
 def degradation(d,k=1e-5):
     return (1-d)**2 + k
 
-def deriv_deg_wrt_damage(d,dlin):
-    return -2*(1-d)
+# def deriv_deg_wrt_damage(d,dlin):
+#     return -2*(1-d)
 
-# def degradation(d,q=200):
+# def degradation(d,q=1.0):
 #     ϕ = 1-d
 #     return (q+1)*(1 - (q/(q+1))**(ϕ**2) )
 
