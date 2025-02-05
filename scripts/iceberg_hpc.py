@@ -68,7 +68,7 @@ cell_size = material.l/3.2
 
 
 
-aspect_ratio = 20.0
+aspect_ratio = 1.0
 x_change = nondim_length/2 - 1.5*nondim_height
 
 new_length = x_change/aspect_ratio + (nondim_length/2 - x_change)
