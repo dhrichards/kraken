@@ -3,6 +3,7 @@ import numpy as np
 from dolfinx import mesh, io, log, default_scalar_type, fem
 from mpi4py import MPI
 import numpy as np
+import kraken 
 from kraken.material import MaterialProperties, Material_no_uc
 import kraken.boundaryconditions as bc
 import kraken.numerics.maths_functions as mf
@@ -33,7 +34,7 @@ print(MPI.COMM_WORLD.rank)
 
 print(MPI.Get_library_version())
 
-true_length = 1.5e3
+true_length = 15e3
 true_height = 300
 
 hpc = False
@@ -51,7 +52,7 @@ material.τ = 3600*24
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 10.0/material.L
+material.l = 13.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
@@ -104,6 +105,10 @@ cliff_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary),
 
 model = mc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], material, 1.0)
 
+# change w
+# model.damage.w = lambda d: d
+# model.damage.calc_c0()
+# model.damage.bounded = True
 #%%
 import ufl
 # gs = [0.1, 6.6, 6.7, 6.9, 7.0, 7.02, 7.3, 9.0,9.2,9.3,9.5]
@@ -137,6 +142,7 @@ for i in range(300):
     
     model.fixed_point(tol=1e-4,solve_stokes=True)
     # log.set_log_level(log.LogLevel.INFO)
+    # model.solve_stokes()
     
 
     utilities.write_xdmf(path +"iceberg" + str(i) + ".xdmf",msh,\
