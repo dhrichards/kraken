@@ -7,43 +7,38 @@ from kraken.numerics import solvers
 from petsc4py import PETSc
 
 class StokesSolver:
-    def __init__(self, msh, bc_func, material, dt, degradation):
+    def __init__(self, msh, bc_func, material, dt):
         self.msh = msh
         self.material = material
         self.dt = dt
-        self.g = degradation
-
-        self.pw = mf.water_pressure
 
         P2_el = bufl.element("Lagrange", self.msh.basix_cell(), 2, shape=(self.msh.geometry.dim,), dtype=default_real_type)
-        P1_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, dtype=default_real_type)
+        P1_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,), dtype=default_real_type)
 
-        self.V = fem.functionspace(self.msh, P2_el)
-        self.Q = fem.functionspace(self.msh, P1_el)
+        self.U = fem.functionspace(self.msh, P2_el)
+        self.V = fem.functionspace(self.msh, P1_el)
 
-        self.bcs = bc_func(self.V)
+        self.bcs = bc_func(self.U)
 
 
 
-    def setup(self,u,p,d,v):
+    def setup(self,u,d,u_test):
         self.u = u
-        self.p = p
         self.d = d
-        self.v = v
+        self.v = u_test
 
-        du, dp = ufl.TrialFunction(self.V), ufl.TrialFunction(self.Q)
-        v, q = ufl.TestFunction(self.V), ufl.TestFunction(self.Q)
+        du, dv = ufl.TrialFunction(self.U), ufl.TrialFunction(self.V)
+        u_test, v_test = ufl.TestFunction(self.U), ufl.TestFunction(self.V)
 
         C1 = self.material.C1; C2 = self.material.C2
         ρratio = self.material.ρratio
 
 
         # Phase field changes
-        g = self.g(self.d)
+        g = mf.degradation(self.d)
 
-    
-        η = lambda u: mf.viscosity(u, self.material.n, 1.e-8)
-        # η = mf.viscosity(u,self.material.n,1e-8)
+        def η(u):
+            return mf.viscosity(u, self.material.n, 1.e-8)
         
         
         f = mf.body_force(self.msh, ρratio, self.material.slope_angle)
@@ -53,31 +48,30 @@ class StokesSolver:
         ds = ufl.Measure("ds", domain=self.msh)
 
         # Water pressure
-        pw = lambda u : self.pw(self.msh,self.v + u*self.dt)
-        # pw = mf.water_pressure(self.msh,self.v)
+        pw = lambda u,v : mf.water_pressure(self.msh,v + u*self.dt)
         
 
         
         
-        F = [((1/C2)*g*η(self.u)*ufl.inner(ε(self.u), ε(v)) \
-        - ufl.inner(self.p, ufl.div(v)) \
-        - C1 * g * ufl.inner(f, v) \
-        + C1 * pw(u) * ufl.inner(ufl.grad(g), v)) * ufl.dx \
-        + C1 * g * pw(u) * ufl.inner(n, v) * ds,
+        F = [((1/C2)*g*η(self.u)*ufl.inner(ε(self.u), ε(u_test)) \
+        - ufl.inner(self.p, ufl.div(u_test)) \
+        - C1 * g * ufl.inner(f, u_test) \
+        + C1 * pw(self.u) * ufl.inner(ufl.grad(g), u_test)) * ufl.dx \
+        + C1 * g * pw(self.u) * ufl.inner(n, u_test) * ds,
         # )*ufl.dx,
-        - ufl.inner(ufl.div(self.u), q) * ufl.dx ]
+        - ufl.inner(ufl.div(self.u), v_test) * ufl.dx ]
         
-        J = [[ufl.derivative(F[0], self.u, du), ufl.derivative(F[0], self.p, dp)],
-            [ufl.derivative(F[1], self.u, du), ufl.derivative(F[1], self.p, dp)]]
+        J = [[ufl.derivative(F[0], self.u, du), ufl.derivative(F[0], self.p, dv)],
+            [ufl.derivative(F[1], self.u, du), ufl.derivative(F[1], self.p, dv)]]
         
         P = [[J[0][0], None],
-            [None, (2 * g*η(self.u))**-1 * dp * q * ufl.dx]]
+            [None, (2 * g*η(self.u))**-1 * dv * v_test * ufl.dx]]
 
         self.solver, self.x = solvers.nested_solve(F, J, u, p, self.bcs, P)
 
         opts = PETSc.Options()
         opts["snes_type"] = "newtonls"
-        opts["snes_linesearch_type"] = "bt"
+        # opts["snes_linesearch_type"] = "bt"
         
         # opts["snes_rtol"] = 1.0e-7
         self.solver.setFromOptions()
@@ -98,8 +92,8 @@ class StokesSolver:
         self.d = d
         self.v = v
 
-        du, dp = ufl.TrialFunction(self.V), ufl.TrialFunction(self.Q)
-        v, q = ufl.TestFunction(self.V), ufl.TestFunction(self.Q)
+        du, dp = ufl.TrialFunction(self.U), ufl.TrialFunction(self.V)
+        v, q = ufl.TestFunction(self.U), ufl.TestFunction(self.V)
 
         C1 = self.material.C1; C2 = self.material.C2
         ρratio = self.material.ρratio
@@ -154,8 +148,8 @@ class StokesSolver:
         self.p = p_prev
 
 
-        u, p = ufl.TrialFunction(self.V), ufl.TrialFunction(self.Q)
-        v, q = ufl.TestFunction(self.V), ufl.TestFunction(self.Q)
+        u, p = ufl.TrialFunction(self.U), ufl.TrialFunction(self.V)
+        v, q = ufl.TestFunction(self.U), ufl.TestFunction(self.V)
 
         C1 = self.material.C1; C2 = self.material.C2
         ρratio = self.material.ρratio

@@ -10,13 +10,14 @@ import numpy as np
 
 
 class DamageSolver:
-    def __init__(self, msh, bc_func, material):
+    def __init__(self, msh, bc_func, material, degradation):
         self.msh = msh
         self.material = material
 
         self.w = lambda d: d**2
         self.bounded = False
         self.calc_c0()
+        self.g = degradation
 
         d_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, dtype=default_real_type)
         self.V = fem.functionspace(self.msh, d_el)
@@ -52,7 +53,7 @@ class DamageSolver:
         C3 = self.material.C3; l = self.material.l
 
         free_energy = (mf.crack_density_function(d,l,self.w, self.c0) \
-                       + C3*mf.degradation(d)*H)*ufl.dx
+                       + C3*self.g(d)*H)*ufl.dx
 
         F = ufl.derivative(free_energy,d,ufl.TestFunction(self.V))
         J = ufl.derivative(F,d,ufl.TrialFunction(self.V))
@@ -101,7 +102,7 @@ class DamageSolver:
 
         # d.x.array[:][d.x.array[:] > 1.0] = 1.0
 
-    def solve_linear(self,v,Hprev,d_old):
+    def solve_linear(self,v,Hprev):
 
         H = mf.history_function(ε(v),Hprev,self.material.ν,self.material.ψcritstar)
 
@@ -110,14 +111,11 @@ class DamageSolver:
         d, g = ufl.TrialFunction(self.V), ufl.TestFunction(self.V)
         
 
-        # only for w=d**2
+        # only for w=d**2, g = (1-d)**2
         F = (ufl.inner(d,g) + l**2*ufl.inner(ufl.grad(d), ufl.grad(g)) \
-                + C3*l*mf.deriv_deg_wrt_damage(d,d_old)*H*g) * ufl.dx
+                - 2*C3*l*(1-d)*H*g) * ufl.dx
         
-        #only for g = (1-d)**2, w=d
-        # F = (g*3/8 + (3/4)*l**2*ufl.inner(ufl.grad(d), ufl.grad(g)) \
-        #         - C3*l*2*(1-d)*H*g) * ufl.dx
-        
+
         
         a, L = ufl.lhs(F), ufl.rhs(F)
 

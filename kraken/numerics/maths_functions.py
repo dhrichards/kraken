@@ -32,15 +32,15 @@ def positive_part(x):
     return ufl.max_value(x,0)
 
 
-def degradation(d,k=1e-5):
+def degradation_default(d,k=1e-5):
     return (1-d)**2 + k
 
 # def deriv_deg_wrt_damage(d,dlin):
 #     return -2*(1-d)
 
-# def degradation(d,q=1.0):
-#     ϕ = 1-d
-#     return (q+1)*(1 - (q/(q+1))**(ϕ**2) )
+def degradation_Lo2023(d,q=1.0):
+    ϕ = 1-d
+    return (q+1)*(1 - (q/(q+1))**(ϕ**2) )
 
 # def deriv_deg_wrt_damage(d,dlin,q=200):
 #     ϕ = 1-dlin

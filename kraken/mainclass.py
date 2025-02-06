@@ -6,20 +6,22 @@ import numpy as np
 import basix.ufl as bufl
 from kraken.models import stokes, damage, elasticity, surface
 from kraken import utilities
-
+from kraken.numerics import maths_functions as mf
 
 class viscoelastic_damage:
-    def __init__(self, msh, bc_funcs, material, dt, eulerian_surfaces=False,acc=lambda x: 0.0):
+    def __init__(self, msh, bc_funcs, material, dt, g=mf.degradation_default, eulerian_surfaces=False,acc=lambda x: 0.0):
         self.msh = msh
         self.material = material
         self.dt = dt
 
         self.Hprev = 0.0
 
+        self.g = g
+
         self.history = damage.HistorySolver(self.msh, self.material)
-        self.elastic = elasticity.ElasticitySolver(self.msh, bc_funcs[0], self.material, self.dt)
-        self.stokes = stokes.StokesSolver(self.msh, bc_funcs[1], self.material, self.dt)
-        self.damage = damage.DamageSolver(self.msh, bc_funcs[2], self.material)
+        self.elastic = elasticity.ElasticitySolver(self.msh, bc_funcs[0], self.material, self.dt, self.g)
+        self.stokes = stokes.StokesSolver(self.msh, bc_funcs[1], self.material, self.dt, self.g)
+        self.damage = damage.DamageSolver(self.msh, bc_funcs[2], self.material, self.g)
        
         self.v = fem.Function(self.elastic.V, name="elastic displacement")
         self.d = fem.Function(self.damage.V, name="damage")
@@ -54,7 +56,7 @@ class viscoelastic_damage:
         self.stokes.solve()
 
     
-    def fixed_point(self, max_its=100, tol=1.5e-4, solve_stokes=False):
+    def fixed_point(self, max_its=100, tol=1e-4, solve_stokes=False):
         L2_old = 0.0
 
         self.converged = False
@@ -99,7 +101,7 @@ class viscoelastic_damage:
 
         
 
-    def gravity_loop(self, g0=6.6, step=0.3, save=False, solve_stokes=False):
+    def gravity_loop(self, g0=6.8, step=0.15, save=False, solve_stokes=False):
 
         self.material.g = g0
 
