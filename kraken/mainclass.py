@@ -14,16 +14,13 @@ class viscoelastic_damage:
         self.material = material
         self.dt = dt
 
-        h_el = bufl.element("DG", self.msh.basix_cell(), 0, dtype=default_real_type)
-        self.Q_h = fem.functionspace(self.msh, h_el)
-
         self.Hprev = 0.0
 
         self.history = damage.HistorySolver(self.msh, self.material)
         self.elastic = elasticity.ElasticitySolver(self.msh, bc_funcs[0], self.material, self.dt)
-        self.damage = damage.DamageSolver(self.msh, bc_funcs[2], self.material)
         self.stokes = stokes.StokesSolver(self.msh, bc_funcs[1], self.material, self.dt)
-
+        self.damage = damage.DamageSolver(self.msh, bc_funcs[2], self.material)
+       
         self.v = fem.Function(self.elastic.V, name="elastic displacement")
         self.d = fem.Function(self.damage.V, name="damage")
         self.u = fem.Function(self.stokes.V, name="velocity")
@@ -49,7 +46,7 @@ class viscoelastic_damage:
         self.elastic.solve(self.v, self.d, self.u)
 
     def solve_damage(self):
-        self.damage.solve_nonlinear(self.v, self.Hprev, self.d)
+        self.damage.solve(self.v, self.Hprev, self.d)
         # self.d = self.damage.solve(self.v, self.Hprev, self.d)
 
     def solve_stokes(self):
@@ -57,7 +54,7 @@ class viscoelastic_damage:
         self.stokes.solve()
 
     
-    def fixed_point(self, max_its=50, tol=1e-4, solve_stokes=False):
+    def fixed_point(self, max_its=100, tol=1.5e-4, solve_stokes=False):
         L2_old = 0.0
 
         self.converged = False
@@ -102,7 +99,7 @@ class viscoelastic_damage:
 
         
 
-    def gravity_loop(self, g0=6.6, step=0.3, save=False):
+    def gravity_loop(self, g0=6.6, step=0.3, save=False, solve_stokes=False):
 
         self.material.g = g0
 
@@ -117,13 +114,13 @@ class viscoelastic_damage:
                 print(f"gravity: {self.material.g}")
             
             
-            self.fixed_point()
+            self.fixed_point(solve_stokes=solve_stokes)
 
             if self.converged:
                 if save:
                     utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",self.msh,\
-                            [self.v,self.d],\
-                            ["v","d"],t=i)
+                            [self.v,self.d,self.u],\
+                            ["v","d","u"],t=i)
                 i+=1
 
 
