@@ -217,10 +217,10 @@ def nested_solve(F, J, u, p, bcs, P=None):
     Fvec = fem.petsc.create_vector_nest(F)
 
     snes = PETSc.SNES().create(MPI.COMM_WORLD)
-    snes.setTolerances(rtol=1.0e-9, max_it=200)
+    snes.setTolerances(rtol=1.0e-6, max_it=100)
     nested_IS = Jmat.getNestISs()
     snes.getKSP().setType("minres")
-    snes.getKSP().setTolerances(rtol=1e-7)
+    snes.getKSP().setTolerances(rtol=1e-6)
     snes.getKSP().getPC().setType("fieldsplit")
     snes.getKSP().getPC().setFieldSplitIS(["u", nested_IS[0][0]], ["p", nested_IS[1][1]])
 
@@ -229,9 +229,9 @@ def nested_solve(F, J, u, p, bcs, P=None):
 
     ksp_u, ksp_p = snes.getKSP().getPC().getFieldSplitSubKSP()
     ksp_u.setType("preonly")
-    ksp_u.getPC().setType("hypre")
+    ksp_u.getPC().setType("lu")
     ksp_p.setType("preonly")
-    ksp_p.getPC().setType("hypre")
+    ksp_p.getPC().setType("lu")
 
     problem = NonlinearPDE_SNESProblem(F, J, [u, p], bcs=bcs, P=P)
     snes.setFunction(problem.F_nest, Fvec)
