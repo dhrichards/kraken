@@ -39,7 +39,7 @@ class ElasticitySolver:
         self.solver.getKSP().setType("preonly")
         self.solver.getKSP().setTolerances(rtol=1.0e-7)
         self.solver.getKSP().getPC().setType("lu")
-        self.solver.getKSP().getPC().setFactorSolverType("mumps")
+        # self.solver.getKSP().getPC().setFactorSolverType("mumps")
 
 
     def solve(self,v,d,u):
