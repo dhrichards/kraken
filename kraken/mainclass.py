@@ -121,8 +121,8 @@ class viscoelastic_damage:
             if self.converged:
                 if save:
                     utilities.write_xdmf("outputs/iceberginitial" + str(i) + ".xdmf",self.msh,\
-                            [self.v,self.d,self.u],\
-                            ["v","d","u"],t=i)
+                            [self.v,self.d,self.u, mf.principal_stress(mf.ε(self.v),self.material.ν)],\
+                            ["v","d","u","λ"],t=i)
                 i+=1
 
 
