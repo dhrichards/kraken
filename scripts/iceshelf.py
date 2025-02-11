@@ -71,7 +71,7 @@ for i in range(1000):
     model.eulerian_update()
 
     utilities.write_xdmf("outputs/shelf" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d,model.u, mf.stress(model.v,material.ν)],\
+                    [model.v,model.d,model.u, mf.cauchy_stress(model.v,material.ν)],\
                     ["v","d","u", "σ"],t=i)
 
     
