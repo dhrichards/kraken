@@ -83,11 +83,12 @@ def degraded_free_energy_P(ε,ε_prev,g,ν,ψcritstar):
 
 
 
-def degraded_stress(u,g,ν):
-    λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
-    σ = λoverμ*ufl.tr(ε(u))*I + 2*ε(u)   
-    σplus = λoverμ*positive_part(ufl.tr(ε(u)))*I + \
-        2*matrix_function(ε(u),positive_part)
+def degraded_stress(ε,g,ν):
+    D = ufl.shape(ε)[0]
+    λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(D)
+    σ = λoverμ*ufl.tr(ε)*I + 2*ε  
+    σplus = λoverμ*positive_part(ufl.tr(ε))*I + \
+        2*matrix_function(ε,positive_part)
     σminus = σ - σplus
     return g*σplus + σminus
 

@@ -17,6 +17,48 @@ def mesh_sizes(mesh):
     return h
 
 
+
+
+def write_file(filename,msh,functions,names,t=0.0):
+    if filename.endswith(".xdmf"):
+        out_function = io.XDMFFile
+    elif filename.endswith(".pvd"):
+        out_function = io.VTKFile
+    else:
+        raise ValueError("Unknown file extension")
+
+    for idx,f in enumerate(functions):
+        # check if has function space
+        if hasattr(f,"ufl_function_space"):
+            if f.ufl_element().degree == 1:
+                functions[idx].name = names[idx]
+            else:
+                # Interpolate onto order 1
+                Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
+                temp = fem.Function(Q)
+                temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
+                temp.name = names[idx]
+                functions[idx] = temp
+
+        else:
+            Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
+            temp = fem.Function(Q)
+            temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
+            temp.name = names[idx]
+            functions[idx] = temp
+
+
+    with out_function(MPI.COMM_WORLD, filename, "w") as file:
+        file.write_mesh(msh)
+        for f in functions:
+            file.write_function(f,t)
+
+
+
+
+
+
+
 def write_vtk(filename,msh,functions,names,t=0.0):
 
     for idx,f in enumerate(functions):

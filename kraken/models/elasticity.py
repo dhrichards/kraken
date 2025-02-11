@@ -52,7 +52,7 @@ class ElasticitySolver:
         n = ufl.FacetNormal(self.msh)
 
     
-        pw = lambda v: mf.water_pressure(self.msh,v+u*self.dt)
+        pw = lambda v: mf.water_pressure(self.msh,v + u*self.dt)
 
         f = mf.body_force(self.msh, ρratio)
         g = self.g(d)
@@ -62,7 +62,10 @@ class ElasticitySolver:
         internal_energy = mf.degraded_free_energy(mf.ε(v),g,ν,self.material.ψcritstar) * ufl.dx
         # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
 
-        external_energy =  self.material.C1 *( g*ufl.dot(f, v) - pw(v)*ufl.inner(ufl.grad(g), v) )* ufl.dx \
+        external_energy =  self.material.C1 *( \
+            g* ufl.dot(f, v) \
+            - pw(v)*ufl.inner(ufl.grad(g), v)\
+             )* ufl.dx \
             - self.material.C1 * g * pw(v) *  ufl.dot(n, v) * ds
         
 

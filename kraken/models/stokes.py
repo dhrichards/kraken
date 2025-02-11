@@ -53,7 +53,7 @@ class StokesSolver:
         ds = ufl.Measure("ds", domain=self.msh)
 
         # Water pressure
-        pw = lambda u : self.pw(self.msh,self.v + u*self.dt)
+        pw = lambda u : self.pw(self.msh,u*self.dt + self.v)
         # pw = mf.water_pressure(self.msh,self.v)
         
 
@@ -61,10 +61,10 @@ class StokesSolver:
         
         F = [((1/C2)*g*η(self.u)*ufl.inner(ε(self.u), ε(v)) \
         - ufl.inner(self.p, ufl.div(v)) \
-        - C1 * g * ufl.inner(f, v) \
-        + C1 * pw(u) * ufl.inner(ufl.grad(g), v)) * ufl.dx \
+        - C1 * g *  ufl.inner(f, v) \
+        + C1 * pw(u) * ufl.inner(ufl.grad(g), v)\
+            ) * ufl.dx \
         + C1 * g * pw(u) * ufl.inner(n, v) * ds,
-        # )*ufl.dx,
         - ufl.inner(ufl.div(self.u), q) * ufl.dx ]
         
         J = [[ufl.derivative(F[0], self.u, du), ufl.derivative(F[0], self.p, dp)],
