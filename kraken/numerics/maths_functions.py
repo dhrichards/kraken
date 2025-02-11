@@ -3,7 +3,7 @@ from .invariants import matrix_function, eigenstate
 from dolfinx import fem, default_scalar_type
 
 def viscosity(u, n, eps=1.e-8, A=1.0): 
-    return A**(-1/n) * (ufl.inner(ε(u), ε(u)) / 2 + eps)**((1 - n) / (2 * n))
+    return 0.5* A**(-1/n) * (ufl.inner(ε(u), ε(u)) / 2 + eps)**((1 - n) / (2 * n))
 
 def ε(u):
     return ufl.sym(ufl.grad(u))
@@ -12,6 +12,10 @@ def cauchy_stress(ε,ν):
     λoverμ = 2*ν/(1-2*ν)
     D = ufl.shape(ε)[0]
     return λoverμ*ufl.tr(ε)*ufl.Identity(D) + 2*ε
+
+def viscous_stress(u,p,η):
+    δ = ufl.Identity(len(u))
+    return -p*δ + 2*η(u)*ε(u)
 
 
 def largest_eigenvalue(A):
@@ -26,6 +30,12 @@ def principal_stress(ε,ν):
 def free_energy(ε,ν):
     λoverμ = 2*ν/(1-2*ν)
     return 0.5*λoverμ*ufl.tr(ε)**2 + ufl.inner(ε,ε)
+
+def free_energy_alt(ε,ν):
+    # use formulation in preprint that I think is wrong
+    λoverμ = 2*ν/(1-2*ν)
+    D = ufl.shape(ε)[0]
+    return 0.5*(λoverμ + 2/D)*ufl.tr(ε)**2 + ufl.inner(ε,ε)
 
 
 def positive_part(x):
@@ -53,11 +63,23 @@ def crack_density_function(d,l,w=lambda d: d**2,cw=2):
 
 
 def free_energy_plus(ε,ν):
-# based on alternative formulation, equivalent to below
+
     λoverμ = 2*ν/(1-2*ν)
     εplus = matrix_function(ε,positive_part)
     return 0.5*λoverμ*positive_part(ufl.tr(ε))**2 + \
             ufl.inner(εplus,εplus)
+
+def free_energy_plus_alt(ε,ν):
+    # use formulation in preprint that I think is wrong
+    λoverμ = 2*ν/(1-2*ν)
+    D = ufl.shape(ε)[0]
+    εDplus = matrix_function(ufl.dev(ε),positive_part)
+    return 0.5*(λoverμ + 2/D)*positive_part(ufl.tr(ε))**2 + \
+            ufl.inner(εDplus,εDplus)
+
+
+
+
 
 def free_energy_plus_P(ε,ε_prev,ν):
     i,j,k,l = ufl.indices(4)
@@ -72,6 +94,12 @@ def degraded_free_energy(ε,g,ν,ψcritstar):
     ψplus = free_energy_plus(ε,ν)-ψcritstar
     # ψplus = free_energy_plus(u,ν)
     ψminus = free_energy(ε,ν) - ψplus
+    return g*(ψplus) + (ψminus)
+
+def degraded_free_energy_alt(ε,g,ν,ψcritstar):
+    ψplus = free_energy_plus_alt(ε,ν)-ψcritstar
+    # ψplus = free_energy_plus(u,ν)
+    ψminus = free_energy_alt(ε,ν) - ψplus
     return g*(ψplus) + (ψminus)
 
 
