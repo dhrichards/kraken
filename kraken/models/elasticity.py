@@ -17,6 +17,7 @@ class ElasticitySolver:
         self.material = material
         self.dt = dt
         self.g = degradation
+        self.pw = lambda u: mf.water_pressure(self.msh,u)
 
         v_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,), dtype=default_real_type)
         self.V = fem.functionspace(self.msh, v_el)
@@ -52,19 +53,21 @@ class ElasticitySolver:
         n = ufl.FacetNormal(self.msh)
 
     
-        pw = lambda v: mf.water_pressure(self.msh,v + u*self.dt)
+        pw = lambda v: self.pw(v + u*self.dt)
 
         f = mf.body_force(self.msh, ρratio)
         g = self.g(d)
 
     
 
-        internal_energy = mf.degraded_free_energy(mf.ε(v),g,ν,self.material.ψcritstar) * ufl.dx
-        # internal_energy = (pf.degradation(d)*free_energy(u,ν) + (1/C3)*pf.γ(d,l)) * ufl.dx
+        # internal_energy = mf.degraded_free_energy(mf.ε(v),g,ν,self.material.ψcritstar) * ufl.dx
+        internal_energy = g*mf.free_energy(mf.ε(v),ν) * ufl.dx
+        # internal_energy = 0.5*g*ufl.inner(mf.ε(v),mf.ε(v)) * ufl.dx
 
         external_energy =  self.material.C1 *( \
-            g* ufl.dot(f, v) \
+            g * ufl.dot(f, v) \
             - pw(v)*ufl.inner(ufl.grad(g), v)\
+            # - ufl.inner(ufl.div(v),g)\
              )* ufl.dx \
             - self.material.C1 * g * pw(v) *  ufl.dot(n, v) * ds
         

@@ -5,11 +5,10 @@ from dolfinx import mesh, fem, plot, io, default_scalar_type
 from mpi4py import MPI
 import ufl
 import numpy as np
-from material import MaterialProperties, Material_no_uc
-from boundaryconditions import get_zero_bc
-import utilities
-import energybased as eb
-import elasticityclass as ec
+from kraken.material import Material_no_uc
+from kraken.boundaryconditions import get_zero_bc
+import kraken.utilities as utilities
+import kraken.mainclass as mc
 
 L = 1
 def boundary(x):
@@ -18,44 +17,45 @@ def boundary(x):
         np.isclose(x[1], -L) | \
         np.isclose(x[1], L)
 
-l = 0.025
+l = 0.05
+
+w_model = 'AT2'
 
 
-
-
-material = Material_no_uc(ρi = 0.0, ρw = 1e6, g=1.0, E = 1e9,
-                                ν=0.2)
+material = Material_no_uc(ρi = 0.0, ρw = 1.0, g=1.0, E = 1.0,
+                                ν=0.15, Gc=1.0)
 material.L = 1.0
 material.l = l
 
-
+h = l/4
+nx = int(2*L/(h/2))
 
 msh = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([-L, -L]), np.array([L, L])],
-                            [100,100], mesh.CellType.quadrilateral)
+                            [nx,nx], mesh.CellType.quadrilateral)
 
 #refine mesh
 
-c = 0.2; n=5
-msh.geometry.x[:,1] = (1-c)/L**(n-1)*msh.geometry.x[:,1]**n + c*msh.geometry.x[:,1]
-c = 0.3; n=5
-msh.geometry.x[:,0] = (1-c)/L**(n-1)*msh.geometry.x[:,0]**n + c*msh.geometry.x[:,0]
+# c = 0.2; n=5
+# msh.geometry.x[:,1] = (1-c)/L**(n-1)*msh.geometry.x[:,1]**n + c*msh.geometry.x[:,1]
+# c = 0.3; n=5
+# msh.geometry.x[:,0] = (1-c)/L**(n-1)*msh.geometry.x[:,0]**n + c*msh.geometry.x[:,0]
 
 # material.set_l_from_mesh(msh)
 
-bc_v = lambda V: [get_zero_bc(V, boundary, default_scalar_type)]
+bc_v = lambda V: [get_zero_bc(V, boundary)]
 
 def crack(x,a,h):
-    return (x[0]>-a)*(x[0]<a)*(x[1]>-h/2)*(x[1]<h/2)
+    return (x[0]>-a)*(x[0]<a)*(x[1]>=-h/2)*(x[1]<=h/2)
 a = 0.125
-h = 0.01
 π = np.pi
-aeff = a + π*l/4
 
-# aeff1 = a*(1 + (π*l/4) / (a*(3*h/(8*l) + 1)))
-aeff2 = a*(1 + (π*l/4) / (a*(h/(2*l) + 1)))
+if w_model == 'AT1':
+    aeff = a*(1 + (π*l/4) / (a*(3*h/(8*l) + 1)))
+else:
+    aeff = a*(1 + (π*l/4) / (a*(h/(2*l) + 1)))
 
 umax = 2*material.pwc*a*(1-material.ν**2)/material.E
-umax_eff = 2*material.pwc*aeff2*(1-material.ν**2)/material.E
+umax_eff = 2*material.pwc*aeff*(1-material.ν**2)/material.E
 
 msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
 def bc_d_func(msh,V,crack):
@@ -71,18 +71,33 @@ bc_d = lambda V: [bc_d_func(msh,V,crackk)]
 
 
 
-model = ec.viscoelastic_damage(msh, [bc_v,bc_v,bc_d], material, 1.0)
+model = mc.viscoelastic_damage(msh, [bc_v,bc_v,bc_d], material, 1.0)
+
+if w_model == 'AT1':
+    model.damage.w = lambda d: d
+    model.damage.calc_c0()
+    model.damage.bounded = True
 
 #overload water pressure
-model.pw = lambda msh,u: -1.0
+model.elastic.pw = lambda u: 1.0
+
+model.fixed_point()
+# model.solve_damage()
+# model.solve_elastic()
 
 
-# model.fixed_point(1)
+utilities.write_xdmf("outputs/sneddon.xdmf",model.msh,
+                        [model.v,model.d],["v","d"],t=0)
 
-model.solve_damage()
-model.solve_elastic()
 
-utilities.write_vtk("output/sneddon.pvd",msh,[model.v,model.d],["v","d"])
+# for i in range(50):
+#     if MPI.COMM_WORLD.rank == 0:
+#         print(i)
+#     model.solve_elastic()
+#     model.solve_damage()
+
+#     utilities.write_xdmf("outputs/sneddon" + str(i) + ".xdmf",model.msh,
+#                         [model.v,model.d],["v","d"],t=i)
 
 v_max = MPI.COMM_WORLD.allreduce(np.max(model.v.x.array), op=MPI.MAX)
 if MPI.COMM_WORLD.rank == 0:

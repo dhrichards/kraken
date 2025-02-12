@@ -116,7 +116,7 @@ class viscoelastic_damage:
                 print(f"gravity: {self.material.g}")
             
             
-            self.fixed_point(solve_stokes=solve_stokes)
+            self.fixed_point(tol=1e-7,solve_stokes=solve_stokes)
 
             if self.converged:
                 if save:
