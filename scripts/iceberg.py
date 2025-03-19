@@ -1,5 +1,5 @@
 #%%
-import numpy as np
+import os
 from dolfinx import mesh, io, log, default_scalar_type, fem
 from mpi4py import MPI
 import numpy as np
@@ -29,21 +29,17 @@ def fixed(x):
 
 
 ## check mpi size is correct
-print(MPI.COMM_WORLD.size)
-print(MPI.COMM_WORLD.rank)
+print("MPI size: {}".format(MPI.COMM_WORLD.Get_size()))
+print("MPI rank: {}".format(MPI.COMM_WORLD.Get_rank()))
 
 print(MPI.Get_library_version())
 
 true_length = 16e3
 true_height = 300
 
-hpc = False
 
-if hpc:
-    path = '/data/hpcdata/users/dancha/'
-else:
-    path = 'outputs/'
-
+path = './outputs'
+os.makedirs(path, exist_ok=True)
 
 
 material = Material_no_uc()
@@ -133,16 +129,21 @@ import ufl
 #                     [model.v,model.d,ψ,ψP],\
 #                     ["v","d","eps","epsP"],t=i)
 #     i+=1
+rank = MPI.COMM_WORLD.Get_rank()
+
+if rank == 0:
+	print("Gravity loop")
 model.gravity_loop(save=True)
 model.material.g = 9.8
-if MPI.COMM_WORLD.rank == 0:
-    print("Starting visco-elasto-damage loop")
+if rank == 0:
+    print("Starting visco-elasto-damage loop. Rank {}".format(rank))
 # model.stokes.setup_solver(model.u,model.p,model.d,model.v)
 # # model.material.g += (9.81-g0)/(steps-1)
+
 for i in range(300):
     
-    if MPI.COMM_WORLD.rank == 0:
-        print(str(i))
+    if rank == 0:
+        print("Iteration {}".format(i))
     
     model.fixed_point(tol=1e-4,solve_stokes=True)
     # log.set_log_level(log.LogLevel.INFO)
