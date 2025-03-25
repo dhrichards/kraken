@@ -1,0 +1,8 @@
+/.idea/
+__pycache__/
+*.pyc
+/*.egg-info/
+/output*/
+*.out
+*.err
+
