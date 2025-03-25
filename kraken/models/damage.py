@@ -50,7 +50,7 @@ class DamageSolver:
 
         H = mf.history_function(ε(v),Hprev,self.material.ν,self.material.ψcritstar)
 
-        C3 = self.material.C3; l = self.material.l
+        C3 = self.material.C3; l = self.material.lstar
 
         free_energy = (mf.crack_density_function(d,l,self.w, self.c0) \
                        + C3*self.g(d)*H)*ufl.dx
@@ -106,7 +106,7 @@ class DamageSolver:
 
         H = mf.history_function(ε(v),Hprev,self.material.ν,self.material.ψcritstar)
 
-        C3 = self.material.C3; l = self.material.l
+        C3 = self.material.C3; l = self.material.lstar
 
         d, g = ufl.TrialFunction(self.V), ufl.TestFunction(self.V)
         

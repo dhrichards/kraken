@@ -337,8 +337,14 @@ def eigenstate2(A):
     # --- determine eigenprojectors E0, E1
     #
     E = [ufl.diff(λk, A).T for λk in λ]
+    # E = []
+    # for λk in λ:
+    #     v = ufl.as_vector([λk - A[1, 1], A[1, 0]])
+    #     v = v / ufl.sqrt(ufl.dot(v, v))
+    #     E.append(ufl.outer(v, v))
 
     return λ, E
+
 
 
 def eigenstate(A):

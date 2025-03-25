@@ -22,6 +22,7 @@ def get_bc(V,boundary,bc_val):
     boundary_dofs_x = get_boundary_dofs(V,boundary)
     return fem.dirichletbc(bc_val, boundary_dofs_x, V)
 
+
 def internal_bc(V,func,val):
     msh = V.mesh
     msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)

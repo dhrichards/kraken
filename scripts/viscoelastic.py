@@ -21,7 +21,7 @@ def bottom_boundary(x):
 
 def crack(x):
     x_c = nondim_length/2 - nondim_height
-    l = material.l
+    l = material.lstar
     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
 
 def fixed(x):
@@ -52,7 +52,7 @@ material.τ = 3600*24
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 30.0/material.L
+material.lstar = 30.0/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
@@ -65,7 +65,7 @@ Hw = material.ρi/material.ρw*nondim_height
 #     msh = infile.read_mesh()
 
 # msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-cell_size = material.l/3.2
+cell_size = material.lstar/3.2
 
 
 
@@ -120,12 +120,13 @@ for i in range(300):
     
     # log.set_log_level(log.LogLevel.INFO)
     # model.solve_stokes()
-    τ_e = 2*mf.ε(model.v)
-    τ_v = 2*mf.viscosity(model.u,material.n,1e-8)*mf.ε(model.u)
+    τ_e = mf.cauchy_stress(mf.ε(model.v),material.ν)
+    # τ_v = 2*mf.viscosity(model.u,material.n,1e-8)*mfε(model.u)
+    τ_v = mf.viscous_stress(model.u,model.p,lambda u: mf.viscosity(u, 3.0))
     
 
-    utilities.write_file(path +"viscoelastic" + str(i) + ".pvd",msh,\
-                    [model.v,model.u,τ_e,τ_v],\
-                    ["v","u","τ_e","τ_v"],t=i)
+    utilities.write_file(path +"viscoelastic" + str(i) + ".xdmf",msh,\
+                    [model.v,model.u,model.u+model.v,τ_e,τ_v],\
+                    ["v","u","w","τ_e","τ_v"],t=i)
 
 

@@ -1,10 +1,10 @@
 #%%
 
-import kraken
-import os
-from dolfinx import mesh, fem, default_scalar_type
+import numpy as np
+from dolfinx import mesh, fem, plot, io, default_scalar_type
 from dolfinx.fem.petsc import LinearProblem
 from mpi4py import MPI
+import ufl
 import numpy as np
 from pf import *
 from material import MaterialProperties
@@ -12,7 +12,7 @@ from material import MaterialProperties
 def left_boundary(x):
     return np.isclose(x[0], 0)
 
-def water_pressure(msh, ρw, g):
+def water_pressure(msh,ρw,g):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1]
     pw = ufl.conditional(ufl.lt(z, 0),
@@ -61,30 +61,30 @@ def elasticity(msh, material):
 
     return uh
 
-if __name__ == "__main__":
-    L = 16e3
-    H = 300
+L = 16e3
+H = 300
 
-    material = MaterialProperties()
-    Hw = material.ρi/material.ρw*H
+material = MaterialProperties()
+Hw = material.ρi/material.ρw*H
 
-    msh = mesh.create_rectangle(MPI.COMM_WORLD,
-                                [np.array([-L/2, -Hw]), np.array([L/2, H-Hw])],
-                                [200,50], mesh.CellType.triangle)
+msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                            [np.array([-L/2, -Hw]), np.array([L/2, H-Hw])],
+                            [200,50], mesh.CellType.triangle)
 
 
-    uh = elasticity(msh, material)
+uh = elasticity(msh, material)
 
-    Q = fem.functionspace(msh, ("Lagrange", 1))
-    expr = fem.Expression(
-        water_pressure(msh,material.ρw,material.g),Q.element.interpolation_points()
-    )
-    ph = fem.Function(Q)
-    ph.interpolate(expr)
 
-    with XDMFFile(MPI.COMM_WORLD, os.path.join("output", "test.xdmf"), "w") as ufile_xdmf:
-            ufile_xdmf.write_mesh(msh)
-            ufile_xdmf.write_function(uh)
-            # ufile_xdmf.write_function(ph)
+Q = fem.functionspace(msh, ("Lagrange", 1))
+expr = fem.Expression(water_pressure(msh,material.ρw,material.g),Q.element.interpolation_points())
+ph = fem.Function(Q)
+ph.interpolate(expr)
 
-    # %%
+
+from dolfinx.io import XDMFFile
+with XDMFFile(MPI.COMM_WORLD, "test.xdmf", "w") as ufile_xdmf:
+        ufile_xdmf.write_mesh(msh)
+        ufile_xdmf.write_function(uh)
+        # ufile_xdmf.write_function(ph)
+
+# %%

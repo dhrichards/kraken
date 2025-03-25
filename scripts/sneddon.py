@@ -17,7 +17,7 @@ def boundary(x):
         np.isclose(x[1], -L) | \
         np.isclose(x[1], L)
 
-l = 0.05
+l = 0.025
 
 w_model = 'AT2'
 
@@ -25,9 +25,9 @@ w_model = 'AT2'
 material = Material_no_uc(ρi = 0.0, ρw = 1.0, g=1.0, E = 1.0,
                                 ν=0.15, Gc=1.0)
 material.L = 1.0
-material.l = l
+material.lstar = l
 
-h = l/4
+h = l/2
 nx = int(2*L/(h/2))
 
 msh = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([-L, -L]), np.array([L, L])],
@@ -79,7 +79,7 @@ if w_model == 'AT1':
     model.damage.bounded = True
 
 #overload water pressure
-model.elastic.pw = lambda u: 1.0
+model.elastic.pw = lambda u: -1.0
 
 model.fixed_point()
 # model.solve_damage()

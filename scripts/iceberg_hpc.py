@@ -21,7 +21,7 @@ def bottom_boundary(x):
 
 def crack(x):
     x_c = nondim_length/2 - nondim_height
-    l = material.l
+    l = material.lstar
     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
 
 def fixed(x):
@@ -52,7 +52,7 @@ material.τ = 3600*24
 nondim_length = true_length/material.L
 nondim_height = true_height/material.L
 
-material.l = 0.5/material.L
+material.lstar = 0.5/material.L
 
 
 Hw = material.ρi/material.ρw*nondim_height
@@ -65,7 +65,7 @@ Hw = material.ρi/material.ρw*nondim_height
 #     msh = infile.read_mesh()
 
 # msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-cell_size = material.l/3.2
+cell_size = material.lstar/3.2
 
 
 

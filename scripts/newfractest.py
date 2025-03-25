@@ -1,7 +1,9 @@
 #%%
 
-from dolfinx import mesh, default_scalar_type
+import numpy as np
+from dolfinx import mesh, fem, plot, io, default_scalar_type, log
 from mpi4py import MPI
+import ufl
 import numpy as np
 import elasticity
 from material import MaterialProperties, Material_no_uc
@@ -19,47 +21,47 @@ def left_boundary(x):
 def right_boundary(x):
     return np.isclose(x[0], nondim_length)
 
-if __name__ == "__main__":
-    true_length = 1.0
-    true_height = 0.3
 
-    material = Material_no_uc(g=1e-9, E=100, ν=0.3, ρi=0.0)
-    material.L = 1.0
-    material.l = 0.1
-    material.ψcritstar = 0.0
+true_length = 1.0
+true_height = 0.3
 
-    cell_size = material.l/6
+material = Material_no_uc(g=1e-9, E=100, ν=0.3, ρi=0.0)
+material.L = 1.0
+material.l = 0.1
+material.ψcritstar = 0.0
 
-
-    nondim_length = true_length/material.L
-    nondim_height = true_height/material.L
-
-    nx = int(nondim_length/cell_size)
-    ny = int(nondim_height/cell_size)
+cell_size = material.l/6
 
 
-    msh = mesh.create_rectangle(MPI.COMM_WORLD,
-                                [np.array([0, 0]), np.array([nondim_length, nondim_height])],
-                                [nx,ny], mesh.CellType.quadrilateral)
+nondim_length = true_length/material.L
+nondim_height = true_height/material.L
+
+nx = int(nondim_length/cell_size)
+ny = int(nondim_height/cell_size)
 
 
-    # material.set_l_from_mesh(msh)
-    #
-    ubc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
-                        get_bc(V.sub(0), right_boundary, default_scalar_type(1.0)) ]
-
-    dbc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
-                     get_zero_bc(V, right_boundary, default_scalar_type)]
-
-    # log.set_log_level(log.LogLevel.INFO)
-
-    vh, dh = eb.fixed_point(msh, [ubc, dbc], material)
-    uh, ph = stokes.solve(msh, ubc, vh, material, 1.0, dh)
-    # vh, dh = pf.minimisation(msh, [ubc, dbc], material)
-    # vh, dh = monolithic.solve(msh, ubc, material)
+msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                            [np.array([0, 0]), np.array([nondim_length, nondim_height])],
+                            [nx,ny], mesh.CellType.quadrilateral)
 
 
-    # utilities.plot_damage_state(vh,dh)
-    utilities.write_vtk("outputs/newfrac.pvd", msh, \
-                        [vh,dh,uh], \
-                        ["v","d","u"])
+# material.set_l_from_mesh(msh)
+# 
+ubc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
+                    get_bc(V.sub(0), right_boundary, default_scalar_type(1.0)) ]
+
+dbc = lambda V: [get_zero_bc(V, left_boundary, default_scalar_type),
+                 get_zero_bc(V, right_boundary, default_scalar_type)]
+
+# log.set_log_level(log.LogLevel.INFO)
+
+vh, dh = eb.fixed_point(msh, [ubc, dbc], material)
+uh, ph = stokes.solve(msh, ubc, vh, material, 1.0, dh)
+# vh, dh = pf.minimisation(msh, [ubc, dbc], material)
+# vh, dh = monolithic.solve(msh, ubc, material)
+
+
+# utilities.plot_damage_state(vh,dh)
+utilities.write_vtk("outputs/newfrac.pvd",msh,\
+                    [vh,dh,uh],\
+                    ["v","d","u"])

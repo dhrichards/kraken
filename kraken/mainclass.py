@@ -49,11 +49,38 @@ class viscoelastic_damage:
 
     def solve_damage(self):
         self.damage.solve(self.v, self.Hprev, self.d)
-        # self.d = self.damage.solve(self.v, self.Hprev, self.d)
+        # self.d = self.damage.solve_linear(self.v, self.Hprev)
 
     def solve_stokes(self):
         # self.stokes.solve(self.u, self.p, self.d, self.v)
         self.stokes.solve()
+
+    def fixed_point_simple(self, max_its=100, tol=1e-4):
+        L2_old = 0.0
+
+        for i in range(max_its):
+
+            self.solve_elastic()
+            self.solve_damage()
+
+            L2_ = ufl.inner(self.d,self.d)*ufl.dx
+            L2_rank = fem.assemble_scalar(fem.form(L2_))
+            L2 = np.sqrt(MPI.COMM_WORLD.allreduce(L2_rank, op=MPI.SUM))
+
+            error_L2 = np.abs(L2 - L2_old)
+            if MPI.COMM_WORLD.rank == 0:
+                print(f"iteration {i}, error {error_L2}")
+
+            if i>0:
+                if error_L2 < tol:
+                    break
+
+            L2_old = L2
+
+        # Update history function as finished fixed point iteration
+        
+        self.Hprev = self.history.solve(self.Hprev, self.v)
+
 
     
     def fixed_point(self, max_its=100, tol=1e-4, solve_stokes=False):
@@ -116,7 +143,7 @@ class viscoelastic_damage:
                 print(f"gravity: {self.material.g}")
             
             
-            self.fixed_point(tol=1e-7,solve_stokes=solve_stokes)
+            self.fixed_point(solve_stokes=solve_stokes)
 
             if self.converged:
                 if save:
