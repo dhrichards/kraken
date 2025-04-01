@@ -48,8 +48,8 @@ class viscoelastic_damage:
         self.elastic.solve(self.v, self.d, self.u)
 
     def solve_damage(self):
-        self.damage.solve(self.v, self.Hprev, self.d)
-        # self.d = self.damage.solve_linear(self.v, self.Hprev)
+        # self.damage.solve(self.v, self.Hprev, self.d)
+        self.d = self.damage.solve_linear(self.v, self.Hprev)
 
     def solve_stokes(self):
         # self.stokes.solve(self.u, self.p, self.d, self.v)
@@ -60,10 +60,11 @@ class viscoelastic_damage:
 
         for i in range(max_its):
 
-            self.solve_elastic()
             self.solve_damage()
+            self.solve_elastic()
+            
 
-            L2_ = ufl.inner(self.d,self.d)*ufl.dx
+            L2_ = ufl.inner(self.d,self.d)*ufl.dx + ufl.inner(self.v,self.v)*ufl.dx
             L2_rank = fem.assemble_scalar(fem.form(L2_))
             L2 = np.sqrt(MPI.COMM_WORLD.allreduce(L2_rank, op=MPI.SUM))
 

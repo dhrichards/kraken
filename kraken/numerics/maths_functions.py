@@ -32,12 +32,13 @@ def free_energy(ε,ν):
     return 0.5*λoverμ*ufl.tr(ε)**2 + ufl.inner(ε,ε)
 
 
-def positive_part(x,eps=1e-6):
-    return 0.5*(x + (x**2 + eps**2)**0.5)
+def positive_part(x,eps=1e-12):
+    # return 0.5*(x + (x**2 + eps**2)**0.5)
+    return ufl.max_value(0.0,x)
 
 
-def negative_part(x,eps=1e-6):
-    return 0.5*(x - (x**2 + eps**2)**0.5)
+# def negative_part(x,eps=1e-6):
+#     return 0.5*(x - (x**2 + eps**2)**0.5)
 
 
 
@@ -89,6 +90,7 @@ def degraded_pressure(p,g):
 
 def history_function(ε,Hprev,ν,ψcrit):
     ψp = free_energy_plus(ε,ν) - ψcrit
+    # ψp = free_energy(ε,ν)
     return ufl.max_value(ψp,Hprev)
 
 

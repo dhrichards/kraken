@@ -18,7 +18,7 @@ def right_boundary(x):
     return np.isclose(x[0], nondim_length/2)
 
 def bottom_boundary(x):
-    return np.isclose(x[1], -Hw)
+    return np.isclose(x[1], -nondim_height)
 
 
 
@@ -28,8 +28,8 @@ print(MPI.COMM_WORLD.rank)
 
 print(MPI.Get_library_version())
 
-true_length = 2e3
-true_height = 300
+true_length = 200
+true_height = 200
 
 hpc = False
 
@@ -42,9 +42,10 @@ else:
 
 # material = Material_no_uc()
 material = Material_with_uc()
-material.l = 20.0
+material.l = 5.0
 # material.Gc = 20.0
 material.uc = material.L
+material.ψcrit = 0.0
 
 # material.L = true_height
 # material.τ = 3600*24
@@ -68,16 +69,20 @@ nx = int((nondim_length/2)/cell_size)
 nz = int(nondim_height/cell_size)
 
 msh = mesh.create_rectangle(MPI.COMM_WORLD,
-                            [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
+                            [np.array([0, -nondim_height]), np.array([nondim_length/2, 0])],
                             [nx,nz], mesh.CellType.quadrilateral)
 
 
 
 
-v_bc = lambda V: [bc.get_zero_bc(V.sub(1), bottom_boundary),
-                  bc.get_zero_bc(V.sub(0), left_boundary),
-                    bc.get_bc(V.sub(0), right_boundary, 1e-3/nondim_length)]
+v_bc = lambda V: [
+                    bc.get_zero_bc(V.sub(1), bottom_boundary),
+                    bc.get_zero_bc(V.sub(0), left_boundary),
+                    bc.get_bc(V.sub(0), right_boundary, 2e-5/nondim_length),
+                ]
 no_bc = lambda V: []
+
+d_bc = lambda V: [bc.internal_bc(V, lambda x: x[0]>nondim_length/4, 0.0)]
 
 model = mc.viscoelastic_damage(msh, [v_bc,no_bc,no_bc], material, 
                                dt = 1)#,g = lambda d: mf.degradation_Lo2023(d,0.05))
@@ -91,39 +96,37 @@ model = mc.viscoelastic_damage(msh, [v_bc,no_bc,no_bc], material,
 
 # Change water pressure to constant tensile stress
 σt0 = material.ρratio*(1-material.ρratio)/2
-side_facets = mesh.locate_entities_boundary(msh, msh.topology.dim-1, right_boundary)
-mesh_tags = mesh.meshtags(model.msh, msh.topology.dim-1, side_facets, 1)
+facets = mesh.locate_entities_boundary(msh, msh.topology.dim-1, right_boundary)
+mesh_tags = mesh.meshtags(model.msh, msh.topology.dim-1, facets, 1)
 ds = ufl.Measure("ds", domain=model.msh, subdomain_data=mesh_tags)
 model.elastic.ds = ds(1)
+# model.elastic.pw = lambda u: material.ρratio*mf.water_pressure(model.msh,u) 
 model.elastic.pw = lambda u: 0.0
 
 disp = np.logspace(-3,0,50)/nondim_length
 
 #%%
 
-# model.elastic.pw = lambda u: -0*σt0
 # model.elastic.solve(model.v,model.d,model.u)
-
-# model.fixed_point_simple()
-
-# utilities.write_xdmf(path +"smith_elasticonly" + ".xdmf", msh, \
-#                     [model.v,model.d],\
-#                     ["v","d"], t=0)
+model.fixed_point_simple()
 
 
+utilities.write_xdmf(path +"smith_elasticonly" + ".xdmf", msh, \
+                    [model.v,model.d,mf.cauchy_stress(mf.ε(model.v),material.ν),mf.ε(model.v),mf.free_energy(mf.ε(model.v),material.ν),mf.free_energy_plus(mf.ε(model.v),material.ν)],\
+                    ["v","d","σ","ε","ψ","ψplus"], t=0)
 
 
+# gs = np.linspace(2.4,9.8,100)
 
-for i in range(len(disp)):
-    if MPI.COMM_WORLD.rank == 0:
-        print(i)
-    disp_bc = lambda V: [bc.get_zero_bc(V.sub(1), bottom_boundary),
-                  bc.get_zero_bc(V.sub(0), left_boundary),
-                    bc.get_bc(V.sub(0), right_boundary, disp[i])]
-    model.elastic.bcs = disp_bc(model.elastic.V)
-    model.fixed_point_simple(max_its=300)
+
+# for i in range(len(gs)):
+#     if MPI.COMM_WORLD.rank == 0:
+#         print(gs[i])
+#     model.material.g = gs[i]
+
+#     model.fixed_point_simple()
     
-    utilities.write_xdmf(path +"smith" + str(i) + ".xdmf", msh, \
-                    [model.v,model.d],\
-                    ["v","d"], t=i)
+#     utilities.write_xdmf(path +"smith" + str(i) + ".xdmf", msh, \
+#                     [model.v,model.d,mf.free_energy_plus(mf.ε(model.v),material.ν)],\
+#                     ["v","d","ψplus"], t=i)
 

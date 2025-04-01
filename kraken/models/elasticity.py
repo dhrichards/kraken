@@ -74,8 +74,8 @@ class ElasticitySolver:
 
         external_energy =  self.material.C1 *( \
              g * ufl.dot(f, v) \
-            - pw(v)*ufl.inner(ufl.grad(g), v)\
-            # - ufl.inner(ufl.div(v),g)\
+            + pw(v)*ufl.inner(ufl.grad(g), v)\
+            # - ufl.inner(ufl.div(pw(v)*v),g)\
              )* self.dx \
             - self.material.C1 * g * pw(v) *  ufl.dot(n, v) * self.ds
     
@@ -104,8 +104,7 @@ class ElasticitySolver:
         # # self.solver.report = True
         # # self.solver.error_on_nonconvergence = False
 
-        
-
+    
         # ksp = self.solver.krylov_solver
         
         # option_prefix = ksp.getOptionsPrefix()

@@ -130,16 +130,10 @@ for i in range(len(disps)):
                             # bc.get_bc_func(V,right_boundary, lambda x: sides_bc(x,disps[i]))]
     model.elastic.bcs = disp_bc(model.elastic.V)
 
-    model.fixed_point(max_its=300)
-    σ = mf.cauchy_stress(mf.ε(model.v),material.ν)
-    ψ = mf.free_energy(mf.ε(model.v),material.ν)
-    ψplus = mf.free_energy_split(mf.ε(model.v),material.ν,mf.positive_part)
-    ψminus_1 = ψ - ψplus
-
-    ψminus_2 = mf.free_energy_split(mf.ε(model.v),material.ν,mf.negative_part)
+    model.fixed_point_simple(max_its=300)
 
 
     utilities.write_xdmf(path +"notchshear" + str(i) + ".xdmf", msh, \
-                    [model.v,model.d,ψminus_1,ψminus_2],\
-                    ["v","d", "ψm1","ψm2"], t=disps[i])
+                    [model.v,model.d],\
+                    ["v","d"], t=disps[i])
 

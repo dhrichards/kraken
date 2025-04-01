@@ -130,23 +130,8 @@ model = mc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], material,
 import ufl
 # gs = [0.1, 6.6, 6.7, 6.9, 7.0, 7.02, 7.3, 9.0,9.2,9.3,9.5]
 # gs = [9.5]
-gs = np.linspace(6.79,6.85,1000)
-i =0
-#%%
-for g in gs:
-    model.material.g = g
-    if MPI.COMM_WORLD.rank == 0:
-        print(model.material.g)
-   
-    model.fixed_point(tol=2e-4,solve_stokes=False,max_its=300)
 
-
-  
-    utilities.write_xdmf(path + "iceberginitial" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d],\
-                    ["v","d"],t=i)
-    i+=1
-# model.gravity_loop(save=True)
+model.gravity_loop(save=True)
 # model.material.g = 9.8
 # if MPI.COMM_WORLD.rank == 0:
 #     print("Starting visco-elasto-damage loop")
