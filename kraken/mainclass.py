@@ -44,18 +44,18 @@ class viscoelastic_damage:
  
 
     def solve_elastic(self):
-        # self.v = self.elastic.solve_linearised(self.v, self.d)
+        # self.v = self.elastic.solve_linearised(self.d, self.u)
         self.elastic.solve(self.v, self.d, self.u)
 
     def solve_damage(self):
-        # self.damage.solve(self.v, self.Hprev, self.d)
-        self.d = self.damage.solve_linear(self.v, self.Hprev)
+        self.damage.solve(self.v, self.Hprev, self.d)
+        # self.d = self.damage.solve_linear(self.v, self.Hprev)
 
     def solve_stokes(self):
         # self.stokes.solve(self.u, self.p, self.d, self.v)
         self.stokes.solve()
 
-    def fixed_point_simple(self, max_its=100, tol=1e-4):
+    def fixed_point_simple(self, max_its=100, tol=1e-4,bounded=False):
         L2_old = 0.0
 
         for i in range(max_its):
@@ -79,8 +79,10 @@ class viscoelastic_damage:
             L2_old = L2
 
         # Update history function as finished fixed point iteration
-        
-        self.Hprev = self.history.solve(self.Hprev, self.v)
+        if bounded:
+            self.damage.d_lb.x.array[:] = self.d.x.array[:]
+        else:
+            self.Hprev = self.history.solve(self.Hprev, self.v)
 
 
     

@@ -12,12 +12,12 @@ import kraken.mainclass as mc
 from kraken.numerics import maths_functions as mf
 
 L = 2.0
-a_aim = 0.1
+a_aim = 0.2
 h_aim = a_aim/10
 nx = int(L/h_aim)
 
 h = L/nx
-l = 3*h
+l = 0.05
 # get a as a multiple of grid spacing
 a = int(a_aim/h)*h
 
@@ -39,15 +39,15 @@ def boundary(x):
         np.isclose(x[1], L/2)
 
 def bottom(x):
-    return np.isclose(x[1], 0) & (x[0] > 1.001*a) 
+    return np.isclose(x[1], 0) 
 def top(x):
-    return np.isclose(x[1], L)
+    return np.isclose(x[1], L/2)
 
 def left(x):
     return np.isclose(x[0], 0)
 
 def right(x):
-    return np.isclose(x[0], L)
+    return np.isclose(x[0], L/2)
 
 def crack_boundary(x):
     return np.isclose(x[1], 0) & (x[0] < 1.001*a)
@@ -69,9 +69,12 @@ material.l = l
 material.E = 1
 material.ν = 0.2
 material.Gc = 1
-pw0 = 1e-3
+pw0 = 0.1
 
-# msh = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([L, L])],
+
+Geff = material.Gc*(h/(4*2*l)+1)
+
+# msh = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([0, 0]), np.array([L/2, L/2])],
 #                             [nx,nx], mesh.CellType.quadrilateral)
 msh = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([-L/2, -L/2]), np.array([L/2, L/2])],
                             [nx,nx], mesh.CellType.quadrilateral)
@@ -111,10 +114,28 @@ def umax(a):
     return 2*pw0*a*(1-material.ν**2)/material.E
 
 
+no_bc = lambda V: []
 
 
 g = lambda d: mf.degradation_default(d)
 model = mc.viscoelastic_damage(msh, [bc_v,bc_v,bc_d], material, 1.0, g=g)
+
+
+# ufl_form = lambda x: ufl.conditional(x[0]>-1.001*a,1.0,0.0)*\
+#     ufl.conditional(x[0]<1.001*a,1.0,0.0)*\
+#     ufl.conditional(x[1]>-1e-6,1.0,0.0)*\
+#     ufl.conditional(x[1]<1.001*w,1.0,0.0)
+
+
+# interpolate initial history function
+# expr = fem.Expression(ufl_form,model.history.V.element.interpolation_points())
+# model.Hprev = fem.Function(model.history.V, name="Hprev")
+# model.Hprev.interpolate(lambda x: 1e4*crack(x))
+
+model.damage.d_lb.interpolate(crack)
+
+# model.damage.bounded = True
+
 
 if w_model == 'AT1':
     model.damage.w = lambda d: d
@@ -122,37 +143,38 @@ if w_model == 'AT1':
     model.damage.bounded = True
 
 # According to Jakob
-pwc = np.sqrt(material.Gc*material.E/(np.pi*a*(1-material.ν**2)))
+pwc = np.sqrt(Geff*material.E/(np.pi*a*(1-material.ν**2)))
+# model.material.Gc = 0.5
+#%%
 
-# #%%
-# pws = np.linspace(1.0,2.0,50)
+pws = np.linspace(1.0,2.0,50)
 
-# for i in range(50):
-#     model.elastic.pw = lambda u: pws[i]
-#     model.fixed_point_simple(max_its=200)
-#     utilities.write_xdmf("outputs/sneddon" + str(i) + ".xdmf",model.msh,
-#                         [model.v,model.d],["v","d"],t=pws[i])
+for i in range(50):
+    model.elastic.pw = lambda u: pws[i]
+    model.damage.pw = lambda u: pws[i]
+    model.fixed_point_simple(max_its=200)
+    utilities.write_xdmf("outputs/sneddon" + str(i) + ".xdmf",model.msh,
+                        [model.v,model.d],["v","d"],t=pws[i])
 
 #%%
-model.elastic.pw = lambda u: pw0
+# model.elastic.pw = lambda u: pw0
 
 # model.solve_damage()
+# # for i in range(20):
 # model.solve_elastic()
-model.fixed_point_simple(max_its=10, tol=-1)
 
-utilities.write_xdmf("outputs/sneddon.xdmf",model.msh,
-                    [model.v,model.d],["v","d"])
+# # model.fixed_point_simple(max_its=10, tol=-1)
 
-
-print("saved")
-v_max = MPI.COMM_WORLD.allreduce(np.max(model.v.x.array), op=MPI.MAX)
-if MPI.COMM_WORLD.rank == 0:
-    # print(np.max(model.d.x.array))
-    print("Vmax: ", v_max)
-    print("Vmax Jakub: ", umax(aeff_jakub))
-    print("Vmax YOI: ", umax(aeff_yoi))
+# H = mf.history_function(mf.ε(model.v),0.0,material.ν,0.0)
+# utilities.write_xdmf("outputs/sneddon.xdmf",model.msh,
+#                     [model.v,model.d,H],["v","d","Hprev"],t=0)
 
 
+# print("saved")
+# v_max = MPI.COMM_WORLD.allreduce(np.max(model.v.x.array), op=MPI.MAX)
+# if MPI.COMM_WORLD.rank == 0:
+#     # print(np.max(model.d.x.array))
+#     print("Vmax: ", v_max)
+#     print("Vmax Jakub: ", umax(aeff_jakub))
+#     print("Vmax YOI: ", umax(aeff_yoi))
 
-
-# %%

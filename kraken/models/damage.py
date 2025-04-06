@@ -18,6 +18,9 @@ class DamageSolver:
         self.bounded = False
         self.calc_c0()
         self.g = degradation
+        self.pw = lambda u: mf.water_pressure(self.msh,u,material.uc_star)
+
+        self.ds = ufl.Measure("ds", domain=self.msh) 
 
         d_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, dtype=default_real_type)
         self.V = fem.functionspace(self.msh, d_el)
@@ -47,15 +50,32 @@ class DamageSolver:
     
     def solve(self,v,Hprev,d):
 
+        if self.bounded:
+            H = mf.free_energy_plus(ε(v),self.material.ν) - self.material.ψcritstar
+        else:
+            H = mf.history_function(ε(v),Hprev,self.material.ν,self.material.ψcritstar)
 
-        H = mf.history_function(ε(v),Hprev,self.material.ν,self.material.ψcritstar)
+        C3 = self.material.C3; l = self.material.lstar; C1 = self.material.C1
 
-        C3 = self.material.C3; l = self.material.lstar
+        f = mf.body_force(self.msh, self.material.ρratio)
+        n = ufl.FacetNormal(self.msh)
 
-        free_energy = (mf.crack_density_function(d,l,self.w, self.c0) \
-                       + C3*self.g(d)*H)*ufl.dx
+        dissipated_energy = (1/C3) * mf.crack_density_function(d,l,self.w, self.c0)*ufl.dx
 
-        F = ufl.derivative(free_energy,d,ufl.TestFunction(self.V))
+
+        elastic_energy = self.g(d) * H * ufl.dx
+        
+
+        external_energy =  C1 *( \
+             self.g(d) * ufl.dot(f, v) \
+            + self.pw(v)*ufl.inner(ufl.grad(self.g(d)), v)\
+            # - ufl.inner(ufl.div(pw(v)*v),g)\
+             )* ufl.dx \
+            - self.material.C1 * self.g(d) * self.pw(v) *  ufl.dot(n, v) * self.ds
+        
+        total_energy = dissipated_energy + elastic_energy - external_energy
+
+        F = ufl.derivative(total_energy,d,ufl.TestFunction(self.V))
         J = ufl.derivative(F,d,ufl.TrialFunction(self.V))
 
         # g = ufl.TestFunction(self.V)
@@ -110,10 +130,10 @@ class DamageSolver:
 
         d, g = ufl.TrialFunction(self.V), ufl.TestFunction(self.V)
         
-
+        ψ = mf.free_energy(ε(v),self.material.ν)   
         # only for w=d**2, g = (1-d)**2
         F = (ufl.inner(d,g) + l**2*ufl.inner(ufl.grad(d), ufl.grad(g)) \
-                - 2*C3*l*(1-d)*H*g) * ufl.dx
+                - 2*C3*l*(1-d)*ψ*g) * ufl.dx
         
 
         
@@ -132,7 +152,7 @@ class HistorySolver:
         self.dt = dt
         
 
-        h_el = bufl.element("DG", self.msh.basix_cell(), 0, dtype=default_real_type)
+        h_el = bufl.element("CG", self.msh.basix_cell(), 1, dtype=default_real_type)
         self.V = fem.functionspace(self.msh, h_el)
         
     def solve(self, Hprev, v):

@@ -8,6 +8,7 @@ import numpy as np
 from kraken.numerics import maths_functions as mf
 from kraken.numerics.maths_functions import ε
 from kraken.numerics import solvers
+from kraken.numerics import projection_tensors as pt
 import basix.ufl as bufl
 
 
@@ -19,6 +20,7 @@ class ElasticitySolver:
         self.g = degradation
         self.pw = lambda u: mf.water_pressure(self.msh,u,material.uc_star)
 
+
         v_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,), dtype=default_real_type)
         self.V = fem.functionspace(self.msh, v_el)
 
@@ -26,8 +28,6 @@ class ElasticitySolver:
 
         self.bcs = bc_func(self.V)
 
-        metadata = {"quadrature_degree": 4}
-        self.dx = ufl.dx(domain=self.msh, metadata=metadata)
         self.ds = ufl.Measure("ds", domain=self.msh) 
 
 
@@ -36,18 +36,15 @@ class ElasticitySolver:
         opts = PETSc.Options()
         opts["snes_type"] = "newtonls"
         opts["snes_linesearch_type"] = "bt"
-        opts
-        
-        # opts["snes_rtol"] = 1.0e-7
+
         self.solver.setFromOptions()
 
         self.solver.setTolerances(rtol=1.0e-7, max_it=50)
         self.solver.getKSP().setType("preonly")
         self.solver.getKSP().setTolerances(rtol=1.0e-7)
-        self.solver.getKSP().getPC().setType("cholesky")
-        self.solver.getKSP().getPC().setFactorSolverType("mumps")
-        #non symmetric lu sover
-        # self.solver.getKSP().getPC().symmetric = False
+        self.solver.getKSP().getPC().setType("lu")
+        # self.solver.getKSP().getPC().setFactorSolverType("mumps")
+ 
 
 
 
@@ -67,16 +64,17 @@ class ElasticitySolver:
         g = self.g(d)
 
     
+        
+        internal_energy = mf.degraded_free_energy(mf.ε(v), g, ν, self.material.ψcritstar) * ufl.dx
 
-        internal_energy = mf.degraded_free_energy(mf.ε(v),g,ν,self.material.ψcritstar) * self.dx
-        # internal_energy = g*mf.free_energy(mf.ε(v),ν) * self.dx
-        # internal_energy = 0.5*g*ufl.inner(mf.ε(v),mf.ε(v)) * self.dx
+        # internal_energy = g*mf.free_energy(mf.ε(v),ν) * ufl.dx
+        # internal_energy = 0.5*g*ufl.inner(mf.ε(v),mf.ε(v)) * ufl.dx
 
         external_energy =  self.material.C1 *( \
              g * ufl.dot(f, v) \
             + pw(v)*ufl.inner(ufl.grad(g), v)\
             # - ufl.inner(ufl.div(pw(v)*v),g)\
-             )* self.dx \
+             )* ufl.dx \
             - self.material.C1 * g * pw(v) *  ufl.dot(n, v) * self.ds
     
 
@@ -135,61 +133,58 @@ class ElasticitySolver:
 
         # return v
 
-    def solve_linearised(self,u,d):
+    def solve_linearised(self,d,u):
 
-        v = ufl.TestFunction(self.V)
+        v = ufl.TrialFunction(self.V)
+        w = ufl.TestFunction(self.V)
 
-        ρratio = self.material.ρratio; ν = self.material.ν
-        C1 = self.material.C1
+        ν = self.material.ν; C1 = self.material.C1
 
         f = mf.body_force(self.msh, self.material.ρratio)
         g = self.g(d)
         n = ufl.FacetNormal(self.msh)
         
-        pw = lambda u: mf.water_pressure(self.msh,u)# -u[self.msh.geometry.dim-1]
+        pw = self.pw(self.v_old + u*self.dt)
 
+        # a = ufl.inner(pt.degraded_stress_P(v,self.v_old,g,ν),mf.ε(w))*ufl.dx 
+        a = ufl.inner(g*mf.cauchy_stress(mf.ε(v),ν),mf.ε(w))*ufl.dx
+             
+        L = C1*( g*ufl.dot(f,w) - pw*ufl.inner(ufl.div(w),g) )*ufl.dx
+            #  + C1*g*pw(u)*ufl.inner(n,w)*ufl.ds
 
-        F = ( ufl.inner(mf.degraded_stress_P(u,self.v_old,d,ν),mf.ε(v)) \
-             - C1*g*ufl.inner(f,v) \
-             + C1*pw(u)*ufl.inner(ufl.grad(g),v) ) * self.dx \
-             + C1*g*pw(u)*ufl.inner(n,v)*ufl.ds
+        problem = LinearProblem(a, L, self.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 
-
+        v = problem.solve()
+        self.v_old.x.array[:] = v.x.array[:]
+        # self.problem = NonlinearProblem(F, u, self.bcs)
         
-        # a, L = ufl.lhs(F), ufl.rhs(F)
-
-        # problem = LinearProblem(a, L, self.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-
-        # u = problem.solve()
-        self.problem = NonlinearProblem(F, u, self.bcs)
-        
-        self.solver = NewtonSolver(MPI.COMM_WORLD, self.problem)
-        self.solver.convergence_criterion = "incremental"
-        self.solver.rtol = 1e-7
-        self.solver.atol = 1e-7
-        self.solver.max_it = 100
-        # self.solver.report = True
-        # self.solver.error_on_nonconvergence = False
+        # self.solver = NewtonSolver(MPI.COMM_WORLD, self.problem)
+        # self.solver.convergence_criterion = "incremental"
+        # self.solver.rtol = 1e-7
+        # self.solver.atol = 1e-7
+        # self.solver.max_it = 100
+        # # self.solver.report = True
+        # # self.solver.error_on_nonconvergence = False
 
         
 
-        ksp = self.solver.krylov_solver
-        opts = PETSc.Options()
-        option_prefix = ksp.getOptionsPrefix()
-        opts[f"{option_prefix}ksp_type"] = "preonly"
-        # opts[f"{option_prefix}ksp_rtol"] = 1.0e-8
-        opts[f"{option_prefix}pc_type"] = "lu"
-        opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
-        # opts[f"{option_prefix}pc_hypre_type"] = "boomeramg"
-        # opts[f"{option_prefix}pc_hypre_boomeramg_max_iter"] = 1
-        # opts[f"{option_prefix}pc_hypre_boomeramg_cycle_type"] = "v"
-        ksp.setFromOptions()
+        # ksp = self.solver.krylov_solver
+        # opts = PETSc.Options()
+        # option_prefix = ksp.getOptionsPrefix()
+        # opts[f"{option_prefix}ksp_type"] = "preonly"
+        # # opts[f"{option_prefix}ksp_rtol"] = 1.0e-8
+        # opts[f"{option_prefix}pc_type"] = "lu"
+        # opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
+        # # opts[f"{option_prefix}pc_hypre_type"] = "boomeramg"
+        # # opts[f"{option_prefix}pc_hypre_boomeramg_max_iter"] = 1
+        # # opts[f"{option_prefix}pc_hypre_boomeramg_cycle_type"] = "v"
+        # ksp.setFromOptions()
 
-        n, converged = self.solver.solve(u)
+        # n, converged = self.solver.solve(u)
 
-        self.v_old.x.array[:] = u.x.array[:]
+        # self.v_old.x.array[:] = u.x.array[:]
 
-        return u
+        return v
 
 
 

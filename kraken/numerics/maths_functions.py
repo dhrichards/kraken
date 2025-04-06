@@ -32,9 +32,12 @@ def free_energy(ε,ν):
     return 0.5*λoverμ*ufl.tr(ε)**2 + ufl.inner(ε,ε)
 
 
-def positive_part(x,eps=1e-12):
-    # return 0.5*(x + (x**2 + eps**2)**0.5)
-    return ufl.max_value(0.0,x)
+def positive_part(x,eps=1e-8):
+    return 0.5*(x + (x**2 + eps**2)**0.5)
+    # return ufl.max_value(0.0,x)
+    # return ufl.conditional(ufl.gt(x,0),x,0)
+    # return 0.5*(x + abs(x))
+    # return 0.5*(x + ufl.sign(x)*x)
 
 
 # def negative_part(x,eps=1e-6):
@@ -55,16 +58,21 @@ def crack_density_function(d,l,w=lambda d: d**2,cw=2):
 
 def free_energy_plus(ε,ν):
     λoverμ = 2*ν/(1-2*ν)
+    D = ufl.shape(ε)[0]
+    ##Amor:
+    # return 0.5*(λoverμ+2/D)*positive_part(ufl.tr(ε))**2 + \
+    #         ufl.inner(ufl.dev(ε),ufl.dev(ε))
+
+
+
+    ##Spectral:
     εplus = matrix_function(ε,positive_part)
     return 0.5*λoverμ*positive_part(ufl.tr(ε))**2 + \
             ufl.inner(εplus,εplus)
 
+    ##None:
+    # return free_energy(ε,ν)
 
-def free_energy_plus_amor(ε,ν):
-    λoverμ = 2*ν/(1-2*ν)
-    D = ufl.shape(ε)[0]
-    return 0.5*(λoverμ+2/D)*positive_part(ufl.tr(ε))**2 + \
-            ufl.inner(ufl.dev(ε),ufl.dev(ε))
 
 
 def degraded_free_energy(ε,g,ν,ψcritstar):
@@ -90,8 +98,8 @@ def degraded_pressure(p,g):
 
 def history_function(ε,Hprev,ν,ψcrit):
     ψp = free_energy_plus(ε,ν) - ψcrit
-    # ψp = free_energy(ε,ν)
     return ufl.max_value(ψp,Hprev)
+    # return ufl.conditional(ufl.gt(ψp,Hprev),ψp,Hprev)
 
 
 def water_pressure_static(msh,ρw=1.0,g=1.0):
