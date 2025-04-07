@@ -9,6 +9,7 @@ from kraken.material import Material_no_uc, Material_with_uc
 import kraken.boundaryconditions as bc
 import kraken.utilities as utilities
 import kraken.mainclass as mc
+import kraken.oneclass as oc
 from kraken.numerics import maths_functions as mf
 
 L = 2.0
@@ -118,8 +119,11 @@ no_bc = lambda V: []
 
 
 g = lambda d: mf.degradation_default(d)
-model = mc.viscoelastic_damage(msh, [bc_v,bc_v,bc_d], material, 1.0, g=g)
+model = oc.viscoelastic_damage(msh, [bc_v,bc_v,bc_d], material, 1.0, g=g)
+model.pw = fem.Function(model.D)
 
+model.setup_elastic()
+model.setup_damage()
 
 # ufl_form = lambda x: ufl.conditional(x[0]>-1.001*a,1.0,0.0)*\
 #     ufl.conditional(x[0]<1.001*a,1.0,0.0)*\
@@ -132,7 +136,7 @@ model = mc.viscoelastic_damage(msh, [bc_v,bc_v,bc_d], material, 1.0, g=g)
 # model.Hprev = fem.Function(model.history.V, name="Hprev")
 # model.Hprev.interpolate(lambda x: 1e4*crack(x))
 
-model.damage.d_lb.interpolate(crack)
+model.d_lb.interpolate(crack)
 
 # model.damage.bounded = True
 
@@ -150,8 +154,7 @@ pwc = np.sqrt(Geff*material.E/(np.pi*a*(1-material.ν**2)))
 pws = np.linspace(1.0,2.0,50)
 
 for i in range(50):
-    model.elastic.pw = lambda u: pws[i]
-    model.damage.pw = lambda u: pws[i]
+    model.pw.x.array[:] = pws[i]
     model.fixed_point_simple(max_its=200)
     utilities.write_xdmf("outputs/sneddon" + str(i) + ".xdmf",model.msh,
                         [model.v,model.d],["v","d"],t=pws[i])

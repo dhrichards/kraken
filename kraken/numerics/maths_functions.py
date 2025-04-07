@@ -46,7 +46,7 @@ def positive_part(x,eps=1e-8):
 
 
 def degradation_default(d,k=1e-5):
-    return (1-d)**2 + k
+    return (1-k)*(1-d)**2 + k
 
 
 def degradation_Lo2023(d,q=1.0):
@@ -111,10 +111,12 @@ def water_pressure_static(msh,ρw=1.0,g=1.0):
     return pw
 
 
-def water_pressure(msh,vh,uc_star=1.0):
+def water_pressure(msh,vh,uc_star=1.0,eps=1e-6):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1] + vh[msh.geometry.dim-1]*uc_star
-    return ufl.max_value(0.0,-z)
+    # return ufl.max_value(0.0,-z)
+    return 0.5*(-z + (z**2 + eps**2)**0.5)
+
 
 def body_force(msh,ρratio, α=0.0):
     if msh.geometry.dim == 2:
