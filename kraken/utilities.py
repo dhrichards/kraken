@@ -1,5 +1,5 @@
 import numpy as np
-from dolfinx import fem, io, plot
+from dolfinx import fem, io, plot, geometry
 from mpi4py import MPI
 
 
@@ -119,6 +119,59 @@ def write_xdmf(filename,msh,functions,names,t=0.0):
         file.write_mesh(msh)
         for f in functions:
             file.write_function(f,t)
+
+
+
+def extract_line(points,msh,functions):
+
+    # Interpolate expression onto order 1 function space
+    for idx,f in enumerate(functions):
+        # check if has function space
+        if hasattr(f,"ufl_function_space"):
+            if f.ufl_element().degree == 1:
+                pass
+                # functions[idx].name = names[idx]
+            else:
+                # Interpolate onto order 1
+                Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
+                temp = fem.Function(Q)
+                temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
+                # temp.name = names[idx]
+                functions[idx] = temp
+
+        else:
+            Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
+            temp = fem.Function(Q)
+            temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
+            # temp.name = names[idx]
+
+            functions[idx] = temp
+    bb_tree = geometry.bb_tree(msh, msh.topology.dim)
+
+
+    cells = []
+    points_on_proc = []
+    # Find cells whose bounding-box collide with the the points
+    cell_candidates = geometry.compute_collisions_points(bb_tree, points.T)
+    # Choose one of the cells that contains the point
+    colliding_cells = geometry.compute_colliding_cells(msh, cell_candidates, points.T)
+    for i, point in enumerate(points.T):
+        if len(colliding_cells.links(i)) > 0:
+            points_on_proc.append(point)
+            cells.append(colliding_cells.links(i)[0])
+
+
+    points_on_proc = np.array(points_on_proc, dtype=np.float64)
+
+
+    
+
+    func_vals = []
+    for f in functions:
+        func_vals.append(f.eval(points_on_proc, cells))
+
+    return points_on_proc, func_vals
+
 
 
 

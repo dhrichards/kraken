@@ -1,12 +1,11 @@
 import numpy as np
-from dolfinx import fem, default_real_type
+from dolfinx import fem
 from mpi4py import MPI
 import ufl
 import numpy as np
-import basix.ufl as bufl
-from kraken.models import stokes, damage, elasticity, surface
-from kraken import utilities
+from kraken.models import surface
 from kraken.numerics import maths_functions as mf
+from kraken.numerics import energy_splits as es
 from kraken.numerics import solvers
 from petsc4py import PETSc
 
@@ -16,7 +15,9 @@ class viscoelastic_damage:
         self.material = material
         self.dt = dt
 
-        self.bounded = True
+        self.bounded = False
+        self.w = lambda d: d**2 # dissipation
+        self.free_energy_plus = es.free_energy_plus_spectral
 
         
 
@@ -42,12 +43,15 @@ class viscoelastic_damage:
         # self.p = fem.Function(self.stokes.Q, name="pressure")
 
         self.Hprev = fem.Function(self.H_space, name="history")
-        self.pw = mf.water_pressure(self.msh,self.v,material.uc_star)
-        self.f = mf.body_force(self.msh, self.material.ρratio)
+        self.pw = mf.water_pressure(self.msh,self.v,self.material.ρw,self.material.g,self.material.patm)
+        self.f = mf.body_force(self.msh, self.material.ρi, self.material.g)
         self.n = ufl.FacetNormal(self.msh)
         self.ds = ufl.Measure("ds", domain=self.msh)
         self.g = g(self.d)
         self.Iprime = 2*self.d # derivative of Indicator function, see https://doi.org/10.1016/j.tafmec.2023.104040
+        # self.Iprime = 6*self.d - 6*self.d**2
+
+        # self.Iprime = ufl.diff(mf.Indicator(self.d),ufl.variable(self.d))
         
 
 
@@ -69,20 +73,21 @@ class viscoelastic_damage:
         
 
     def external_energy(self):
-        return self.material.C1 *( \
-             self.g * ufl.dot(self.f, self.v) \
-            # + self.pw*ufl.inner(ufl.grad(self.g), self.v)\
-            - self.pw*self.Iprime*ufl.inner(ufl.grad(self.d), self.v))* ufl.dx \
-            - self.material.C1 * self.g * self.pw *  ufl.dot(self.n, self.v) * self.ds
+        return ( \
+             self.g*ufl.dot(self.f, self.v) \
+            + self.pw*ufl.inner(ufl.grad(self.g), self.v)\
+            # - self.pw*self.Iprime*ufl.inner(ufl.grad(self.d), self.v)\
+            )* ufl.dx \
+            - self.g * self.pw * ufl.dot(self.n, self.v) * self.ds
     
     def external_energy_without_surface(self):
-        return self.material.C1 *( \
+        return ( \
               ufl.dot(self.f, self.v) \
             # + self.pw*ufl.inner(ufl.grad(self.g), self.v)\
             - self.pw*self.Iprime*ufl.inner(ufl.grad(self.d), self.v))* ufl.dx 
     
     def elastic_energy(self):
-        return mf.degraded_free_energy(mf.ε(self.v), self.g, self.material.ν, self.material.ψcritstar) * ufl.dx
+        return mf.degraded_free_energy(mf.ε(self.v), self.g, self.material.λ, self.material.μ, self.material.ψcrit, self.free_energy_plus) * ufl.dx
 
 
     def setup_elastic(self):
@@ -115,26 +120,26 @@ class viscoelastic_damage:
         
         
 
-    def setup_damage(self, w=lambda d: d**2):
+    def setup_damage(self):
 
         
-        self.w = w
+        
         s = np.linspace(0,1,500)
         self.c0 = 4*np.trapz(np.sqrt(self.w(s)),s)
 
         if self.bounded:
-            H = mf.free_energy_plus(mf.ε(self.v),self.material.ν) - self.material.ψcritstar
+            H = self.free_energy_plus(mf.ε(self.v),self.material.λ, self.material.μ) - self.material.ψcrit
         else:
-            H = mf.history_function(mf.ε(self.v),self.Hprev,self.material.ν,self.material.ψcritstar)
+            H = mf.history_function(mf.ε(self.v),self.Hprev,self.material.λ,self.material.μ,self.material.ψcrit,self.free_energy_plus)
 
-        C3 = self.material.C3; l = self.material.lstar; C1 = self.material.C1
+        l = self.material.l
 
         
 
-        dissipated_energy = (1/C3) * mf.crack_density_function(self.d,l,self.w, self.c0)*ufl.dx
+        dissipated_energy = self.material.Gc * mf.crack_density_function(self.d,l,self.w, self.c0)*ufl.dx
         elastic_energy = self.g * H * ufl.dx
        
-        total_energy = dissipated_energy + elastic_energy - self.external_energy_without_surface()
+        total_energy = dissipated_energy + elastic_energy #- self.external_energy_without_surface()
 
 
 
@@ -172,7 +177,7 @@ class viscoelastic_damage:
             h, g = ufl.TrialFunction(self.H_space), ufl.TestFunction(self.H_space)
 
             H = mf.history_function(mf.ε(self.v),self.Hprev,
-                                    self.material.ν,self.material.ψcritstar)
+                                    self.material.λ,self.material.μ,self.material.ψcrit)
 
             a = ufl.inner(h,g) * ufl.dx
             L = ufl.inner(H,g) * ufl.dx
@@ -203,17 +208,25 @@ class viscoelastic_damage:
     def fixed_point_simple(self, max_its=100, tol=1e-4):
         L2_old = 0.0
 
+        one = fem.Function(self.D)
+        one.x.array[:] = 1.0
+        area = fem.assemble_scalar(fem.form(ufl.inner(one,one)*ufl.dx))
+
+        area = np.sqrt(MPI.COMM_WORLD.allreduce(area, op=MPI.SUM))
+
+
+        
         for i in range(max_its):
             
             self.solve_damage()
             self.solve_elastic()
             
 
-            L2_ = ufl.inner(self.d,self.d)*ufl.dx 
+            L2_ = ufl.inner(self.d,self.d)*ufl.dx
             L2_rank = fem.assemble_scalar(fem.form(L2_))
             L2 = np.sqrt(MPI.COMM_WORLD.allreduce(L2_rank, op=MPI.SUM))
 
-            error_L2 = np.abs(L2 - L2_old)
+            error_L2 = np.abs(L2 - L2_old)/area
             if MPI.COMM_WORLD.rank == 0:
                 print(f"iteration {i}, error {error_L2}")
 

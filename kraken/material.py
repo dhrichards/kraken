@@ -104,6 +104,7 @@ class Material_with_uc:
         self.ψcrit = 1.0 
         self.uc = 1e-2 # Critical displacement
         self.τ = secperyr # Characteristic time in seconds
+        self.patm = 1e5 # Atmospheric pressure
 
         # self.lstar = l/L # Regularisation length
         # self.Hc = self.μ*(uc/L)**2
