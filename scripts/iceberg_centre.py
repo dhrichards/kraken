@@ -126,8 +126,8 @@ model.solve_elastic()
 
 
 import ufl
-pwincrack = model.pw*ufl.inner(ufl.grad(model.g), model.v)
-pw2 = model.pw
+pwincrack = model.p*ufl.inner(ufl.grad(model.g), model.v)
+pw2 = model.p
 
 utilities.write_xdmf(path + "iceberginit.xdmf",msh,\
                     [model.v,model.d,
@@ -163,7 +163,7 @@ points_on_proc,func_vals = utilities.extract_line(points,msh,
     mf.free_energy_plus_stocek(mf.ε(model.v),material.λ,material.μ),
     mf.cauchy_stress(mf.ε(model.v),material.λ,material.μ)[0,0],
     mf.cauchy_stress(mf.ε(model.v),material.λ,material.μ)[1,1],
-    model.pw,
+    model.p,
     λ[0],
     λ[1],
     

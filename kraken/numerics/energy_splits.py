@@ -1,9 +1,16 @@
 import ufl
 from .invariants import eigenstate, matrix_function
 
+def λoverμ(ν):
+    return 2*ν/(1-2*ν)
 
-def free_energy(ε,λ,μ):
-    return 0.5*λ*ufl.tr(ε)**2 + μ*ufl.inner(ε,ε)
+def cauchy_stress(ε,ν):
+    D = ufl.shape(ε)[0]
+    return λoverμ(ν)*ufl.tr(ε)*ufl.Identity(D) + 2*ε 
+
+
+def free_energy(ε,ν):
+    return 0.5*λoverμ(ν)*ufl.tr(ε)**2 + ufl.inner(ε,ε) 
 
 def positive_part(x,eps=1e-8):
     # return 0.5*(x + (x**2 + eps**2)**0.5)
@@ -20,35 +27,34 @@ def negative_part(x,eps=1e-6):
 
 
 
-def free_energy_plus_amor(ε,λ,μ):
-    κ = λ + 2*μ/3
+def free_energy_plus_amor(ε,ν):
+    κ = λoverμ(ν) + 2/3
     return 0.5*κ*positive_part(ufl.tr(ε))**2 + \
             ufl.inner(ufl.dev(ε),ufl.dev(ε))
 
-def free_energy_plus_star(ε,λ,μ,γ=4):
-    κ = λ + 2*μ/3
+def free_energy_plus_star(ε,ν,γ=4):
+    κ = λoverμ(ν) + 2/3
     return 0.5*κ*(positive_part(ufl.tr(ε))**2 \
                   - γ*negative_part(ufl.tr(ε))**2) \
-            + μ*ufl.inner(ufl.dev(ε),ufl.dev(ε)) 
+            + ufl.inner(ufl.dev(ε),ufl.dev(ε)) 
 
 
-def free_energy_plus_spectral(ε,λ,μ):
+def free_energy_plus_spectral(ε,ν):
     ##Spectral:
     εplus = matrix_function(ε,positive_part)
-    return 0.5*λ*positive_part(ufl.tr(ε))**2 + \
-            μ*ufl.inner(εplus,εplus)
+    return 0.5*λoverμ(ν)*positive_part(ufl.tr(ε))**2 \
+            + ufl.inner(εplus,εplus) 
 
-def free_energy_plus_stocek(ε,λ,μ):
-    κ = λ + 2*μ/3
+def free_energy_plus_stocek(ε,ν):
+    κ = λoverμ(ν) + 2*μ/3
     εplus = matrix_function(ufl.dev(ε),positive_part)
     return 0.5*κ*positive_part(ufl.tr(ε))**2 + \
-            μ*ufl.inner(εplus,εplus)
+            ufl.inner(εplus,εplus)
 
 
-def free_energy_plus_notension(ε,λ,μ):
+def free_energy_plus_notension(ε,ν):
 
     A,M = eigenstate(ε)
-    ν = λ/(2*μ + λ)
 
 
     α2 = positive_part(A[1])
@@ -75,8 +81,8 @@ def free_energy_plus_notension(ε,λ,μ):
     for α_, M_ in zip(α,M):
         Ece += α_ * M_
 
-    return free_energy(Ece,λ,μ)
+    return free_energy(Ece,ν)
 
 
-def free_energy_plus_basic(ε,λ,μ):
-    return free_energy(ε,λ,μ)
+def free_energy_plus_basic(ε,ν):
+    return free_energy(ε,ν)
