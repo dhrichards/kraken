@@ -49,7 +49,7 @@ class viscoelastic_damage:
         self.g = g(self.d)
         self.p_ext = lambda u: mf.water_pressure(self.msh,u) +self.material.patmstar
         self.η = mf.viscosity(self.u, self.material.n, 1.e-8)
-        self.f = self.g*mf.body_force(self.msh, self.material.ρratio)
+        self.f = self.g*mf.body_force(self.msh, self.material.ρratio, self.material.slope_angle)
         self.n = ufl.FacetNormal(self.msh)
         self.ds = ufl.Measure("ds", domain=self.msh)
         
@@ -83,10 +83,10 @@ class viscoelastic_damage:
                                         ψcrit, self.free_energy_plus) * ufl.dx
         
         external_energy = ( C1*ufl.dot(self.f, self.v) \
-            + C1*self.p_ext(self.v+self.u*self.dt)*ufl.inner(ufl.grad(self.g), self.v)\
+            + C1*self.p_ext(self.v)*ufl.inner(ufl.grad(self.g), self.v)\
             # - self.pw*self.Iprime*ufl.inner(ufl.grad(self.d), self.v)\
             )* ufl.dx \
-            - C1*self.g*self.p_ext(self.v+self.u*self.dt)*ufl.dot(self.n, self.v) * self.ds
+            - C1*self.g*self.p_ext(self.v)*ufl.dot(self.n, self.v) * self.ds
         
 
         total_energy = elastic_energy - external_energy
@@ -198,12 +198,12 @@ class viscoelastic_damage:
     
         
         
-        F = [((1/C2)*self.g*self.η*ufl.inner(mf.ε(self.u), mf.ε(v)) \
+        F = [((1/C2)*self.g*2*self.η*ufl.inner(mf.ε(self.u), mf.ε(v)) \
         - ufl.inner(self.p, ufl.div(v)) \
         - C1 * ufl.inner(self.f, v) \
         - C1 * self.p_ext(self.u*self.dt) * ufl.inner(ufl.grad(self.g), v)\
             ) * ufl.dx \
-        + C1 * self.g * self.p_ext(self.u*self.dt + self.v) * ufl.inner(self.n, v) * self.ds,
+        + C1 * self.g * self.p_ext(self.u*self.dt) * ufl.inner(self.n, v) * self.ds,
         - ufl.inner(ufl.div(self.u), q) * ufl.dx ]
         
         J = [[ufl.derivative(F[0], self.u, du), ufl.derivative(F[0], self.p, dp)],
