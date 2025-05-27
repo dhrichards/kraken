@@ -217,7 +217,7 @@ def nested_solve(F, J, u, p, bcs, P=None):
     Fvec = fem.petsc.create_vector_nest(F)
 
     snes = PETSc.SNES().create(MPI.COMM_WORLD)
-    snes.setTolerances(rtol=1.0e-6, max_it=100)
+    snes.setTolerances(rtol=1.0e-14, max_it=100)
     nested_IS = Jmat.getNestISs()
     snes.getKSP().setType("minres")
     snes.getKSP().setTolerances(rtol=1e-6)
