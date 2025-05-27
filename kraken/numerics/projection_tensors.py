@@ -1,0 +1,55 @@
+import ufl
+from .invariants import matrix_function, eigenstate
+from .maths_functions import ε
+from .energy_splits import positive_part
+
+
+
+def heaviside(x,eps=1e-8):
+    # return ufl.conditional(ufl.gt(x,0),1,0)
+    return 0.5*(ufl.sign(x)+1)
+    # return 0.5*(1 + x/(x**2 + eps**2)**0.5)
+
+
+def degraded_stress_P(u,u_prev,g,ν):
+    λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
+    i,j,k,l = ufl.indices(4)
+    σ = λoverμ*ufl.tr(ε(u))*I + 2*ε(u)
+    P = projection_tensor(ε(u_prev))
+    σplus = λoverμ*heaviside(ufl.tr(ε(u_prev)))*ufl.tr(ε(u))*I + \
+        2*ufl.as_tensor(P[i,j,k,l]*ε(u)[k,l],(i,j))
+    σminus = σ - σplus
+    return g*σplus + σminus
+
+    
+
+
+def projection_tensor(ε):
+    D = ufl.shape(ε)[0]
+    λ, M = eigenstate(ε)
+
+    if D == 3:
+        bofa = [[1,2],[0,2],[0,1]]
+    elif D == 2:
+        bofa = [[1],[0]]
+
+    P = ufl.zero((D,D,D,D))
+
+    for a in range(D):
+        P += heaviside(positive_part(λ[a]))*ufl.outer(M[a],M[a])
+
+
+    for a in range(D):
+        for b in bofa[a]:
+            P += 0.5*θab(λ[a],λ[b])*tensor_commuter(M[a],M[b])
+
+    return P
+
+def θab(λa,λb):
+    return (positive_part(λa)-positive_part(λb))/(λa-λb)
+
+
+def tensor_commuter(A,B):
+    i,j,k,l = ufl.indices(4)
+    return ufl.as_tensor(A[i,k]*B[j,l] + A[i,l]*B[j,k],(i,j,k,l))
+
