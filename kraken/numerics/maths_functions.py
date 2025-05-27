@@ -3,18 +3,19 @@ from .invariants import eigenstate
 from . import energy_splits as es
 from dolfinx import fem, default_scalar_type
 
-def viscosity(u, n, eps=1.e-8, A=1.0): 
-    return 0.5* A**(-1/n) * (ufl.inner(ε(u), ε(u)) / 2 + eps)**((1 - n) / (2 * n))
+def viscosity(ε, n, eps=1.e-11, A=1.0): 
+    return 0.5* A**(-1/n) * (ufl.inner(ε, ε) / 2 + eps)**((1 - n) / (2 * n))
 
-def viscous_stress(u,p,η):
-    δ = ufl.Identity(len(u))
-    return -p*δ + 2*η(u)*ε(u)
+def viscous_stress(ε,p,η,C2):
+    D = ufl.shape(ε)[0]
+    δ = ufl.Identity(D)
+    return η*ε/C2 - p*δ
 
 def ε(u):
     return ufl.sym(ufl.grad(u))
 
-
-
+def εD(u):
+    return ufl.dev(ε(u))
 
 
 def largest_eigenvalue(A):
@@ -48,14 +49,14 @@ def degraded_free_energy(ε,g,ν,ψcrit,free_energy_plus=es.free_energy_plus_spe
 
 
 def history_function(ε,Hprev,ν,ψcrit,free_energy_plus=es.free_energy_plus_spectral):
-    ψp = free_energy_plus(ε,ν) - ψcrit
+    ψp = es.free_energy_plus_spectral(ε,ν) - ψcrit
     return ufl.max_value(ψp,Hprev)
     # return ufl.conditional(ufl.gt(ψp,Hprev),ψp,Hprev)
 
 
-def water_pressure(msh,v):
+def water_pressure(msh,v,ucstar=1.0):
     x = ufl.SpatialCoordinate(msh)
-    z = x[msh.geometry.dim-1] + v[msh.geometry.dim-1]
+    z = x[msh.geometry.dim-1] + ucstar*v[msh.geometry.dim-1]
     return ufl.max_value(0.0,-z) 
     # return ufl.conditional(ufl.gt(z,0),0.0,-ρw*g*z)
     # return 0.5*(-z + (z**2 + eps**2)**0.5)
