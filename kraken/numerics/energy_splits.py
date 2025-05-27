@@ -46,7 +46,7 @@ def free_energy_plus_spectral(ε,ν):
             + ufl.inner(εplus,εplus) 
 
 def free_energy_plus_stocek(ε,ν):
-    κ = λoverμ(ν) + 2*μ/3
+    κ = λoverμ(ν) + 2/3
     εplus = matrix_function(ufl.dev(ε),positive_part)
     return 0.5*κ*positive_part(ufl.tr(ε))**2 + \
             ufl.inner(εplus,εplus)
@@ -70,7 +70,7 @@ def free_energy_plus_notension(ε,ν):
 
 
     α1 = ufl.conditional(ufl.gt(A[0],0),A[0],
-                    ufl.conditional(ufl.gt((1-ν)*A[0] + ν*A[1],0),
+                    ufl.conditional(ufl.gt((1-ν)*A[1] + ν*A[0],0),
                                     A[0] + ν*A[1]/(1-ν),0))
     
     α = [α1,α2]
@@ -82,6 +82,24 @@ def free_energy_plus_notension(ε,ν):
         Ece += α_ * M_
 
     return free_energy(Ece,ν)
+
+
+def free_energy_plus_lo(ε,ν):
+    κ = λoverμ(ν) + 2/3
+
+    λ,M = eigenstate(ε)
+
+
+    val = (1+ν)*((1-ν)*λ[1]+ν*λ[0])**2/((1-2*ν)*(1-ν**2))
+
+    return ufl.conditional(ufl.gt(λ[0],0),0.5*κ*(λ[1]+λ[0])**2 + λ[1]**2 + λ[0]**2,
+                           ufl.conditional(ufl.And(ufl.gt(λ[1],0),ufl.gt((1-ν)*λ[1] + ν*λ[0],0)),
+                                           val,0))
+                                                   
+
+    
+
+
 
 
 def free_energy_plus_basic(ε,ν):
