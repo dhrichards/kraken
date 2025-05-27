@@ -3,7 +3,7 @@ import ufl
 from dolfinx import fem, default_real_type, mesh
 import numpy as np
 from kraken.numerics import integrators
-import kraken.boundaryconditions as bc
+import kraken.boundaryconditions as bc_bottom
 
 
 
