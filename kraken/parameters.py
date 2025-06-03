@@ -21,7 +21,6 @@ class Params_total_velocity:
         self.slope_angle = 0.0
         self.σc =  0.1e6 # tensile strength
         self.ψcrit = 1.0 
-        self.uc = 1e-2 # Characteristic displacement
         self.dt = 60*60*24 # Time step in seconds
         self.patm = 1e5 # Atmospheric pressure
 
@@ -67,14 +66,19 @@ class Params_total_velocity:
         return self.τ / self.dt
     
     @property
-    def uc_star(self):
+    def uc(self):
+        return (self.ρc * self.g)**self.n * self.A * self.dt * self.L**(self.n+1)
+    
+    
+    @property
+    def ucstar(self):
         """Non dimensional critical displacement."""
         return self.uc/self.L
     
     
     @property
     def Hc(self):
-        return self.μ*(self.De*self.uc_star)**2
+        return self.μ*(self.De*self.ucstar)**2
     
     @property
     def ψcritstar(self):
@@ -96,19 +100,19 @@ class Params_total_velocity:
     @property
     def ρistar(self):
         return self.ρi/self.ρc
+    
+    @property
+    def patmstar(self):
+        return self.patm / self.pwc
+    
+    @property
+    def δ(self):
+        """Non dimensional density difference."""
+        return 1.0 - self.ρistar
 
     @property
     def lstar(self):
         return self.l/self.L
-
-
-
-
-    @property
-    def C1C2(self):
-        """Non dimensional constant describing ratio between
-        external and viscous stresses."""
-        return self.L**2 * self.ρc * self.g * self.dt / (self.uc * self.ηc)
 
    
     @property
@@ -116,12 +120,6 @@ class Params_total_velocity:
         """Non dimensional constant describing ratio between
         elastic and fracture stresses."""
         return self.Hc * self.L / self.Gc
-
-
-    def set_C1C2_to_one(self):
-        """change uc such that C1C2 = 1."""
-        self.uc = (self.ρc * self.g)**self.n * self.A * self.dt * self.L**(self.n+1)
-    
 
 
     def set_l_from_mesh(self,msh,factor=2):

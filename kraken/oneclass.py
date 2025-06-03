@@ -34,6 +34,7 @@ class viscoelastic_damage:
         self.v = fem.Function(self.V, name="elastic displacement")
         
         self.u = fem.Function(self.U, name="velocity")
+        self.u.x.array[:] = 1.0
         self.p = fem.Function(self.Q, name="pressure")
         self.u_prev = fem.Function(self.U, name="velocity_prev")
 
@@ -48,7 +49,7 @@ class viscoelastic_damage:
 
         self.g = g(self.d)
         self.p_ext = lambda u: mf.water_pressure(self.msh,u) +self.material.patmstar
-        self.η = mf.viscosity(self.u, self.material.n, 1.e-8)
+        self.η = mf.viscosity(mf.ε(self.u), self.material.n, 1.e-8)
         self.f = self.g*mf.body_force(self.msh, self.material.ρratio, self.material.slope_angle)
         self.n = ufl.FacetNormal(self.msh)
         self.ds = ufl.Measure("ds", domain=self.msh)
@@ -73,7 +74,7 @@ class viscoelastic_damage:
     def setup_all(self):
         self.setup_elastic()
         self.setup_damage()
-        self.setup_stokes()
+        self.setup_velocity()
 
     def setup_elastic(self):
 
@@ -188,7 +189,7 @@ class viscoelastic_damage:
             self.Hprev = problem.solve()
 
 
-    def setup_stokes(self):
+    def setup_velocity(self):
 
         du, dp = ufl.TrialFunction(self.U), ufl.TrialFunction(self.Q)
         v, q = ufl.TestFunction(self.U), ufl.TestFunction(self.Q)
@@ -196,7 +197,7 @@ class viscoelastic_damage:
         C1 = self.material.C1; C2 = self.material.C2
 
     
-        
+        # self.η=1.0
         
         F = [((1/C2)*self.g*2*self.η*ufl.inner(mf.ε(self.u), mf.ε(v)) \
         - ufl.inner(self.p, ufl.div(v)) \
@@ -231,7 +232,7 @@ class viscoelastic_damage:
     def solve_damage(self):
         self.damage_solver.solve(None, self.d.x.petsc_vec)
 
-    def solve_stokes(self):
+    def solve_velocity(self):
         # self.stokes.solve(self.u, self.p, self.d, self.v)
         self.stokes_solver.solve(None, self.x)
 
@@ -255,7 +256,7 @@ class viscoelastic_damage:
             self.solve_damage()
             self.solve_elastic()
             if solve_stokes:
-                self.solve_stokes()
+                self.solve_velocity()
             
 
             L2_ = ufl.inner(self.d,self.d)*ufl.dx
