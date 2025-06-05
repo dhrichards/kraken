@@ -75,6 +75,15 @@ class Params_total_velocity:
         """Non dimensional critical displacement."""
         return self.uc/self.L
     
+    @property
+    def ue(self):
+        return self.uc * self.De
+    
+    @property
+    def uestar(self):
+
+        return self.ue / self.dt
+    
     
     @property
     def Hc(self):
@@ -251,7 +260,7 @@ class Params_no_uc:
     
 
 
-class Material_with_uc:
+class Params_with_uc:
     def __init__(self):
 
         # Default material properties
@@ -268,8 +277,7 @@ class Material_with_uc:
         self.slope_angle = 0.0
         self.σc =  0.1e6 # tensile strength
         self.ψcrit = 1.0 
-        self.uc = 1e-2 # Critical displacement
-        self.τ = secperyr # Characteristic time in seconds
+        self.dt = secperyr # Characteristic time in seconds
         self.patm = 1e5 # Atmospheric pressure
 
         # self.lstar = l/L # Regularisation length
@@ -289,11 +297,40 @@ class Material_with_uc:
         return q
         
 
+    @property
+    def uc(self):
+        return self.ρc * self.g * self.L**2 / self.μ
 
     @property
     def uc_star(self):
         return self.uc/self.L
+    
 
+    @property
+    def γdot(self):
+        """Calculate the characteristic strain rate."""
+        return self.uc / (self.L* self.dt)
+    
+    @property
+    def ηc(self):
+        """Calculate the characteristic viscosity."""
+        return self.A**(-1/self.n) * self.γdot**((1-self.n)/self.n)
+    
+
+    @property
+    def τ(self):
+        """Relaxation time."""
+        return self.ηc/ self.μ
+    
+    @property
+    def dtstar(self):
+        """Non dimensional time step."""
+        return self.dt / self.τ
+    
+    @property
+    def De(self):
+        """Deborah number."""
+        return self.τ / self.dt
     
     @property
     def Hc(self):
@@ -309,11 +346,25 @@ class Material_with_uc:
     
     @property
     def pwc(self):
-        return self.ρw * self.g * self.L
+        return self.ρc * self.g * self.L
     
     @property
-    def ρratio(self):
-        return self.ρi/self.ρw
+    def ρistar(self):
+        return self.ρi/self.ρc
+    
+    @property
+    def ρc(self):
+        """Characteristic density."""
+        return self.ρw
+    
+    @property
+    def δ(self):
+        """Non dimensional density difference."""
+        return 1.0 - self.ρistar
+    
+    @property
+    def patmstar(self):
+        return self.patm / self.pwc
 
 
 
@@ -332,18 +383,14 @@ class Material_with_uc:
         """Calculate the shear modulus (second Lamé parameter)."""
         return self.E / (2 * (1 + self.ν))
 
-    @property
-    def C1(self):
-        """Non dimensional constant describing ratio between
-        external and elastic stresses."""
-        return self.L**2 * self.ρw * self.g / (self.uc * self.μ)
+  
 
     @property
     def C2(self):
         """Non dimensional constant describing ratio between
         elastic and viscousc stresses."""
         return self.A**(1/self.n) * (self.uc/self.L)**(1-1/self.n) * \
-                self.μ * self.τ**(1/self.n)
+                self.μ * self.dt**(1/self.n)
 
     @property
     def C3(self):
@@ -352,20 +399,6 @@ class Material_with_uc:
         return self.μ * self.uc**2 / (self.Gc * self.L)
 
 
-    def set_C1_to_one(self):
-        """change uc such that C1 = 1."""
-        self.uc = self.L**2 * self.ρw * self.g /  self.μ
-
-
-    def set_C2_to_one(self):
-        """change τ such that C2 = 1."""
-        self.τ = (self.A**(1/self.n) * (self.uc/self.L)**(1-1/self.n) * \
-                self.μ)**-self.n
-
-
-    def set_C3l_to_one(self):
-        """change regularisation length so C3*l=1."""
-        self.l = 1/self.C3
 
     def set_l_from_mesh(self,msh,factor=2):
         """Set the regularisation length from the mesh."""
@@ -374,10 +407,10 @@ class Material_with_uc:
         
 
     def yrs2nondimt(self,yr):
-        return yr*secperyr/self.τ
+        return yr*secperyr/self.dt
     
     def nondimt2yrs(self,t):
-        return t*self.τ/secperyr
+        return t*self.dt/secperyr
 
 
 

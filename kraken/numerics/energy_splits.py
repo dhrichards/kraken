@@ -9,6 +9,13 @@ def cauchy_stress(ε,ν):
     return λoverμ(ν)*ufl.tr(ε)*ufl.Identity(D) + 2*ε 
 
 
+def stress_plus_spectral(ε,ν):
+    I = ufl.Identity(ufl.shape(ε)[0])
+    εplus = matrix_function(ε,positive_part)
+    return λoverμ(ν)*positive_part(ufl.tr(ε))*I + 2*εplus
+
+
+
 def free_energy(ε,ν):
     return 0.5*λoverμ(ν)*ufl.tr(ε)**2 + ufl.inner(ε,ε) 
 
