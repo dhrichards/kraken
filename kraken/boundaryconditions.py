@@ -7,15 +7,29 @@ def get_boundary_dofs(V,boundary):
     fdim = msh.topology.dim - 1
     boundary_facets = mesh.locate_entities_boundary(msh, fdim, boundary)
     # boundary_dofs_x = fem.locate_dofs_topological(V, fdim, boundary_facets)
-    boundary_dofs_x = fem.locate_dofs_topological(V, fdim, boundary_facets)
+
+
+    try: # Attempt to collapse the function space
+        Vcollapse, _ = V.collapse()
+        spaces = (V, Vcollapse)
+    except RuntimeError:
+        spaces = V
+    
+    boundary_dofs_x = fem.locate_dofs_topological(spaces, fdim, boundary_facets)
 
     return boundary_dofs_x
 
+
+
 def get_zero_vec(V,dtype=default_scalar_type):
-    if V.value_size == 1:
-        return dtype(0.0)
-    else:
-        return dtype(np.array([0]*V.value_size))
+    try :
+        Vcollapse, _ = V.collapse()
+        return fem.Function(Vcollapse)
+    except RuntimeError:
+        if V.value_size == 1:
+            return dtype(0.0)
+        else:
+            return dtype(np.array([0]*V.value_size))
 
 
 def get_bc(V,boundary,bc_val):

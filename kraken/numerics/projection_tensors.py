@@ -11,6 +11,12 @@ def heaviside(x,eps=1e-8):
     # return 0.5*(1 + x/(x**2 + eps**2)**0.5)
 
 
+def degraded_pressure(p, p_prev, g):
+    pplus = heaviside(p_prev)*p
+    pminus = p - pplus
+    return g*pplus + pminus
+
+
 def degraded_stress_P(u,u_prev,g,ν):
     λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
     i,j,k,l = ufl.indices(4)
