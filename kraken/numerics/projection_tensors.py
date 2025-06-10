@@ -11,10 +11,10 @@ def heaviside(x,eps=1e-8):
     # return 0.5*(1 + x/(x**2 + eps**2)**0.5)
 
 
-def degraded_pressure(p, p_prev, g):
-    pplus = heaviside(p_prev)*p
-    pminus = p - pplus
-    return g*pplus + pminus
+def degraded_scalar(f, f_prev, g):
+    fplus = heaviside(f_prev)*f
+    fminus = f - fplus
+    return g*fplus + fminus
 
 
 def degraded_stress_P(u,u_prev,g,ν):

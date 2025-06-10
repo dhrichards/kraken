@@ -1,5 +1,5 @@
 import numpy as np
-from dolfinx import fem, io, plot, geometry
+from dolfinx import fem, io, plot, geometry, mesh
 from mpi4py import MPI
 
 
@@ -97,15 +97,12 @@ def write_xdmf(filename,msh,functions,names,t=0.0):
     for idx,f in enumerate(functions):
         # check if has function space
         if hasattr(f,"ufl_function_space"):
-            if f.ufl_element().degree == 1:
-                functions[idx].name = names[idx]
-            else:
-                # Interpolate onto order 1
-                Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
-                temp = fem.Function(Q)
-                temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
-                temp.name = names[idx]
-                functions[idx] = temp
+            # Interpolate onto order 1
+            Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
+            temp = fem.Function(Q)
+            temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
+            temp.name = names[idx]
+            functions[idx] = temp
 
         else:
             Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
@@ -175,6 +172,53 @@ def extract_line(points,msh,functions):
 
 
 
+
+
+def create_refined_mesh(length, height, 
+                        params, 
+                        aspect_ratios=(100,100), refineH = (2.2,0.3),
+                        cell_factor=2.1 ):
+    
+    nondim_length = length/params.L
+    nondim_height = height/params.L
+
+    cell_size = params.lstar/cell_factor
+
+    aspect_ratio_x = aspect_ratios[0]
+    aspect_ratio_z = aspect_ratios[1]
+
+
+
+    Hw = params.ρistar*nondim_height
+
+    x_change = nondim_length/2 - nondim_height*refineH[0]
+    z_change = nondim_height - nondim_height*refineH[1]
+
+    new_length = x_change/aspect_ratio_x + (nondim_length/2 - x_change)
+    new_height = z_change/aspect_ratio_z + (nondim_height - z_change)
+
+    nx = int(new_length/cell_size)
+    nz = int(new_height/cell_size)
+
+    msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                                [np.array([0, 0]), np.array([new_length, new_height])],
+                                [nx,nz], mesh.CellType.quadrilateral)
+    
+    
+    x = msh.geometry.x[:,0]
+
+    x[x>x_change/aspect_ratio_x] = x_change + x[x>x_change/aspect_ratio_x] - x_change/aspect_ratio_x
+    x[x<=x_change/aspect_ratio_x] = x[x<=x_change/aspect_ratio_x]*aspect_ratio_x
+
+    msh.geometry.x[:,0] = x
+
+    z = msh.geometry.x[:,1]
+    z[z>z_change/aspect_ratio_z] = z_change + z[z>z_change/aspect_ratio_z] - z_change/aspect_ratio_z
+    z[z<=z_change/aspect_ratio_z] = z[z<=z_change/aspect_ratio_z]*aspect_ratio_z
+
+    msh.geometry.x[:,1] = z - Hw
+
+    return msh
 
 
 

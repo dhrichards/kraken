@@ -77,6 +77,7 @@ class viscoelastic_damage:
 
         du_v = (self.u_v - self.u_v_prev_time)/self.params.dtstar
         du_v_prev_it = (self.u_v_prev_it - self.u_v_prev_time)/self.params.dtstar
+        
 
 
         η = mf.viscosity(mf.ε(du_v_prev_it), self.params.n, 1.e-8)
@@ -94,18 +95,18 @@ class viscoelastic_damage:
 
 
         # p_deg = self.g*es.positive_part(-self.p) + es.negative_part(-self.p)
-        p_deg = pt.degraded_pressure(self.p, self.p_prev_it, self.g)
+        p_deg = pt.degraded_scalar(-self.p, -self.p_prev_it, self.g)
         n = ufl.FacetNormal(self.msh)
 
         F = (ufl.inner(σ, mf.ε(v_v))\
               - ufl.inner(f, v_v) 
-            #  - p_ext* ufl.inner(ufl.grad(self.g), v_v)\
+             - p_ext* ufl.inner(ufl.grad(self.g), v_v)\
               ) * ufl.dx \
             + self.g * p_ext * ufl.inner(n, v_v) * ufl.ds \
             + self.g*η*ufl.inner(mf.ε(du_v), mf.ε(v)) * ufl.dx \
-            - ufl.inner(p_deg, ufl.div(v)) * ufl.dx \
+            + ufl.inner(p_deg, ufl.div(v)) * ufl.dx \
             - ufl.inner(σ, mf.ε(v)) * ufl.dx \
-            - ufl.inner(ufl.div(du_v), q) * ufl.dx \
+            - ufl.inner(pt.degraded_scalar(ufl.div(du_v),-self.p_prev_it,self.g), q) * ufl.dx \
             
 
         J = ufl.derivative(F,self.w,ufl.TrialFunction(self.W))
