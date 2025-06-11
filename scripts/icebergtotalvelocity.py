@@ -51,9 +51,9 @@ params = kp.Params_with_uc()
 
 # material = Material_with_uc()
 params.L = 300.00
-params.l = 10.0
-params.dt = 60*60*24*2
-params.ψcrit = 1.5
+params.l = 6.0
+params.dt = 60*60*24*5
+params.ψcrit = 1.0
 params.patm = 0.0
 
 nondim_length = true_length/params.L
@@ -81,9 +81,25 @@ model = jk2.viscoelastic_damage(msh, [u_bc_mixed,bc_d], params)
 
 
 #%%
+
+gs = [6.8,7.5,8.5]
+
+for i in range(len(gs)):
+    model.params.g = gs[i]
+    model.setup_displacement()
+    model.setup_damage() 
+
+    model.fixed_point(min_its=10)
+
+    utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf", msh,
+                        [model.u, model.d, model.u_v,
+                         model.u-model.u_v],
+                    ["u", "d", "u_v","u_e"], t=i)
+    
+
+model.params.g = 9.8
 model.setup_displacement()
 model.setup_damage()
-
 
 for i in range(300):
 
@@ -95,7 +111,7 @@ for i in range(300):
     p_ext = mf.water_pressure(model.msh,model.u,model.params.uc_star) +model.params.patmstar
     
     ψplus = es.free_energy_plus_spectral(mf.ε(model.u_e), params.ν)
-    utilities.write_xdmf("path/iceberginit" + str(i) + ".xdmf", msh,
+    utilities.write_xdmf(path + "/iceberg" + str(i) + ".xdmf", msh,
                         [model.u, model.d, model.u_v,
                          model.u-model.u_v,model.Hprev, 
                          ufl.div(model.u_v-model.u_v_prev_time), ψplus,
