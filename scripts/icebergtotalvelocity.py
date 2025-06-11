@@ -30,7 +30,7 @@ def crack(x):
     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
 
 def fixed(x):
-    return x[0]<(nondim_length/2 - 1.4*nondim_height)#*(x[1]>-60))
+    return x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height)#*(x[1]>-60))
 
 
 ## check mpi size is correct
@@ -51,8 +51,8 @@ params = kp.Params_with_uc()
 
 # material = Material_with_uc()
 params.L = 300.00
-params.l = 6.0
-params.dt = 60*60*24*5
+params.l = 10.0
+params.dt = 60*60*24*10
 params.ψcrit = 1.0
 params.patm = 0.0
 
@@ -61,9 +61,9 @@ nondim_height = true_height/params.L
 Hw = params.ρistar*nondim_height
 
 
-
+refineH = (1.4,0.3)
 msh = utilities.create_refined_mesh(16e3, 300, params,
-                                     aspect_ratios=(100,100), refineH=(1.5,0.3),
+                                     aspect_ratios=(100,1), refineH=refineH,
                                      cell_factor=2.1)
 
 
@@ -81,7 +81,7 @@ model = jk2.viscoelastic_damage(msh, [u_bc_mixed,bc_d], params)
 
 
 #%%
-
+min_its = 10
 gs = [6.8,7.5,8.5]
 
 for i in range(len(gs)):
@@ -106,7 +106,10 @@ for i in range(300):
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
-    model.fixed_point(min_its=10)#tol=-1, max_its = 10)
+    if i > 20:
+        min_its = 5
+
+    model.fixed_point(min_its=min_its,tol=1e-5)#tol=-1, max_its = 10)
 
     p_ext = mf.water_pressure(model.msh,model.u,model.params.uc_star) +model.params.patmstar
     
