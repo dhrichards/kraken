@@ -82,20 +82,21 @@ class viscoelastic_damage:
 
         η = mf.viscosity(mf.ε(du_v_prev_it), self.params.n, 1.e-8)
 
-        # σ0 = es.cauchy_stress(mf.ε(self.u_e), self.params.ν)
-        # σplus = es.stress_plus_spectral(mf.ε(self.u_e), self.params.ν)
-        # σminus = σ0 - σplus
+        σ0 = es.cauchy_stress(mf.ε(self.u_e), self.params.ν)
+        σplus = es.stress_plus_spectral(mf.ε(self.u_e), self.params.ν)
+        σminus = σ0 - σplus
         # σ = self.g*σplus + σminus
-        # σ = self.g*σ0
+        σ = self.g*σ0
 
-        σ = pt.degraded_stress_P(self.u_e, self.u_e_prev_it, self.g, self.params.ν)
+        # σ = pt.degraded_stress(self.u_e, self.u_e_prev_it, self.g, self.params.ν)
 
         p_ext = mf.water_pressure(self.msh,self.u,self.params.uc_star) +self.params.patmstar
         f = self.g*mf.body_force(self.msh, self.params.ρistar, self.params.slope_angle)
 
 
         # p_deg = self.g*es.positive_part(-self.p) + es.negative_part(-self.p)
-        p_deg = pt.degraded_scalar(-self.p, -self.p_prev_it, self.g)
+        # p_deg = pt.degraded_scalar(-self.p, -self.p_prev_it, self.g)
+        p_deg = self.g*-self.p
         n = ufl.FacetNormal(self.msh)
 
         F = (ufl.inner(σ, mf.ε(v_v))\
@@ -106,7 +107,8 @@ class viscoelastic_damage:
             + self.g*η*ufl.inner(mf.ε(du_v), mf.ε(v)) * ufl.dx \
             + ufl.inner(p_deg, ufl.div(v)) * ufl.dx \
             - ufl.inner(σ, mf.ε(v)) * ufl.dx \
-            - ufl.inner(pt.degraded_scalar(ufl.div(du_v),-self.p_prev_it,self.g), q) * ufl.dx \
+            - ufl.inner(self.g*ufl.div(du_v), q) * ufl.dx \
+            # - ufl.inner(pt.degraded_scalar(ufl.div(du_v),-self.p_prev_it,self.g), q) * ufl.dx \
             
 
         J = ufl.derivative(F,self.w,ufl.TrialFunction(self.W))

@@ -51,9 +51,10 @@ params = kp.Params_with_uc()
 
 # material = Material_with_uc()
 params.L = 300.00
-params.l = 10.0
-params.dt = 60*60*24*10
-params.ψcrit = 1.0
+params.l = 12.0
+params.dt = 60*60*24*50
+params.ψcrit = 0.5
+params.Gc = 1.0
 params.patm = 0.0
 
 nondim_length = true_length/params.L
@@ -107,18 +108,21 @@ for i in range(300):
         print("Iteration: ", i)
 
     if i > 20:
-        min_its = 5
+        min_its = 3
 
     model.fixed_point(min_its=min_its,tol=1e-5)#tol=-1, max_its = 10)
 
     p_ext = mf.water_pressure(model.msh,model.u,model.params.uc_star) +model.params.patmstar
     
+    ψ = es.free_energy(mf.ε(model.u_e), model.params.ν)
     ψplus = es.free_energy_plus_spectral(mf.ε(model.u_e), params.ν)
-    utilities.write_xdmf(path + "/iceberg" + str(i) + ".xdmf", msh,
+    ψminus = ψ - ψplus
+
+    utilities.write_xdmf(path + "/iceberg12gc" + str(i) + ".xdmf", msh,
                         [model.u, model.d, model.u_v,
                          model.u-model.u_v,model.Hprev, 
-                         ufl.div(model.u_v-model.u_v_prev_time), ψplus,
+                         ufl.div(model.u_v-model.u_v_prev_time), ψplus, ψminus,
                          p_ext*ufl.grad(model.g)],
-                    ["u", "d", "u_v","u_e","Hprev","div_u_v","psiplus","test"], t=i)
+                    ["u", "d", "u_v","u_e","Hprev","div_u_v","psiplus","psiminus","test"], t=i)
     # model.move_mesh()
     model.w_prev_time.x.array[:] = model.w.x.array[:]
