@@ -302,14 +302,19 @@ class Params_with_uc:
         return self.ρc * self.g * self.L**2 / self.μ
 
     @property
-    def uc_star(self):
+    def ucstar(self):
         return self.uc/self.L
+    
+    @property
+    def τ(self):
+        """Relaxation time."""
+        return self.A**(-1) * self.ucstar**(1-self.n) * self.μ**(-self.n)
     
 
     @property
     def γdot(self):
         """Calculate the characteristic strain rate."""
-        return self.uc / (self.L* self.dt)
+        return self.ucstar / self.τ
     
     @property
     def ηc(self):
@@ -318,11 +323,6 @@ class Params_with_uc:
     
 
     @property
-    def τ(self):
-        """Relaxation time."""
-        return self.ηc/ self.μ
-    
-    @property
     def dtstar(self):
         """Non dimensional time step."""
         return self.dt / self.τ
@@ -330,11 +330,11 @@ class Params_with_uc:
     @property
     def De(self):
         """Deborah number."""
-        return self.τ / self.dt
+        return 1 / self.dtstar
     
     @property
     def Hc(self):
-        return self.μ*(self.uc/self.L)**2
+        return self.μ*(self.ucstar)**2
     
     @property
     def ψcritstar(self):
@@ -342,7 +342,12 @@ class Params_with_uc:
     
     @property
     def pc(self):
-        return self.μ * self.uc / self.L
+        return self.μ * self.ucstar
+    
+    @property
+    def ρc(self):
+        """Characteristic density."""
+        return self.ρw
     
     @property
     def pwc(self):
@@ -352,10 +357,7 @@ class Params_with_uc:
     def ρistar(self):
         return self.ρi/self.ρc
     
-    @property
-    def ρc(self):
-        """Characteristic density."""
-        return self.ρw
+    
     
     @property
     def δ(self):
@@ -390,7 +392,7 @@ class Params_with_uc:
         """Non dimensional constant describing ratio between
         elastic and viscousc stresses."""
         return self.A**(1/self.n) * (self.uc/self.L)**(1-1/self.n) * \
-                self.μ * self.dt**(1/self.n)
+                self.μ * self.τ**(1/self.n)
 
     @property
     def C3(self):
