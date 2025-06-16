@@ -15,6 +15,13 @@ def stress_plus_spectral(ε,ν):
     return λoverμ(ν)*positive_part(ufl.tr(ε))*I + 2*εplus
 
 
+def stress_plus_amor(ε,ν):
+    D = ufl.shape(ε)[0]
+    I = ufl.Identity(D)
+    κ = λoverμ(ν) + 2/D
+    return κ*positive_part(ufl.tr(ε))*I + 2*ufl.dev(ε)
+
+
 
 def free_energy(ε,ν):
     return 0.5*λoverμ(ν)*ufl.tr(ε)**2 + ufl.inner(ε,ε) 

@@ -73,3 +73,14 @@ def body_force(msh,ρratio, α=0.0):
             0.0,
             -ρratio*ufl.cos(α*ufl.pi/180))))
     return f
+
+
+def body_force_with_water(msh,ρi,g):
+    x = ufl.SpatialCoordinate(msh)
+    z = x[msh.geometry.dim-1]
+    f = fem.Constant(msh, default_scalar_type((0.0,-1.0)))
+
+    ρa = 1e-3; ρw = 1.0
+    ρw = ufl.conditional(ufl.gt(z,0),ρa,ρw)
+
+    return g*ρi*f + (1-g)*ρw*f
