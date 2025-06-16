@@ -18,6 +18,7 @@ class viscoelastic_damage:
         self.msh = msh
         self.params = params
 
+        self.free_energy_plus = es.free_energy_plus_spectral
 
 
         self.u_el = bufl.element("CG", self.msh.basix_cell(), 2, shape=(self.msh.geometry.dim,))
@@ -26,11 +27,10 @@ class viscoelastic_damage:
         self.mixed_el = bufl.mixed_element([self.u_el, self.u_el, self.p_el])
 
         self.W = fem.functionspace(self.msh, self.mixed_el)
-        self.w = fem.Function(self.W, name="mixed function")
+        self.dw = fem.Function(self.W, name="mixed function")
 
-        self.u, self.u_v, self.p = ufl.split(self.w)
-        self.u_e = self.u - self.u_v
-        self.ε_e = mf.ε(self.u_e)
+        self.du, self.du_v, self.dp = ufl.split(self.dw)
+        self.du_e = self.du - self.du_v
 
         self.W0 = self.W.sub(0)
         self.W1 = self.W.sub(1)
@@ -42,17 +42,22 @@ class viscoelastic_damage:
 
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
         self.u_prev_time, self.u_v_prev_time, self.p_prev_time = ufl.split(self.w_prev_time)
+        self.u_e_prev_time = self.u_prev_time - self.u_v_prev_time
 
-        self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
-        self.u_prev_it, self.u_v_prev_it, self.p_prev_it = ufl.split(self.w_prev_it)
-        self.u_e_prev_it = self.u_prev_it - self.u_v_prev_it
+        self.dw_prev_it = fem.Function(self.W, name="mixed function previous iteration")
+        self.du_prev_it, self.du_v_prev_it, self.dp_prev_it = ufl.split(self.dw_prev_it)
+        self.du_e_prev_it = self.du_prev_it - self.du_v_prev_it
 
+        self.u = self.u_prev_time + self.du
+        self.u_v = self.u_v_prev_time + self.du_v
+        self.u_e = self.u_e_prev_time + self.du_e
+        self.p = self.p_prev_time + self.dp
 
         self.V = fem.functionspace(self.msh, ("Lagrange", 1, (self.msh.geometry.dim, )))
         self.D = fem.functionspace(self.msh, ("Lagrange", 1))
 
         # self.H_el = bufl.quadrature_element(
-        #     self.msh.basix_cell(), value_shape=(), scheme="default", degree=2
+        #     self.msh.basix_cell(), value_shape=(), scheme="default", degree=1
         # )
         self.H_space = fem.functionspace(self.msh, ("DG", 1))
 
@@ -63,12 +68,11 @@ class viscoelastic_damage:
         self.d = fem.Function(self.D, name="damage")
         self.d_prev_time = fem.Function(self.D, name="damage previous time")
         self.Hprev = fem.Function(self.H_space, name="history")
-        self.H = mf.history_function(self.ε_e, self.Hprev,
-                                    self.params.ν, self.params.ψcritstar)
 
         self.g = g(self.d)
         
      
+        self.move_mesh = self.lagrangian_update
 
 
     def setup_displacement(self):
@@ -76,54 +80,50 @@ class viscoelastic_damage:
 
         w_test = ufl.TestFunction(self.W)
         v, v_v, q = ufl.split(w_test)
-        
+        n = ufl.FacetNormal(self.msh)
 
-        du_v = (self.u_v - self.u_v_prev_time)/self.params.dtstar
-        du_v_prev_it = (self.u_v_prev_it - self.u_v_prev_time)/self.params.dtstar
-        
+        δt = self.params.dtstar
+    
 
 
-        η = mf.viscosity(mf.ε(du_v_prev_it), self.params.n, 1.e-8)
+        η = mf.viscosity(mf.ε(self.du_v_prev_it/δt), self.params.n, 1.e-8)
 
-        x = ufl.SpatialCoordinate(self.msh)
-        z = x[self.msh.geometry.dim-1] + self.u[self.msh.geometry.dim-1]*self.params.ucstar
-        
-        σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
-        σplus = es.stress_plus_spectral(self.ε_e, self.params.ν)
+      
+        # σ0 = es.cauchy_stress(mf.ε(self.du_e), self.params.ν)
+        # σplus = es.stress_plus_amor(mf.ε(self.u_e), self.params.ν)
         # σplus = σ0 - self.params.ρistar*(z+self.params.δ)*ufl.Identity(self.msh.geometry.dim)
-        σminus = σ0 - σplus
-        σ = self.g*σplus + σminus
+        # σminus = σ0 - σplus
+        # σ = self.g*σplus + σminus
         # σ = self.g*σ0
 
-        # σ = pt.degraded_stress(mf.ε(self.u_e), mf.ε(self.u_e_prev_it), self.g, self.params.ν)
+        σ = pt.degraded_stress(self.u_e, 
+                               self.du_e_prev_it+self.u_e_prev_time, 
+                               self.g, self.params.ν)
 
         p_ext = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
         f = mf.body_force(self.msh, self.params.ρistar, self.params.slope_angle)
 
-        # f = mf.body_force_with_water(self.msh, self.params.ρistar, self.g)
-        # σ +=   - (1-self.g)*p_ext*ufl.Identity(self.msh.geometry.dim) # biot 
-
         # p_deg = self.g*es.positive_part(-self.p) + es.negative_part(-self.p)
-        p_deg = pt.degraded_scalar(-self.p, -self.p_prev_it, self.g)
+        p_deg = pt.degraded_scalar(-self.dp, -self.dp_prev_it, self.g)
         # p_deg = self.g*-self.p
-        n = ufl.FacetNormal(self.msh)
+        
 
         F = (ufl.inner(σ, mf.ε(v_v))\
               - ufl.inner(f, v_v) 
              - p_ext* ufl.inner(ufl.grad(self.g), v_v)\
               ) * ufl.dx \
-            + self.g*p_ext * ufl.inner(n, v_v) * ufl.ds \
-            + self.g*η*ufl.inner(mf.ε(du_v), mf.ε(v)) * ufl.dx \
-            + ufl.inner(p_deg, ufl.div(v)) * ufl.dx \
+            + p_ext * ufl.inner(n, v_v) * ufl.ds \
+            + self.g*η*ufl.inner(mf.ε(self.du_v/δt), mf.ε(v)) * ufl.dx \
+            + ufl.inner(-self.p, ufl.div(v)) * ufl.dx \
             - ufl.inner(σ, mf.ε(v)) * ufl.dx \
-            - ufl.inner(ufl.div(du_v), q) * ufl.dx \
+            - ufl.inner(ufl.div(self.du_v/δt), q) * ufl.dx \
             # - ufl.inner(pt.degraded_scalar(ufl.div(du_v),-self.p_prev_it,self.g), q) * ufl.dx 
             
 
-        J = ufl.derivative(F,self.w,ufl.TrialFunction(self.W))
+        J = ufl.derivative(F,self.dw,ufl.TrialFunction(self.W))
             
         
-        self.problem = solvers.SNESProblem(F, self.w, bcs=self.bc_u)
+        self.problem = solvers.SNESProblem(F, self.dw, bcs=self.bc_u)
 
         self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
         # self.solver.setType("newtonls")
@@ -157,12 +157,26 @@ class viscoelastic_damage:
         η = self.params.crack_viscosity
 
     
+        H = mf.history_function(mf.ε(self.du_e),self.Hprev,ν,ψcrit,
+                                    self.free_energy_plus)
+
+
         v = ufl.TestFunction(self.D)
+
+        # dissipated_energy = (1/C3) * mf.crack_density_function(self.d,l)*ufl.dx
+        # elastic_energy = self.g * H * ufl.dx
+       
+        # total_energy = dissipated_energy + elastic_energy #- self.external_energy_without_surface()
+
+
+
+        # F = ufl.derivative(total_energy,self.d,ufl.TestFunction(self.D))
+        # 
 
 
         F = (η*(ufl.inner(self.d,v) - ufl.inner(self.d_prev_time,v))/self.params.dtstar \
                 + ufl.inner(self.d,v) + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
-                - C3*l*2*(1-self.d)*self.H*v) * ufl.dx
+                - C3*l*2*(1-self.d)*H*v) * ufl.dx
         J = ufl.derivative(F,self.d,ufl.TrialFunction(self.D))
 
 
@@ -186,28 +200,30 @@ class viscoelastic_damage:
 
     def update_history(self):
 
-      
+    
 
-        # h, g = ufl.TrialFunction(self.H_space), ufl.TestFunction(self.H_space)
 
+        h, g = ufl.TrialFunction(self.H_space), ufl.TestFunction(self.H_space)
+
+        H = mf.history_function(mf.ε(self.du_e),self.Hprev,
+                                self.params.ν,self.params.ψcritstar)
+
+        a = ufl.inner(h,g) * ufl.dx
+        L = ufl.inner(H,g) * ufl.dx
+
+        problem = fem.petsc.LinearProblem(a, L, 
+                [], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
         
+        temp = problem.solve()
 
-        # a = ufl.inner(h,g) * ufl.dx
-        # L = ufl.inner(self.H,g) * ufl.dx
-
-        # problem = fem.petsc.LinearProblem(a, L, 
-        #         [], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-        
-        # temp = problem.solve()
-
-        # self.Hprev.x.array[:] = temp.x.array[:]
+        self.Hprev.x.array[:] = temp.x.array[:]
 
         # interpolate the history function
-        self.Hprev.interpolate(fem.Expression(self.H,self.H_space.element.interpolation_points()))
+        # self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
 
     def solve_displacement(self):
-        self.solver.solve(None, self.w.x.petsc_vec)
-        self.w_prev_it.x.array[:] = self.w.x.array[:]
+        self.solver.solve(None, self.dw.x.petsc_vec)
+        self.dw_prev_it.x.array[:] = self.dw.x.array[:]
 
     def solve_damage(self):
         self.damage_solver.solve(None, self.d.x.petsc_vec)
@@ -253,5 +269,13 @@ class viscoelastic_damage:
 
 
     
-    def timestep(self):
-        self.w_prev_time.x.array[:] = self.w.x.array[:]
+    def lagrangian_update(self):
+        
+        uhh = fem.Function(self.V)
+        uhh.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+        self.msh.geometry.x[:,:self.msh.geometry.dim] += self.params.ucstar*uhh.x.array.reshape((-1, self.msh.geometry.dim))
+        
+        self.w_prev_time.x.array[:] += self.dw.x.array[:]
+        self.d_prev_time.x.array[:] = self.d.x.array[:]
+        # self.w.x.array[:] = 0.0
+        
