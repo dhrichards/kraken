@@ -34,7 +34,9 @@ echo "START `date +%F\ %T`"
 
 conda activate /data/hpcdata/users/dancha/conda-envs/fenicsx
 
-COMMAND="mpirun -n 2 python /data/hpcdata/users/dancha/kraken/kraken3/scripts/iceberg_hpc.py"
+COMMAND="srun -n 2 python /data/hpcdata/users/dancha/kraken/kraken3/scripts/iceberg_hpc.py"
+
+mpirun --version
 
 echo "Running $COMMAND"
 eval $COMMAND
