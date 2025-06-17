@@ -2,10 +2,10 @@
 #SBATCH --output=/users/dancha/jobs/myfirstjob.%j.%N.out
 #SBATCH --error=/users/dancha/jobs/myfirstjob.%j.%N.err
 #SBATCH --job-name=icebergtest
-#SBATCH --mem=4gb
+#SBATCH --ntasks=2
+#SBATCH --cpus-per-task=2
+#SBATCH --mem=128gb
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
-#SBATCH --cpus-per-task=1
 #SBATCH --time=00:15:00
 #SBATCH --partition=rocky
 #SBATCH --account=rocky
@@ -23,4 +23,4 @@ cd /users/dancha/kraken3/scripts
 mpirun --version
 
 
-srun -n 4 python3 iceberg_hpc.py
+srun -n 2 python3 iceberg_hpc.py
