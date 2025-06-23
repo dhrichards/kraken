@@ -279,13 +279,9 @@ class Params_with_uc:
         self.ψcrit = 1.0 
         self.dt = secperyr # Characteristic time in seconds
         self.patm = 1e5 # Atmospheric pressure
+        self.crack_viscosity = 1e6 # dunno what the units are for this
 
-        # self.lstar = l/L # Regularisation length
-        # self.Hc = self.μ*(uc/L)**2
-        # self.ψcritstar = self.ψcrit / self.Hc
-        # self.pc = self.μ * uc / L
-        # self.pwc = self.ρw * self.g * L
-        # self.ρratio = self.ρi/self.ρw
+
 
     @property
     def q(self):
@@ -393,6 +389,170 @@ class Params_with_uc:
         elastic and viscousc stresses."""
         return self.A**(1/self.n) * (self.uc/self.L)**(1-1/self.n) * \
                 self.μ * self.τ**(1/self.n)
+
+    @property
+    def C3(self):
+        """Non dimensional constant describing ratio between
+        elastic and fracture stresses."""
+        return self.μ * self.uc**2 / (self.Gc * self.L)
+
+
+
+    def set_l_from_mesh(self,msh,factor=2):
+        """Set the regularisation length from the mesh."""
+        h = mesh_sizes(msh)
+        self.lstar = factor*h.max()
+        
+
+    def yrs2nondimt(self,yr):
+        return yr*secperyr/self.dt
+    
+    def nondimt2yrs(self,t):
+        return t*self.dt/secperyr
+
+
+
+
+
+
+    
+
+
+
+
+
+
+class wrong:
+    def __init__(self):
+
+        # Default material properties
+        self.ρi = 900 # Density of ice
+        self.ρw = 1000 # Density of water
+        self.g = 9.81 # Gravitational acceleration
+        self.E = 9.33e9 # Young's modulus
+        self.ν = 0.325 # Poisson's ratio
+        self.A = 1.2e-25 # Flow law parameter
+        self.n = 3.0 # Flow law exponent
+        self.Gc = 1.0 # Fracture toughness
+        self.L = 100 # Characteristic length
+        self.l = 0.5 # Regularisation length
+        self.slope_angle = 0.0
+        self.σc =  0.1e6 # tensile strength
+        self.ψcrit = 1.0 
+        self.dt = secperyr # Characteristic time in seconds
+        self.patm = 1e5 # Atmospheric pressure
+
+        # self.lstar = l/L # Regularisation length
+        # self.Hc = self.μ*(uc/L)**2
+        # self.ψcritstar = self.ψcrit / self.Hc
+        # self.pc = self.μ * uc / L
+        # self.pwc = self.ρw * self.g * L
+        # self.ρratio = self.ρi/self.ρw
+
+    @property
+    def q(self):
+        """Calculate the paramerter q for Lo et al. degradation model."""
+        a = 3*self.Gc*self.E / (8*self.l*self.σc**2)
+        q = 1.0
+        for i in range(100):
+            q = a/np.log((1+q)/q)
+        return q
+        
+
+    @property
+    def uc(self):
+        return self.ρc * self.g * self.L**2 / self.μ
+
+    @property
+    def ucstar(self):
+        return self.uc/self.L
+    
+
+    @property
+    def γdot(self):
+        """Calculate the characteristic strain rate."""
+        return self.uc / (self.L* self.dt)
+    
+    @property
+    def ηc(self):
+        """Calculate the characteristic viscosity."""
+        return self.A**(-1/self.n) * self.γdot**((1-self.n)/self.n)
+    
+
+    @property
+    def τ(self):
+        """Relaxation time."""
+        return self.ηc/ self.μ
+    
+    @property
+    def dtstar(self):
+        """Non dimensional time step."""
+        return self.dt / self.τ
+    
+    @property
+    def De(self):
+        """Deborah number."""
+        return self.τ / self.dt
+    
+    @property
+    def Hc(self):
+        return self.μ*(self.uc/self.L)**2
+    
+    @property
+    def ψcritstar(self):
+        return self.ψcrit / self.Hc
+    
+    @property
+    def pc(self):
+        return self.μ * self.uc / self.L
+    
+    @property
+    def pwc(self):
+        return self.ρc * self.g * self.L
+    
+    @property
+    def ρistar(self):
+        return self.ρi/self.ρc
+    
+    @property
+    def ρc(self):
+        """Characteristic density."""
+        return self.ρw
+    
+    @property
+    def δ(self):
+        """Non dimensional density difference."""
+        return 1.0 - self.ρistar
+    
+    @property
+    def patmstar(self):
+        return self.patm / self.pwc
+
+
+
+    @property
+    def lstar(self):
+        return self.l/self.L
+
+
+    @property
+    def λ(self):
+        """Calculate the first Lamé parameter."""
+        return self.ν * self.E / ((1 + self.ν) * (1 - 2 * self.ν))
+
+    @property
+    def μ(self):
+        """Calculate the shear modulus (second Lamé parameter)."""
+        return self.E / (2 * (1 + self.ν))
+
+  
+
+    @property
+    def C2(self):
+        """Non dimensional constant describing ratio between
+        elastic and viscousc stresses."""
+        return self.A**(1/self.n) * (self.uc/self.L)**(1-1/self.n) * \
+                self.μ * self.dt**(1/self.n)
 
     @property
     def C3(self):
