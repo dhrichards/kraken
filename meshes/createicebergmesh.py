@@ -1,14 +1,14 @@
 #%%
 import gmsh
 from dolfinx import io
-from kraken.material import Material_no_uc
+from kraken.parameters import Params_no_uc
 from mpi4py import MPI
 
 
 true_length = 4e3
 true_height = 300
 
-material = Material_no_uc()
+material = Params_no_uc()
 material.L = true_height
 material.τ = 3600*24  
 

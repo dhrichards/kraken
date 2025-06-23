@@ -1,7 +1,7 @@
 #%%
 import gmsh
 from dolfinx import io
-from kraken.material import Material_no_uc
+from kraken.parameters import Params_no_uc
 from mpi4py import MPI
 
 

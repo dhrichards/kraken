@@ -12,7 +12,7 @@ notch_width = 1
 notch_depth = 26
 thickness = 42
 
-size_small = 0.5
+size_small = 0.25
 size_large = 5
 
 z_el = int(thickness/size_small)
