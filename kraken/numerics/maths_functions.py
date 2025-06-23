@@ -74,6 +74,27 @@ def body_force(msh,ρratio, α=0.0):
             -ρratio*ufl.cos(α*ufl.pi/180))))
     return f
 
+def external_density(msh):
+    x = ufl.SpatialCoordinate(msh)
+    z = x[msh.geometry.dim-1]
+    ρa = 1e-3; ρw = 1.0
+    return ufl.conditional(ufl.gt(z,0),0.0,ρw)
+
+
+def water_body_force(msh,α=0.0):
+    ρw = external_density(msh)
+    if msh.geometry.dim == 2:
+        f = ρw*fem.Constant(msh, default_scalar_type((
+                        ufl.sin(α*ufl.pi/180), 
+                        -ufl.cos(α*ufl.pi/180))))
+    else:
+        f = ρw*fem.Constant(msh, default_scalar_type((
+            ufl.sin(α*ufl.pi/180),
+            0.0,
+            -ufl.cos(α*ufl.pi/180))))
+    return f
+
+
 
 def body_force_with_water(msh,ρi,g):
     x = ufl.SpatialCoordinate(msh)

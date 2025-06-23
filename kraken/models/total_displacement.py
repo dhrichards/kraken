@@ -25,7 +25,7 @@ class viscoelastic_damage:
 
 
         self.u_el = bufl.element("CG", msh.basix_cell(), 2, shape=(msh.geometry.dim,))
-        self.ε_el = bufl.element("DG", msh.basix_cell(), 1, shape=(2,2))
+        self.ε_el = bufl.element("CG", msh.basix_cell(), 2, shape=(2,2))
         self.p_el = bufl.element("CG", msh.basix_cell(), 1)
 
         self.mixed_el = bufl.mixed_element([self.u_el, self.ε_el, self.p_el])
@@ -64,7 +64,7 @@ class viscoelastic_damage:
 
         self.g = g(self.d)
 
-    def setup_all(self):
+    def setup(self):
         self.setup_displacement()
         self.setup_damage()
 

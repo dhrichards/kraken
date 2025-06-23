@@ -36,6 +36,8 @@ class viscoelastic_damage:
         self.p_prev_time = fem.Function(self.Q, name="pressure_prev")
         self.σD_prev_time = fem.Function(self.T, name="stress_prev")
 
+        self.total_disp_prev_time = fem.Function(self.U, name="total_disp_prev")
+
         self.d = fem.Function(self.D, name="damage")
         self.d_lb = fem.Function(self.D, name="damage_lb")
         self.d_ub = fem.Function(self.D, name="damage_ub")
@@ -57,19 +59,14 @@ class viscoelastic_damage:
         C3 = self.params.C3; l = self.params.lstar
         ψcrit = self.params.ψcritstar; ν = self.params.ν
         
-        s = np.linspace(0,1,500)
-        self.c0 = 4*np.trapezoid(np.sqrt(self.w(s)),s)
-
-        if self.bounded:
-            H = self.free_energy_plus(mt.elastic_strain(self.σD,self.p,ν),ν) - ψcrit
-        else:
-            H = mf.history_function(mt.elastic_strain(self.σD,self.p,ν),self.Hprev,ν,ψcrit,
+   
+        H = mf.history_function(mt.elastic_strain(self.σD,self.p,ν),self.Hprev,ν,ψcrit,
                                     self.free_energy_plus)
 
 
         
 
-        dissipated_energy = (1/C3) * mf.crack_density_function(self.d,l,self.w, self.c0)*ufl.dx
+        dissipated_energy = (1/C3) * mf.crack_density_function(self.d,l)*ufl.dx
         elastic_energy = self.g * H * ufl.dx
        
         total_energy = dissipated_energy + elastic_energy #- self.external_energy_without_surface()
@@ -87,11 +84,7 @@ class viscoelastic_damage:
         self.damage_solver.setJacobian(self.damage_problem.J, fem.petsc.create_matrix(fem.form(J)),P=None)
 
 
-        if self.bounded:
-            self.damage_solver.setType("vinewtonrsls")
-            self.damage_solver.setVariableBounds(self.d_lb.x.petsc_vec,self.d_ub.x.petsc_vec)
-        else:
-            self.damage_solver.setType("newtonls")
+        self.damage_solver.setType("newtonls")
 
         
         
@@ -102,25 +95,21 @@ class viscoelastic_damage:
 
     def update_history(self):
 
-        if self.bounded:
-            self.d_lb.x.array[:] = self.d.x.array[:]
 
-        else:
+        ν = self.params.ν
 
-            ν = self.params.ν
+        h, g = ufl.TrialFunction(self.H_space), ufl.TestFunction(self.H_space)
 
-            h, g = ufl.TrialFunction(self.H_space), ufl.TestFunction(self.H_space)
+        H = mf.history_function(mt.elastic_strain(self.σD,self.p,ν),self.Hprev,
+                                ν,self.params.ψcritstar)
 
-            H = mf.history_function(mt.elastic_strain(self.σD,self.p,ν),self.Hprev,
-                                    ν,self.params.ψcritstar)
+        a = ufl.inner(h,g) * ufl.dx
+        L = ufl.inner(H,g) * ufl.dx
 
-            a = ufl.inner(h,g) * ufl.dx
-            L = ufl.inner(H,g) * ufl.dx
-
-            problem = fem.petsc.LinearProblem(a, L, 
-                    [], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-            
-            self.Hprev = problem.solve()
+        problem = fem.petsc.LinearProblem(a, L, 
+                [], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        
+        self.Hprev = problem.solve()
 
     def update_stress(self):
         
@@ -135,8 +124,7 @@ class viscoelastic_damage:
 
     def setup_velocity(self):
 
-        De = self.params.De
-        # De = 0.0
+        δt = self.params.dtstar
         λoverμ = self.params.λ/self.params.μ
         D = self.msh.geometry.dim
 
@@ -144,30 +132,32 @@ class viscoelastic_damage:
         du, dp = ufl.TrialFunction(self.U), ufl.TrialFunction(self.Q)
         v, q = ufl.TestFunction(self.U), ufl.TestFunction(self.Q)
 
-        self.n = ufl.FacetNormal(self.msh)
-        self.ds = ufl.Measure("ds", domain=self.msh)
+        n = ufl.FacetNormal(self.msh)
         
-        self.p_ext = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
-        self.f = self.g*mf.body_force(self.msh, self.params.ρistar, self.params.slope_angle)
+        p_ext = mf.water_pressure(self.msh,self.u,self.params.ucstar*self.params.dtstar) +self.params.patmstar
+        f = self.g*mf.body_force(self.msh, self.params.ρistar, self.params.slope_angle)
         
-        self.η = mf.viscosity(mf.εD(self.u), self.params.n)
+        η = mf.viscosity(mf.εD(self.u_prev_it), self.params.n)
+        η_mod = η/(1 + η/δt)
         # self.η = 1.0
         self.σD = mt.deviatoric_stress(mf.εD(self.u), self.σD_prev_time, self.η, De)
-        self.η_mod = self.η/(1 + De*self.η)
+        
 
-        self.p_mod = 2*self.η_mod * De/ (D*(λoverμ + 2/D))
+        κ = 2*η_mod/ (δt*D*(λoverμ + 2/D))
         
         
-        F = [(self.g*2*self.η_mod*ufl.inner(mf.ε(self.u), mf.ε(v)) \
-        - ufl.inner(self.p*(1-self.p_mod), ufl.div(v)) \
-        + ufl.inner(self.p_mod*self.p_prev_time, ufl.div(v)) \
-        - ufl.inner(De*self.η/(1+De*self.η)*self.σD_prev_time, mf.ε(v)) \
-        - ufl.inner(self.f, v) 
-        - self.p_ext* ufl.inner(ufl.grad(self.g), v)\
+        F = [(self.g*2*η_mod*ufl.inner(mf.ε(self.u), mf.ε(v)) \
+        - ufl.inner(self.p*(1-κ), ufl.div(v)) \
+        + ufl.inner(κ*self.p_prev_time, ufl.div(v)) \
+        - ufl.inner((η/δt)/(1+η/δt)*self.σD_prev_time, mf.ε(v)) \
+        - ufl.inner(f, v) 
+        - p_ext* ufl.inner(ufl.grad(self.g), v)\
             ) * ufl.dx \
-        + self.g * self.p_ext * ufl.inner(self.n, v) * self.ds \
+        + self.g * self.p_ext * ufl.inner(n, v) * ufl.ds \
         ,
-        - (ufl.inner(ufl.div(self.u), q) - (De/(D*(λoverμ + 2/D)))*(self.p-self.p_prev_time)*q)* ufl.dx ]
+        - (ufl.inner(ufl.div(self.u), q) \
+        - (1.0/(D*(λoverμ + 2/D)))*(self.p-self.p_prev_time)/δt\
+            *q)* ufl.dx ]
 
         # F = [(self.g*2*self.η*ufl.inner(mf.ε(self.u), mf.ε(v)) \
         # - ufl.inner(self.p, ufl.div(v)) \

@@ -2,8 +2,8 @@ import ufl
 from dolfinx import fem, default_scalar_type
 from kraken.numerics.energy_splits import λoverμ
 
-def deviatoric_stress(ε, σD_prev, η, De):
-    return 1/(1 + De*η) * (2*η*ε + De *η* σD_prev) 
+def deviatoric_stress(ε, σD_prev, η, dt):
+    return 1/(1 + η/dt) * (2*η*ε + η* σD_prev/dt) 
 
 
 def elastic_strain(σD, p, ν):
@@ -19,9 +19,13 @@ def elastic_strain(σD, p, ν):
 
 def ucm_steady(σD, u):
     # steady part of the upper convected Maxwell model
-    i, j, k = ufl.indices(3)
-    return u[k]*ufl.Dx(σD[i,j],k) \
-            - ufl.Dx(u[i],k)*σD[k,j] \
-            - ufl.Dx(u[j],k)*σD[i,k] 
+    # i, j, k = ufl.indices(3)
+    # return u[k]*ufl.Dx(σD[i,j],k) \
+    #         - ufl.Dx(u[i],k)*σD[k,j] \
+    #         - ufl.Dx(u[j],k)*σD[i,k] 
 
+    L = ufl.grad(u)
+    return ufl.dot(u,ufl.nabla_grad(σD)) \
+              - ufl.dot(L, σD) \
+                - ufl.dot(σD, L.T)
 

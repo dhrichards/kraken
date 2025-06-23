@@ -14,7 +14,7 @@ from petsc4py import PETSc
 
 
 class viscoelastic_damage:
-    def __init__(self, msh, bc_funcs, params, g=mf.degradation_default):
+    def __init__(self, msh, bc_funcs, params):
         self.msh = msh
         self.params = params
 
@@ -52,6 +52,7 @@ class viscoelastic_damage:
         self.u_v = self.u_v_prev_time + self.du_v
         self.u_e = self.u_e_prev_time + self.du_e
         self.p = self.p_prev_time + self.dp
+        self.ε_e = mf.ε(self.u_e)
 
         self.V = fem.functionspace(self.msh, ("Lagrange", 1, (self.msh.geometry.dim, )))
         self.D = fem.functionspace(self.msh, ("Lagrange", 1))
@@ -68,11 +69,12 @@ class viscoelastic_damage:
         self.d = fem.Function(self.D, name="damage")
         self.d_prev_time = fem.Function(self.D, name="damage previous time")
         self.Hprev = fem.Function(self.H_space, name="history")
+        self.H = mf.history_function(self.ε_e, self.Hprev,
+                                    self.params.ν, self.params.ψcritstar)
 
-        self.g = g(self.d)
-        
-     
-        self.move_mesh = self.lagrangian_update
+    def setup(self):
+        self.setup_displacement()
+        self.setup_damage()
 
 
     def setup_displacement(self):
@@ -84,40 +86,42 @@ class viscoelastic_damage:
 
         δt = self.params.dtstar
     
-
+        g = mf.degradation_default(self.d, 1e-3)
 
         η = mf.viscosity(mf.ε(self.du_v_prev_it/δt), self.params.n, 1.e-8)
 
       
-        # σ0 = es.cauchy_stress(mf.ε(self.du_e), self.params.ν)
+        σ0 = es.cauchy_stress(mf.ε(self.du_e), self.params.ν)
         # σplus = es.stress_plus_amor(mf.ε(self.u_e), self.params.ν)
         # σplus = σ0 - self.params.ρistar*(z+self.params.δ)*ufl.Identity(self.msh.geometry.dim)
         # σminus = σ0 - σplus
-        # σ = self.g*σplus + σminus
-        # σ = self.g*σ0
+        # σ = g*σplus + σminus
+        σ = g*σ0
 
-        σ = pt.degraded_stress(self.u_e, 
-                               self.du_e_prev_it+self.u_e_prev_time, 
-                               self.g, self.params.ν)
+        # σ = pt.degraded_stress(self.u_e, 
+        #                        self.du_e_prev_it+self.u_e_prev_time, 
+        #                        g, self.params.ν)
 
         p_ext = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
         f = mf.body_force(self.msh, self.params.ρistar, self.params.slope_angle)
 
-        # p_deg = self.g*es.positive_part(-self.p) + es.negative_part(-self.p)
-        p_deg = pt.degraded_scalar(-self.dp, -self.dp_prev_it, self.g)
-        # p_deg = self.g*-self.p
+        # p_deg = g*es.positive_part(-self.p) + es.negative_part(-self.p)
+        p_deg = pt.degraded_scalar(-self.dp, -self.dp_prev_it, g)
+        # p_deg = g*-self.p
+
+        Iprime = 2*self.d
         
 
         F = (ufl.inner(σ, mf.ε(v_v))\
-              - ufl.inner(f, v_v) 
-             - p_ext* ufl.inner(ufl.grad(self.g), v_v)\
+              - g*ufl.inner(f, v_v) 
+             + p_ext*ufl.inner(Iprime*ufl.grad(self.d), v_v)\
               ) * ufl.dx \
-            + p_ext * ufl.inner(n, v_v) * ufl.ds \
-            + self.g*η*ufl.inner(mf.ε(self.du_v/δt), mf.ε(v)) * ufl.dx \
-            + ufl.inner(-self.p, ufl.div(v)) * ufl.dx \
+            + g*p_ext * ufl.inner(n, v_v) * ufl.ds \
+            + g*η*ufl.inner(mf.ε(self.du_v/δt), mf.ε(v)) * ufl.dx \
+            + g*ufl.inner(-self.p, ufl.div(v)) * ufl.dx \
             - ufl.inner(σ, mf.ε(v)) * ufl.dx \
-            - ufl.inner(ufl.div(self.du_v/δt), q) * ufl.dx \
-            # - ufl.inner(pt.degraded_scalar(ufl.div(du_v),-self.p_prev_it,self.g), q) * ufl.dx 
+            - g*ufl.inner(ufl.div(self.du_v/δt), q) * ufl.dx \
+            # - ufl.inner(pt.degraded_scalar(ufl.div(du_v),-self.p_prev_it,g), q) * ufl.dx 
             
 
         J = ufl.derivative(F,self.dw,ufl.TrialFunction(self.W))
@@ -164,7 +168,7 @@ class viscoelastic_damage:
         v = ufl.TestFunction(self.D)
 
         # dissipated_energy = (1/C3) * mf.crack_density_function(self.d,l)*ufl.dx
-        # elastic_energy = self.g * H * ufl.dx
+        # elastic_energy = g * H * ufl.dx
        
         # total_energy = dissipated_energy + elastic_energy #- self.external_energy_without_surface()
 
@@ -276,6 +280,11 @@ class viscoelastic_damage:
         self.msh.geometry.x[:,:self.msh.geometry.dim] += self.params.ucstar*uhh.x.array.reshape((-1, self.msh.geometry.dim))
         
         self.w_prev_time.x.array[:] += self.dw.x.array[:]
-        self.d_prev_time.x.array[:] = self.d.x.array[:]
+        # self.d_prev_time.x.array[:] = self.d.x.array[:]
         # self.w.x.array[:] = 0.0
+
+
+    def timestep(self):
+        self.w_prev_time.x.array[:] += self.dw.x.array[:]
+        self.dw_prev_it.x.array[:] = 0.0
         
