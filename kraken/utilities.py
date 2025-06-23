@@ -56,39 +56,55 @@ def write_file(filename,msh,functions,names,t=0.0):
 
 
 
-
-
-
-def write_vtk(filename,msh,functions,names,t=0.0):
-
-    for idx,f in enumerate(functions):
+class vtx_writer:
+    def __init__(self, filename, msh, functions, names):
+        self.functions = []
+        for idx,f in enumerate(functions):
         # check if has function space
-        if hasattr(f,"ufl_function_space"):
-            if f.ufl_element().degree == 1:
-                functions[idx].name = names[idx]
+            if hasattr(f,"ufl_function_space"):
+
+                if f.function_space.element.basix_element.discontinuous == False:
+                    self.functions.append(f)
+                    self.functions[idx].name = names[idx]
+                    
+                else:
+                    # Interpolate onto order 1
+                    Q = fem.functionspace(msh, ("CG", 1, f.ufl_shape))
+                    self.functions.append(fem.Function(Q))
+                    self.functions[idx].interpolate(fem.Expression(f,Q.element.interpolation_points()))
+                    self.functions[idx].name = names[idx]
+                   
             else:
-                # Interpolate onto order 1
-                Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
-                temp = fem.Function(Q)
-                temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
-                temp.name = names[idx]
-                functions[idx] = temp
-
-        else:
-            Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
-            temp = fem.Function(Q)
-            temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
-            temp.name = names[idx]
-            functions[idx] = temp
+                
+                Q = fem.functionspace(msh, ("CG", 1, f.ufl_shape))
+                self.functions.append(fem.Function(Q))
+                self.functions[idx].interpolate(fem.Expression(f,Q.element.interpolation_points()))
+                self.functions[idx].name = names[idx]
+        
 
 
+        self.vtx = io.VTXWriter(MPI.COMM_WORLD,
+                   filename + ".bp",
+                   self.functions)
+        
 
 
+    def write(self, functions, t=0.0):
+        for idx,f in enumerate(functions):
+            # check if has function space
+            if hasattr(f,"ufl_function_space"):
+                if f.function_space.element.basix_element.discontinuous == False:
+                    self.functions[idx] = f
+                else:
+                    Q = self.functions[idx].function_space
+                    self.functions[idx].interpolate(fem.Expression(f,Q.element.interpolation_points()))
 
+            else:
+                Q = self.functions[idx].function_space
+                self.functions[idx].interpolate(fem.Expression(f,Q.element.interpolation_points()))
 
-    with io.VTKFile(MPI.COMM_WORLD, filename, "w") as file:
-        file.write_mesh(msh)
-        file.write_function(functions,t)
+        self.vtx.write(t)
+    
 
 
 
@@ -177,7 +193,7 @@ def extract_line(points,msh,functions):
 def create_refined_mesh(length, height, 
                         params, 
                         aspect_ratios=(100,100), refine = (2.2,0.3),
-                        cell_factor=2.1 ):
+                        cell_factor=2.1, refine_right=True ):
     
     nondim_length = length/params.L
     nondim_height = height/params.L
@@ -191,10 +207,16 @@ def create_refined_mesh(length, height,
 
     Hw = params.ρistar*nondim_height
 
-    x_change = nondim_length/2 - refine[0]/params.L
-    z_change = nondim_height - refine[1]/params.L
 
-    new_length = x_change/aspect_ratio_x + (nondim_length/2 - x_change)
+
+    x_change = nondim_length/2 - refine[0]
+    z_change = nondim_height - refine[1]
+
+    if refine_right:
+        new_length = x_change/aspect_ratio_x + (nondim_length/2 - x_change)
+    else:
+        new_length = x_change + (nondim_length/2 - x_change)/aspect_ratio_x
+
     new_height = z_change/aspect_ratio_z + (nondim_height - z_change)
 
     nx = int(new_length/cell_size)
@@ -207,8 +229,13 @@ def create_refined_mesh(length, height,
     
     x = msh.geometry.x[:,0]
 
-    x[x>x_change/aspect_ratio_x] = x_change + x[x>x_change/aspect_ratio_x] - x_change/aspect_ratio_x
-    x[x<=x_change/aspect_ratio_x] = x[x<=x_change/aspect_ratio_x]*aspect_ratio_x
+    if refine_right:
+        x[x>x_change/aspect_ratio_x] = x_change + x[x>x_change/aspect_ratio_x] - x_change/aspect_ratio_x
+        x[x<=x_change/aspect_ratio_x] = x[x<=x_change/aspect_ratio_x]*aspect_ratio_x
+    else:
+        x[x>x_change] = x_change + (x[x>x_change] - x_change)*aspect_ratio_x
+
+
 
     msh.geometry.x[:,0] = x
 
