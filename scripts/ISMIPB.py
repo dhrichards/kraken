@@ -6,41 +6,41 @@ from petsc4py import PETSc
 import ufl
 import kraken
 from kraken import boundaryconditions as bc
-import kraken.mainclass as mc
-import kraken.material
+import kraken.oneclass as oc
+from kraken.parameters import Params_no_uc
+from kraken.numerics import maths_functions as mf
 
 
 
-L = 5e3 # length of 1 wavelength
+L = 20e3 # length of 1 wavelength
 H = 1e3
 repetitions = 8
-Lmax = 4
 
-nz = 10
+nz = 15
 nx = int(nz*L*repetitions/H)
 
 def top(x):
-    return H
+    return H/L
 
 def bottom(x):
-    return 0.5*H*np.sin(x*2*np.pi/L)
+    return 0.5*(H/L)*np.sin(x*2*np.pi)
 
 def bottom_boundary(x):
     r = -x[1] + bottom(x[0])
     return np.isclose(r,0.0)
 
 def left_boundary(x):
-    return np.isclose(x[0],-L*repetitions//2)
+    return np.isclose(x[0],-repetitions//2)
 
 def right_boundary(x):
-    return np.isclose(x[0],L*repetitions//2)
+    return np.isclose(x[0],repetitions//2)
 
 def top_boundary(x):
-    return np.isclose(x[1],H)
+    return np.isclose(x[1],H/L)
 
 
 msh = mesh.create_rectangle(MPI.COMM_WORLD,
-                            [np.array([-L*repetitions//2, 0]), np.array([L*repetitions//2, 1])],
+                            [np.array([-repetitions//2, 0]), np.array([repetitions//2, 1])],
                             [nx,nz], mesh.CellType.quadrilateral)
 
 
@@ -63,23 +63,33 @@ warp_mesh(msh,top,bottom)
 
 
 
-material = kraken.material.Material_no_uc()
+material = Params_no_uc()
 material.τ = 1.0
-material.L = 1.0
+material.L = L
+material.ρi = 910
 material.A = 1e-16
 material.slope_angle = 0.5
+
+# μ =1/material.A**(1/material.n)
+
+# material.E = μ*(2*(1+material.ν))
 
 bc_u = lambda V: [bc.get_zero_bc(V, bottom_boundary),
                   bc.get_zero_bc(V, left_boundary),
                   bc.get_zero_bc(V, right_boundary)]
-bc_f = lambda V: []
-bc_z = lambda V: []
+no_bc = lambda V: []
 
-model = mc.viscoelastic_damage(msh,[bc_z,bc_u,bc_f],material,0.0)
-model.stokes.pw = lambda u: 0.0
-model.solve_stokes()
+model = oc.viscoelastic_damage(msh,[no_bc,bc_u,no_bc],material,1.0)
+# model.stokes.pw = lambda u: 0.0
+# model.η = 1
+model.p_ext = lambda u: 0.0
+model.setup_velocity()
 
-kraken.utilities.write_xdmf("outputs/ISMIPB.xdmf", msh, [model.u], "u")
+#%%
+model.solve_velocity()
+
+kraken.utilities.write_xdmf("outputs/ISMIPB.xdmf", msh, [model.u*L], "u")
+
 
     
 

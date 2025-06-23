@@ -7,9 +7,9 @@ import ufl
 import ufl.mathfunctions
 import kraken.utilities as utilities
 import numpy as np  
-import kraken.boundaryconditions as bc
+import kraken.boundaryconditions as bc_bottom
 import kraken.mainclass as mc
-from kraken.material import Material_no_uc
+from kraken.parameters import Params_no_uc
 
 
 
@@ -53,15 +53,15 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 
 
 facets = mesh.locate_entities_boundary(msh, 1, left_boundary)
-bc_u = lambda V: [bc.get_zero_bc(V, bottom_boundary),
-                    bc.get_zero_bc(V, left_boundary),
-                    bc.get_zero_bc(V, right_boundary)]
+bc_u = lambda V: [bc_bottom.get_zero_bc(V, bottom_boundary),
+                    bc_bottom.get_zero_bc(V, left_boundary),
+                    bc_bottom.get_zero_bc(V, right_boundary)]
 bc_f = lambda V: []
-bc_z = lambda V: [bc.get_zero_bc(V, bottom_boundary)]
+bc_z = lambda V: [bc_bottom.get_zero_bc(V, bottom_boundary)]
     # bc.get_bc_func(V, left_boundary, lambda x: x[1]),
     #                 bc.get_bc_func(V, right_boundary, lambda x: x[1]),
     #                 ]
-material = Material_no_uc()
+material = Params_no_uc()
 material.τ = 1.0
 material.L = 1.0
 material.A = 1e-16

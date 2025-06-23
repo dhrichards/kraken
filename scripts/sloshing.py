@@ -5,9 +5,9 @@ from mpi4py import MPI
 from petsc4py import PETSc
 import ufl
 import ufl.mathfunctions
-from kraken.material import Material_no_uc
+from kraken.parameters import Params_no_uc
 import kraken.mainclass as mc
-import kraken.boundaryconditions as bc
+import kraken.boundaryconditions as bc_bottom
 import kraken.utilities as utilities
 
 
@@ -64,18 +64,18 @@ def warp_mesh(msh,top,bot):
 warp_mesh(msh,top,bottom)
 
 
-material = Material_no_uc()
+material = Params_no_uc()
 material.τ = 1.0
 material.L = 1.0
 material.A = 1e-16
 
 
 facets = mesh.locate_entities_boundary(msh, 1, left_boundary)
-bc_u = lambda V: [bc.get_zero_bc(V, bottom_boundary),
-                    bc.get_zero_bc(V.sub(0), left_boundary),
-                    bc.get_zero_bc(V.sub(0), right_boundary)]
+bc_u = lambda V: [bc_bottom.get_zero_bc(V, bottom_boundary),
+                    bc_bottom.get_zero_bc(V.sub(0), left_boundary),
+                    bc_bottom.get_zero_bc(V.sub(0), right_boundary)]
 bc_f = lambda V: []
-bc_z = lambda V: [bc.get_zero_bc(V, bottom_boundary)]
+bc_z = lambda V: [bc_bottom.get_zero_bc(V, bottom_boundary)]
 
 
 dt = 40

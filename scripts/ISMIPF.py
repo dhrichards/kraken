@@ -4,10 +4,10 @@ from dolfinx import mesh, fem, plot, default_scalar_type
 from mpi4py import MPI
 from petsc4py import PETSc
 import ufl
-import kraken.boundaryconditions as bc
+import kraken.boundaryconditions as bc_bottom
 import kraken.mainclass as mc
 import kraken.utilities as utilities
-from kraken.material import Material_no_uc
+from kraken.parameters import Params_no_uc
 
 
 
@@ -95,17 +95,17 @@ def u_bc(x):
 
 
 facets = mesh.locate_entities_boundary(msh, 1, left_boundary)
-bc_u = lambda V: [bc.get_zero_bc(V, bottom_boundary),
-                  bc.get_bc_func(V, right_boundary, u_bc),
-                  bc.get_bc_func(V, left_boundary, u_bc),
-                  bc.get_zero_bc(V.sub(1), front_boundary),
-                  bc.get_zero_bc(V.sub(1), back_boundary)]
+bc_u = lambda V: [bc_bottom.get_zero_bc(V, bottom_boundary),
+                  bc_bottom.get_bc_func(V, right_boundary, u_bc),
+                  bc_bottom.get_bc_func(V, left_boundary, u_bc),
+                  bc_bottom.get_zero_bc(V.sub(1), front_boundary),
+                  bc_bottom.get_zero_bc(V.sub(1), back_boundary)]
 
 no_bc = lambda V: []
-bc_z = lambda V: [bc.get_bc_func(V, bottom_boundary, lambda x: bottom(x[0],x[1]))]
+bc_z = lambda V: [bc_bottom.get_bc_func(V, bottom_boundary, lambda x: bottom(x[0],x[1]))]
 
 dt = 1.0
-params = Material_no_uc()
+params = Params_no_uc()
 params.τ = 1.0
 params.L = 1.0
 params.A = 2.140373e-7

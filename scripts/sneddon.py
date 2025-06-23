@@ -5,8 +5,8 @@ from dolfinx import mesh, fem, plot, io, default_scalar_type
 from mpi4py import MPI
 import ufl
 import numpy as np
-from kraken.material import Material_no_uc, Material_with_uc
-import kraken.boundaryconditions as bc
+from kraken.parameters import Params_no_uc, Params_with_uc
+import kraken.boundaryconditions as bc_bottom
 import kraken.utilities as utilities
 import kraken.mainclass as mc
 import kraken.oneclass as oc
@@ -56,7 +56,7 @@ def crack_boundary(x):
 
 
 
-material = Material_with_uc()
+material = Params_with_uc()
 
 material.L = 1.0
 material.uc = 1.0
@@ -88,7 +88,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD, [np.array([-L/2, -L/2]), np.array([L
 
 # material.set_l_from_mesh(msh)
 
-bc_v = lambda V: [bc.get_zero_bc(V, boundary)]
+bc_v = lambda V: [bc_bottom.get_zero_bc(V, boundary)]
 
 # bc_v = lambda V: [  
 #                 bc.get_zero_bc(V.sub(1), bottom),
@@ -97,7 +97,7 @@ bc_v = lambda V: [bc.get_zero_bc(V, boundary)]
 #                 bc.get_zero_bc(V, right)]
 
 msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-bc_d = lambda V: [bc.internal_bc(V, crack, 1.0)]
+bc_d = lambda V: [bc_bottom.internal_bc(V, crack, 1.0)]
 
 # bc_d = lambda V: [bc.get_bc(V, crack_boundary, 1.0)]
 
@@ -120,7 +120,7 @@ no_bc = lambda V: []
 
 g = lambda d: mf.degradation_default(d)
 model = oc.viscoelastic_damage(msh, [bc_v,bc_v,bc_d], material, 1.0, g=g)
-model.pw = fem.Function(model.D)
+model.p = fem.Function(model.D)
 
 model.setup_elastic()
 model.setup_damage()
@@ -154,7 +154,7 @@ pwc = np.sqrt(Geff*material.E/(np.pi*a*(1-material.ν**2)))
 pws = np.linspace(1.0,2.0,50)
 
 for i in range(50):
-    model.pw.x.array[:] = pws[i]
+    model.p.x.array[:] = pws[i]
     model.fixed_point_simple(max_its=200)
     utilities.write_xdmf("outputs/sneddon" + str(i) + ".xdmf",model.msh,
                         [model.v,model.d],["v","d"],t=pws[i])

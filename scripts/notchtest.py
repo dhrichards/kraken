@@ -4,11 +4,12 @@ from dolfinx import mesh, io, log, default_scalar_type, fem
 from mpi4py import MPI
 import numpy as np
 import kraken 
-from kraken.material import Material_no_uc, Material_with_uc
-import kraken.boundaryconditions as bc
+from kraken.parameters import Params_no_uc, Params_with_uc
+import kraken.boundaryconditions as bc_bottom
 import kraken.numerics.maths_functions as mf
 import kraken.utilities as utilities
-import kraken.mainclass as mc
+import kraken.oneclass as oc
+import kraken.numerics.energy_splits as es
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -41,7 +42,7 @@ else:
 
 
 # material = Material_no_uc()
-material = Material_with_uc()
+material = Params_no_uc()
 material.L = 1e-3
 
 material.g = 1e-9
@@ -89,18 +90,20 @@ with io.XDMFFile(MPI.COMM_WORLD,"meshes/" + filename,"r") as infile:
 # disp_bc = lambda V: [bc.get_zero_bc(V, bottom_boundary),
 #                             bc.get_bc(V.sub(1), top_boundary, 1e-5)]
 
-disp_bc  = lambda V: [bc.get_zero_bc(V, bottom_boundary),
-                            bc.get_bc(V, top_boundary, default_scalar_type(np.array([0.05,0.0])))]
+disp_bc  = lambda V: [bc_bottom.get_zero_bc(V, bottom_boundary),
+                            bc_bottom.get_bc(V, top_boundary, default_scalar_type(np.array([0.05,0.0])))]
     
 
 no_bc = lambda V: []
-bc_d = lambda V: [bc.internal_bc(V, crack, 1.0)]
+bc_d = lambda V: [bc_bottom.internal_bc(V, crack, 1.0)]
 # bc_d = lambda V: [bc.internal_bc(V, lambda x: x<(x_change+0.1), 0.0)]
 
-model = mc.viscoelastic_damage(msh, [no_bc,no_bc,no_bc], material, 
+model = oc.viscoelastic_damage(msh, [no_bc,no_bc,no_bc], material, 
                                dt = 1)#,g = lambda d: mf.degradation_Lo2023(d,0.05))
 
+model.p_ext = lambda u: 0.0
 
+model.free_energy_plus = es.free_energy
 # # change w
 # model.damage.w = lambda d: d
 # model.damage.calc_c0()
@@ -109,6 +112,8 @@ model = mc.viscoelastic_damage(msh, [no_bc,no_bc,no_bc], material,
 #%%
 import ufl
 
+
+model.setup_damage()
 disps_tension = np.linspace(0.005,0.007,50)
 disps_shear = np.linspace(0.0060,0.060,100)
 # disps_shear = np.linspace(0.001, 0.03, 1000)
@@ -121,14 +126,15 @@ for i in range(len(disps)):
     # disp_bc  = lambda V: [bc.get_zero_bc(V, bottom_boundary),
     #                         bc.get_bc(V, top_boundary, default_scalar_type(np.array([disps[i],0.0])))]
     
-    disp_bc = lambda V: [bc.get_zero_bc(V, bottom_boundary),
-                         bc.get_zero_bc(V.sub(1), top_boundary),
-                         bc.get_bc(V.sub(0),top_boundary, default_scalar_type(disps[i])),
-                         bc.get_zero_bc(V.sub(1), left_boundary),
-                            bc.get_zero_bc(V.sub(1), right_boundary)]
+    disp_bc = lambda V: [bc_bottom.get_zero_bc(V, bottom_boundary),
+                         bc_bottom.get_zero_bc(V.sub(1), top_boundary),
+                         bc_bottom.get_bc(V.sub(0),top_boundary, default_scalar_type(disps[i])),
+                         bc_bottom.get_zero_bc(V.sub(1), left_boundary),
+                            bc_bottom.get_zero_bc(V.sub(1), right_boundary)]
                         #  bc.get_bc_func(V,left_boundary, lambda x: sides_bc(x,disps[i])),
                             # bc.get_bc_func(V,right_boundary, lambda x: sides_bc(x,disps[i]))]
-    model.elastic.bcs = disp_bc(model.elastic.V)
+    model.bc_v = disp_bc(model.V)
+    model.setup_elastic()
 
     model.fixed_point_simple(max_its=300)
 

@@ -4,8 +4,8 @@ from dolfinx import mesh, io, log, default_scalar_type, fem
 from mpi4py import MPI
 import numpy as np
 import kraken 
-from kraken.material import Material_no_uc, Material_with_uc
-import kraken.boundaryconditions as bc
+from kraken.parameters import Params_no_uc, Params_with_uc
+import kraken.boundaryconditions as bc_bottom
 import kraken.numerics.maths_functions as mf
 import kraken.utilities as utilities
 import kraken.mainclass as mc
@@ -31,7 +31,7 @@ else:
 
 
 # material = Material_no_uc()
-material = Material_with_uc()
+material = Params_with_uc()
 material.l = 1
 # material.Gc = 20.0
 L = 100
@@ -58,8 +58,8 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 
 v_bc = lambda V: [
     # bc.get_zero_bc(V.sub(0), left_boundary),
-                     bc.get_bc(V.sub(0), right_boundary, 0.0),
-                     bc.get_zero_bc(V.sub(1), bottom_boundary)]
+                     bc_bottom.get_bc(V.sub(0), right_boundary, 0.0),
+                     bc_bottom.get_zero_bc(V.sub(1), bottom_boundary)]
 no_bc = lambda V: []
 
 # bc_d = lambda V: [bc.internal_bc(V, lambda x: x<(x_change+0.1), 0.0)]
@@ -74,7 +74,7 @@ mesh_tags = mesh.meshtags(model.msh, model.msh.topology.dim - 1, facets, 1)
 ds = ufl.Measure("ds", domain=model.msh, subdomain_data=mesh_tags)
 model.ds = ds(1)
 x = ufl.SpatialCoordinate(model.msh)
-model.pw = -Rxx + material.ρi*material.g*(L-x[1])
+model.p = -Rxx + material.ρi*material.g*(L-x[1])
 # # model.material.g = 0.1
 # model.bounded = False
 # model.setup_elastic()

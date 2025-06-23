@@ -1,16 +1,15 @@
 #%%
-import numpy as np
-from dolfinx import mesh, io, log, default_scalar_type, fem
 from mpi4py import MPI
 import numpy as np
-import kraken 
-from kraken.material import Material_no_uc, Material_with_uc
+import ufl
+import os
+from dolfinx import io
+import kraken.parameters as kp
 import kraken.boundaryconditions as bc
 import kraken.numerics.maths_functions as mf
 import kraken.numerics.energy_splits as es
-import kraken.utilities as utilities
-import kraken.mainclass as mc
-import kraken.oneclass as oc
+import kraken as kr
+
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -23,11 +22,11 @@ def bottom_boundary(x):
 
 def crack(x):
     x_c = nondim_length/2 - nondim_height
-    l = material.lstar
+    l = params.lstar
     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
 
 def fixed(x):
-    return x[0]<(nondim_length/2 - 1.4*nondim_height)#*(x[1]>-60))
+    return x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height)#*(x[1]>-60))
 
 
 ## check mpi size is correct
@@ -39,182 +38,88 @@ print(MPI.Get_library_version())
 true_length = 16e3
 true_height = 300
 
-hpc = False
 
-if hpc:
-    path = '/data/hpcdata/users/dancha/'
-else:
-    path = 'outputs/'
+path = './outputs'
+os.makedirs(path, exist_ok=True)
 
 
+params = kp.Params_with_uc()
 
-material = Material_no_uc()
 # material = Material_with_uc()
-material.L = 300.0
-material.l = 10.0
-material.τ = 60*60*24
+params.L = 300.00
+params.l = 12.0
+params.dt = 60*60*12
+params.ψcrit = 0.5
+params.Gc = 1.0
+params.patm = 0.0
+
+nondim_length = true_length/params.L
+nondim_height = true_height/params.L
+Hw = params.ρistar*nondim_height
 
 
-
-nondim_length = true_length/material.L
-nondim_height = true_height/material.L
-
-Hw = material.ρi/material.ρw*nondim_height
-
-
-# filename = "icebergL" + str(int(true_length/1e3)) + "l" + str(int(material.l*material.L)) + ".xdmf"
-
-# # msh,ct,ft = io.gmshio.read_from_msh("../meshes/iceberg.msh", MPI.COMM_WORLD, rank=0, gdim=2)
-# with io.XDMFFile(MPI.COMM_WORLD,"../meshes/" + filename,"r") as infile:
-#     msh = infile.read_mesh()
-
-# msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-cell_size = material.lstar/2.1
+refineH = (2.0,0.3)
+msh = kr.utilities.create_refined_mesh(16e3, 300, params,
+                                     aspect_ratios=(100,1), refine=refineH,
+                                     cell_factor=2.1)
 
 
-# msh = mesh.create_rectangle(MPI.COMM_WORLD,
-#                             [np.array([0, -Hw]), np.array([nondim_length/2, nondim_height-Hw])],
-#                             [int(0.5*nondim_length/cell_size),int(nondim_height/cell_size)], mesh.CellType.quadrilateral)
-
-
-
-aspect_ratio_x = 100.0
-aspect_ratio_z = 1
-x_change = nondim_length/2 - 1.5*nondim_height
-z_change = nondim_height - (nondim_height-Hw)*3.0
-
-new_length = x_change/aspect_ratio_x + (nondim_length/2 - x_change)
-
-new_height = z_change/aspect_ratio_z + (nondim_height - z_change)
-
-nx = int(new_length/cell_size)
-nz = int(new_height/cell_size)
-
-msh = mesh.create_rectangle(MPI.COMM_WORLD,
-                            [np.array([0, 0]), np.array([new_length, new_height])],
-                            [nx,nz], mesh.CellType.quadrilateral)
-
-
-x = msh.geometry.x[:,0]
-
-x[x>x_change/aspect_ratio_x] = x_change + x[x>x_change/aspect_ratio_x] - x_change/aspect_ratio_x
-x[x<=x_change/aspect_ratio_x] = x[x<=x_change/aspect_ratio_x]*aspect_ratio_x
-
-msh.geometry.x[:,0] = x
-
-z = msh.geometry.x[:,1]
-z[z>z_change/aspect_ratio_z] = z_change + z[z>z_change/aspect_ratio_z] - z_change/aspect_ratio_z
-z[z<=z_change/aspect_ratio_z] = z[z<=z_change/aspect_ratio_z]*aspect_ratio_z
-
-msh.geometry.x[:,1] = z - Hw
-
-
-
-
-clamped_both = lambda V: [bc.get_zero_bc(V, left_boundary),
-                            bc.get_zero_bc(V, right_boundary)]
-
-clamped_bc = lambda V: [bc.get_zero_bc(V, left_boundary)]
-symm_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 no_bc = lambda V: []
 bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0)]
-# bc_d = lambda V: [bc.internal_bc(V, lambda x: x<(x_change+0.1), 0.0)]
 
-cliff_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary),
-                        bc.get_zero_bc(V.sub(1), bottom_boundary)]
+u_bc_mixed = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
 
-model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], material, 
-                               dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
+model = kr.models.jakub2.viscoelastic_damage(msh, [u_bc_mixed,bc_d], params)
 
-# model.free_energy_plus = es.free_energy_plus_notension
-# model.bounded = True
-# model.w = lambda d: d
-# model.free_energy_plus = lambda ε,λ,μ: mf.free_energy_plus_star(ε,λ,μ,γ=1)
+# model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
+#                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
 
 
 #%%
+min_its = 10
+gs = [6.8,7.5,8.5]
+gravfile = io.VTXWriter(MPI.COMM_WORLD,path + "/iceberggravity.bp", model.d)
+gravfile.write(0)
 
+for i in range(len(gs)):
+    model.params.g = gs[i]
+    model.setup()
 
-# model.setup_elastic()
-# model.setup_damage()
+    kr.iterators.fixed_point(model,min_its=10)
 
-# model.solve_elastic()
-# model.solve_damage()
-
-
-# import ufl
-# pwincrack = model.pw*ufl.inner(ufl.grad(model.g), model.v)
-# pw2 = model.pw
-
-# utilities.write_xdmf(path + "iceberginit.xdmf",msh,\
-#                     [model.v,model.d,
-#                       mf.principal_stress(mf.ε(model.v),material.λ,material.μ),
-#                       mf.free_energy_plus(mf.ε(model.v),material.λ,material.μ),
-#                       pwincrack,
-#                       pw2],\
-#                     ["v","d", "λ","freeenergyplus","pwincrack","pw2"],t=0)
-
-
-
-# g0 = 6.
-# step = 0.15
-# model.material.g = g0
-# i=0
-# g_end = 9.8
-
-# gs = [9.81]
-# for g in gs:
-#     model.material.g = g
-#     if MPI.COMM_WORLD.rank == 0:
-#         print(f"gravity: {model.material.g}")
-
-#     model.f = mf.body_force(model.msh, model.material.ρi, model.material.g)
-#     model.p = mf.water_pressure(model.msh,model.v,model.material.ρw,model.material.g,model.material.patm)
-#     # have to re-setup as constants are changing
-#     model.setup_elastic()
-#     model.setup_damage()
-#     model.fixed_point_simple(max_its=100,tol=1e-5)
-
+    gravfile.write(i+1)
     
-#     utilities.write_xdmf("outputs/iceberginitialcoarse" + str(i) + ".xdmf",model.msh,\
-#             [model.v,model.d,
-#             mf.principal_stress(mf.ε(model.v),model.material.λ,model.material.μ),
-#                 es.free_energy_plus_spectral(mf.ε(model.v),model.material.λ,model.material.μ),
-#                 es.free_energy_plus_notension(mf.ε(model.v),model.material.λ,model.material.μ),
-#                 es.free_energy_plus_star(mf.ε(model.v),model.material.λ,model.material.μ),
-#                 ],\
-#             ["v","d","λ","spectral","notension","star"],t=i)
-#     i+=1
 
+model.params.g = 9.8
+model.setup()
 
-    # model.material.g += step
-    # step = step*1.5
-    # if model.material.g > g_end:
-    #     model.material.g = g_end
+functions = [model.u, model.d,
+                    # model.u_v,model.u-model.u_v,
+                    # model.u_v - model.u_v_prev_time,
+                    model.Hprev,
+                    es.free_energy_plus_spectral(model.ε_e, params.ν),
+                   ]
+names = ["u", "d",
+                    #  "u_v","u_e",
+                    #  "du_v",
+                    "Hprev",
+                    "psiplus",
+                    ]
 
+vtx = kr.utilities.vtx_writer(path + "/test", msh, functions,names)
 
-# model.material.g = 1.0
+for i in range(300):
 
-model.setup_all()
-model.fixed_point_simple(solve_stokes=False)
-if MPI.COMM_WORLD.rank == 0:
-    print("Starting visco-elasto-damage loop")
-# model.stokes.setup_solver(model.u,model.p,model.d,model.v)
-# # model.material.g += (9.81-g0)/(steps-1)
-for i in range(1000):
-    
     if MPI.COMM_WORLD.rank == 0:
-        print(str(i))
-    
-    model.fixed_point_simple(tol=1e-4,solve_stokes=True)
-    # model.solve_elastic()
-    # log.set_log_level(log.LogLevel.INFO)
-    # model.solve_stokes()
-    
+        print("Iteration: ", i)
 
-    utilities.write_xdmf(path +"iceberg" + str(i) + ".xdmf",msh,\
-                    [model.v,model.d,model.u],\
-                    ["v","d","u"],t=i)
+    if i > 20:
+        min_its = 3
 
-    model.lagrangian_update()
+    kr.iterators.fixed_point(model,min_its=min_its,tol=1e-5)#tol=-1, max_its = 10)
 
+    vtx.write(functions,i)
+
+    model.w_prev_time.x.array[:] = model.w.x.array[:]
+    # model.d_lb.x.array[:] = model.d.x.array[:]

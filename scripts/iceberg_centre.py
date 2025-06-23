@@ -4,9 +4,10 @@ from dolfinx import mesh, io, log, default_scalar_type, fem
 from mpi4py import MPI
 import numpy as np
 import kraken 
-from kraken.material import Material_no_uc, Material_with_uc
+from kraken.parameters import Params_no_uc, Params_with_uc
 import kraken.boundaryconditions as bc
 import kraken.numerics.maths_functions as mf
+import kraken.numerics.energy_splits as es
 import kraken.utilities as utilities
 import kraken.mainclass as mc
 import kraken.oneclass as oc
@@ -48,15 +49,16 @@ else:
 
 
 
-# material = Material_no_uc()
-material = Material_with_uc()
+material = Params_no_uc()
+# material = Material_with_uc()
 material.L = 1.0
-material.l = 5
+material.l = 10
 material.Gc = 1.0
 # material.set_C1_to_one()
 material.ψcrit = 1.0
 # material.ν = 0.1
 # material.E*= 10
+material.patm=0.0
 
 
 # material.L = true_height
@@ -119,32 +121,32 @@ model.bounded = False
 #%%
 
 
-model.setup_elastic()
-model.setup_damage()
+model.setup_all()
 
 model.solve_elastic()
-
+model.solve_velocity()
 
 import ufl
 pwincrack = model.p*ufl.inner(ufl.grad(model.g), model.v)
-pw2 = model.p
+# pw2 = model.p
 
-utilities.write_xdmf(path + "iceberginit.xdmf",msh,\
-                    [model.v,model.d,
-                      mf.principal_stress(mf.ε(model.v),material.λ,material.μ),
-                      mf.free_energy_plus_spectral(mf.ε(model.v),material.λ,material.μ),
-                      mf.free_energy_plus_amor(mf.ε(model.v),material.λ,material.μ),
-                        mf.free_energy_plus_star(mf.ε(model.v),material.λ,material.μ,1),
-                        mf.free_energy_plus_star(mf.ε(model.v),material.λ,material.μ,5),
-                        mf.free_energy_plus_stocek(mf.ε(model.v),material.λ,material.μ),
-                      pw2,
-                      mf.cauchy_stress(mf.ε(model.v),material.λ,material.μ),
-                      mf.history_function(mf.ε(model.v),model.Hprev,material.λ,material.μ,material.ψcrit) \
-                      ],\
-                    ["v","d", "λ","spectral","amor","star1","star5","stocek","pw2","stress","history"],t=0)
+# utilities.write_xdmf(path + "iceberginit.xdmf",msh,\
+#                     [model.v,model.d,
+#                       mf.principal_stress(mf.ε(model.v),ν),
+#                       mf.free_energy_plus_spectral(mf.ε(model.v),ν),
+#                       mf.free_energy_plus_amor(mf.ε(model.v),ν),
+#                         mf.free_energy_plus_star(mf.ε(model.v),ν,1),
+#                         mf.free_energy_plus_star(mf.ε(model.v),ν,5),
+#                         mf.free_energy_plus_stocek(mf.ε(model.v),ν),
+#                       pw2,
+#                       mf.cauchy_stress(mf.ε(model.v),ν),
+#                       mf.history_function(mf.ε(model.v),model.Hprev,ν,material.ψcrit) \
+#                       ],\
+#                     ["v","d", "λ","spectral","amor","star1","star5","stocek","pw2","stress","history"],t=0)
 
 #%%
 tol = 0.001  # Avoid hitting the outside of the domain
+ν = material.ν
 y = np.linspace(-50 + tol, nondim_height - Hw - tol, 101)
 x = 2e3*np.ones_like(y)
 points = np.zeros((3, 101))
@@ -152,24 +154,17 @@ points[0] = x
 points[1] = y
 
 from kraken.numerics.invariants import eigenstate2
+from kraken.numerics import energy_splits as es
 
 λ, E = eigenstate2((mf.ε(model.v)))
 
-points_on_proc,func_vals = utilities.extract_line(points,msh,
-    [mf.free_energy_plus_spectral(mf.ε(model.v),material.λ,material.μ),
-    mf.free_energy_plus_amor(mf.ε(model.v),material.λ,material.μ),
-    mf.free_energy_plus_star(mf.ε(model.v),material.λ,material.μ,1),
-    mf.free_energy_plus_star(mf.ε(model.v),material.λ,material.μ,5),
-    mf.free_energy_plus_stocek(mf.ε(model.v),material.λ,material.μ),
-    mf.cauchy_stress(mf.ε(model.v),material.λ,material.μ)[0,0],
-    mf.cauchy_stress(mf.ε(model.v),material.λ,material.μ)[1,1],
+points_on_proc,func_vals = utilities.extract_line(points,msh,[
+    es.cauchy_stress(mf.ε(model.v),ν)[0,0],
+    es.cauchy_stress(mf.ε(model.v),ν)[1,1],
+    mf.ε(model.u)[0,0],
+    mf.ε(model.u)[1,1],
+    mf.ε(model.u)[0,1],
     model.p,
-    λ[0],
-    λ[1],
-    
-    mf.ε(model.v)[0,0],
-    mf.ε(model.v)[1,1],
-    mf.ε(model.v)[0,1],
 
                              ])
 λ = material.λ
@@ -182,54 +177,29 @@ h = nondim_height
 z = points_on_proc[:, 1]
 zprime = z - δ*h
 
-σzz = ρ*g*zprime
+σzz = ρ*g*zprime/μ 
 
 
 C = g*h*ρ*(-δ*λ + 2*δ*μ - 2*μ)/(2*(λ + 2*μ))
 
 σxx = (λ/(λ + 2 * μ))*ρ*g*z + C
+σxx /= μ
 
 pw_calc = -ρ*g*z/(1-δ)
 
 import matplotlib.pyplot as plt
-fig = plt.figure()
-# plt.plot(func_vals[0], points_on_proc[:, 1], "r-", linewidth=2, label="Displacement")
-plt.plot(func_vals[0], points_on_proc[:, 1], "b-", linewidth=1, label="Spectral")
-# plt.plot(func_vals[1], points_on_proc[:, 1], "g-", linewidth=1, label="Amor")
-# plt.plot(func_vals[2], points_on_proc[:, 1], "m-", linewidth=1, label="Star1")
-# plt.plot(func_vals[3], points_on_proc[:, 1], "c-", linewidth=1, label="Star5")
-# plt.plot(func_vals[4], points_on_proc[:, 1], "k-", linewidth=1, label="Stocek")
-plt.figure()
-plt.plot(func_vals[5], points_on_proc[:, 1], "r-", linewidth=1, label="σxx")
-plt.plot(func_vals[6], points_on_proc[:, 1], "g-", linewidth=1, label="σzz")
-plt.plot(func_vals[7], points_on_proc[:, 1], "b-", linewidth=1, label="pw")
+plt.plot(func_vals[0], points_on_proc[:, 1], "r-", linewidth=1, label="σxx")
+plt.plot(func_vals[1], points_on_proc[:, 1], "g-", linewidth=1, label="σzz")
 plt.plot(σzz,z, "k-", linewidth=1, label="σzz calculated")
 plt.plot(σxx,z, "m--", linewidth=1, label="σxx calculated")
-plt.plot(pw_calc,z, "c-", linewidth=1, label="pw calculated")
+plt.plot(-func_vals[5], z, "b-", linewidth=1, label="p")
 plt.legend()
 
 
-# plt.figure()
-# plt.plot(func_vals[10], points_on_proc[:, 1], "r-", linewidth=1, label="eps00")
-# plt.plot(func_vals[11], points_on_proc[:, 1], "g-", linewidth=1, label="eps11")
-# plt.plot(func_vals[12], points_on_proc[:, 1], "b-", linewidth=1, label="eps01")
-# plt.grid()
-# plt.ylabel("y")
-# plt.legend()
+plt.figure()
+plt.plot(func_vals[2], points_on_proc[:, 1], "r-", linewidth=1, label="εxx")
+plt.plot(func_vals[3], points_on_proc[:, 1], "g-", linewidth=1, label="εzz")
+plt.plot(func_vals[4], points_on_proc[:, 1], "b-", linewidth=1, label="εxz")
+plt.plot(func_vals[5],z, "k-", linewidth=1, label="p")
 
-#%%
-pw = func_vals[7][:,0]
-σxx_model = func_vals[5][:,0]
 
-F_l = h*(2*C*λ + 4*C*μ + 2*g*h*δ*λ*ρ - g*h*λ*ρ)/(2*(λ + 2*μ))
-
-#Integrate
-import numpy as np
-
-z = points_on_proc[:, 1]
-Fpw = np.trapz(pw, z)
-Fσxx = np.trapz(σxx_model, z)
-
-F_test = np.trapz(σxx, z)
-print(Fpw/Fσxx)
-print(Fσxx/F_test)
