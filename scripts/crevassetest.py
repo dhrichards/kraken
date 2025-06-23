@@ -4,8 +4,8 @@ from dolfinx import mesh, io, log, default_scalar_type, fem
 from mpi4py import MPI
 import numpy as np
 import kraken 
-from kraken.material import Material_no_uc
-import kraken.boundaryconditions as bc
+from kraken.parameters import Params_no_uc
+import kraken.boundaryconditions as bc_bottom
 import kraken.numerics.maths_functions as mf
 import kraken.utilities as utilities
 import kraken.mainclass as mc
@@ -41,7 +41,7 @@ else:
 
 
 
-material = Material_no_uc()
+material = Params_no_uc()
 material.L = true_height
 material.τ = 3600*24
 nondim_length = true_length/material.L
@@ -59,11 +59,11 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
                             [np.array([-nondim_length/2, 0]), np.array([nondim_length/2, nondim_height])],
                             [nx,nz], mesh.CellType.quadrilateral)
 
-elast_bc = lambda V: [bc.get_bc(V.sub(0), left_boundary, -1e-6),
-                        bc.get_bc(V.sub(0), right_boundary, 1e-6)]
+elast_bc = lambda V: [bc_bottom.get_bc(V.sub(0), left_boundary, -1e-6),
+                        bc_bottom.get_bc(V.sub(0), right_boundary, 1e-6)]
 
 no_bc = lambda V: []
-bc_d = lambda V: [bc.internal_bc(V, crack, 1.0)]
+bc_d = lambda V: [bc_bottom.internal_bc(V, crack, 1.0)]
 
 
 

@@ -3,8 +3,8 @@ import numpy as np
 from dolfinx import mesh, default_scalar_type
 from mpi4py import MPI
 import numpy as np
-from kraken.material import Material_no_uc
-import kraken.boundaryconditions as bc
+from kraken.parameters import Params_no_uc
+import kraken.boundaryconditions as bc_bottom
 import kraken.numerics.maths_functions as mf
 import kraken.utilities as utilities
 import kraken.mainclass as mc
@@ -29,7 +29,7 @@ true_height = 300
 
 
 
-material = Material_no_uc()
+material = Params_no_uc()
 material.L = true_height
 material.τ = 3600*24  
 nondim_length = true_length/material.L
@@ -46,14 +46,14 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
                             [nx,nz], mesh.CellType.quadrilateral)
 
 
-clamped_bc = lambda V: [bc.get_zero_bc(V, left_boundary)]
-symm_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
+clamped_bc = lambda V: [bc_bottom.get_zero_bc(V, left_boundary)]
+symm_bc = lambda V: [bc_bottom.get_zero_bc(V.sub(0), left_boundary)]
 no_bc = lambda V: []
 
-z_bc = lambda V: [bc.get_bc(V, bottom_boundary, default_scalar_type(-Hw))]
+z_bc = lambda V: [bc_bottom.get_bc(V, bottom_boundary, default_scalar_type(-Hw))]
 
 
-u_in_bc = lambda V: [bc.get_bc(V, left_boundary, np.array([1.0,0.0]))]
+u_in_bc = lambda V: [bc_bottom.get_bc(V, left_boundary, np.array([1.0,0.0]))]
 
 
 model = mc.viscoelastic_damage(msh, [clamped_bc,u_in_bc,no_bc,no_bc], material,
