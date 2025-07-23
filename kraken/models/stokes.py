@@ -26,12 +26,13 @@ class viscoelastic_damage:
         self.bc_d = bc_funcs[1](self.D)
         
         self.u = fem.Function(self.U, name="velocity")
-        self.p = fem.Function(self.Q, name="pressure")
+        self.dp = fem.Function(self.Q, name="pressure")
         self.u_prev_it = fem.Function(self.U, name="velocity_prev")
         self.u_prev_it.x.array[:] = 1.0
-        self.p_prev_it = fem.Function(self.Q, name="pressure_prev_it")
+        self.dp_prev_it = fem.Function(self.Q, name="pressure_prev_it")
         self.p_prev_time = fem.Function(self.Q, name="pressure_prev")
         
+        self.p = self.p_prev_time + self.dp
         
 
 
@@ -51,11 +52,11 @@ class viscoelastic_damage:
         self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
 
 
-    def setup_all(self):
-        self.setup()
+    def setup_all(self,compressible=True):
+        self.setup(compressible)
         damage.setup_damage_bounded(self)
 
-    def setup(self):
+    def setup(self,compressible=True):
 
         δt = self.params.dtstar
         λoverμ = self.params.λ/self.params.μ
@@ -73,8 +74,9 @@ class viscoelastic_damage:
         
         self.η = mf.viscosity(mf.εD(self.u_prev_it), self.params.n)
 
-        dot_p = (self.p_prev_it - self.p_prev_time)/δt
         
+        dotp = self.dp/δt
+        dotp_prev_it = self.dp_prev_it/δt
         self.ε_e = self.η*mf.εD(self.u) - self.p/(D*self.g*κ) * ufl.Identity(D)
 
 
@@ -87,17 +89,17 @@ class viscoelastic_damage:
             ) * ufl.dx \
         + self.g * p_ext* ufl.inner(n, v) * ufl.ds,
         - (ufl.inner(ufl.div(self.u), q) \
-           -dot_p*q/(self.g*κ)\
+        #    +dotp*q/(self.g*κ)\
               )* ufl.dx ]
         
-        J = [[ufl.derivative(F[0], self.u, du), ufl.derivative(F[0], self.p, dp)],
-            [ufl.derivative(F[1], self.u, du), ufl.derivative(F[1], self.p, dp)]]
+        J = [[ufl.derivative(F[0], self.u, du), ufl.derivative(F[0], self.dp, dp)],
+            [ufl.derivative(F[1], self.u, du), ufl.derivative(F[1], self.dp, dp)]]
         
         P = [[J[0][0], None],
             [None, (2 * self.g*self.η)**-1 * dp * q * ufl.dx]]
         
 
-        self.stokes_solver, self.x = solvers.nested_solve(F, J, self.u, self.p, self.bc_u, P)
+        self.stokes_solver, self.x = solvers.nested_solve(F, J, self.u, self.dp, self.bc_u, P)
 
         opts = PETSc.Options()
         opts["snes_type"] = "newtonls"
@@ -116,9 +118,10 @@ class viscoelastic_damage:
         self.stokes_solver.solve(None, self.x)
 
         self.u.x.scatter_forward()
-        self.p.x.scatter_forward()
+        self.dp.x.scatter_forward()
 
         self.u_prev_it.x.array[:] = self.u.x.array[:]
+        self.dp_prev_it.x.array[:] = self.dp.x.array[:]
         
   
     
@@ -131,5 +134,5 @@ class viscoelastic_damage:
         self.msh.geometry.x[:,:self.msh.geometry.dim] += self.params.ucstar*self.params.dtstar*uhh.x.array.reshape((-1, self.msh.geometry.dim))
         
         self.d_prev_time.x.array[:] = self.d.x.array[:]
-        self.p_prev_time.x.array[:] = self.p.x.array[:]
+        self.p_prev_time.x.array[:] += self.dp.x.array[:]
 

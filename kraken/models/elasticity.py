@@ -1,194 +1,161 @@
-from dolfinx import fem, default_scalar_type, la, default_real_type
-from dolfinx.fem.petsc import LinearProblem, NonlinearProblem
-from dolfinx.nls.petsc import NewtonSolver
-from petsc4py import PETSc
+import numpy as np
+from dolfinx import fem
 from mpi4py import MPI
 import ufl
-import numpy as np
-from kraken.numerics import maths_functions as mf
-from kraken.numerics.maths_functions import ε
-from kraken.numerics import solvers
-from kraken.numerics import projection_tensors as pt
 import basix.ufl as bufl
+import numpy as np
+from kraken.models import damage
+from kraken.numerics import maths_functions as mf
+from kraken.numerics import energy_splits as es
+from kraken.numerics import projection_tensors as pt
+from kraken.numerics import solvers
+from petsc4py import PETSc
 
 
-class ElasticitySolver:
-    def __init__(self, msh, bc_func, material,dt,degradation):
+
+class elastic_damage:
+    def __init__(self, msh, bc_funcs, params):
         self.msh = msh
-        self.material = material
-        self.dt = dt
-        self.g = degradation
-        self.pw = lambda u: mf.water_pressure(self.msh,u,material.uc_star)
+        self.params = params
+
+        self.u_el = bufl.element("CG", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,))
+        
+        self.U = fem.functionspace(self.msh, self.u_el)
+
+        self.u = fem.Function(self.U, name="displacement")
+        self.ε_e = mf.ε(self.u_e)
+
+        self.u_prev_it = fem.Function(self.U, name="displacement previous iteration")
+        self.u_prev_time = fem.Function(self.U, name="displacement previous time")
+ 
+        self.D = fem.functionspace(self.msh, ("Lagrange", 1))
+
+        # self.H_el = bufl.quadrature_element(
+        #     self.msh.basix_cell(), value_shape=(), scheme="default", degree=1
+        # )
+        self.H_space = fem.functionspace(self.msh, ("DG", 1))
+
+        self.bc_u = bc_funcs[0](self.U)
+        self.bc_d = bc_funcs[1](self.D)
+
+      
+        self.d = fem.Function(self.D, name="damage")
+        # self.g = mf.degradation_Lo2023(self.d, 5)
+        self.g = mf.degradation_default(self.d)
+        self.d_prev_time = fem.Function(self.D, name="damage previous time")
+        self.Hprev = fem.Function(self.H_space, name="history")
+
+      
+     
+    def setup_all(self):
+        self.setup_momentum()
+        # self.setup_damage()
+        # damage.setup_damage_non_linear(self)
+        damage.setup_damage_bounded(self, lambda d: d**2)
 
 
-        v_el = bufl.element("Lagrange", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,), dtype=default_real_type)
-        self.V = fem.functionspace(self.msh, v_el)
+    def setup_momentum(self):
 
-        self.v_old = fem.Function(self.V, name="displacement")
 
-        self.bcs = bc_func(self.V)
+        v = ufl.TestFunction(self.U)
+        
+        
+        σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
+        # ψplus = es.free_energy_plus_dp(self.ε_e, self.params.ν)
+        # σplus = ufl.diff(ψplus, self.ε_e)
+        # σplus = es.stress_plus_spectral(mf.ε(self.u_e), self.params.ν)
+        # σplus = es.stress_plus_amor(self.ε_e, self.params.ν)
+        # σminus = σ0 - σplus
+        # σ = self.g*σplus + σminus
+        # σ = self.g*σ0
 
-        self.ds = ufl.Measure("ds", domain=self.msh) 
+        σ = pt.degraded_stress(self.ε_e, mf.ε(self.u_prev_it), self.g, self.params.ν)
 
+        p_ext = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
+
+        f = self.g*mf.body_force(self.msh, self.params.ρistar)
+
+
+
+
+
+
+        # p_deg = g*es.positive_part(-self.p) + es.negative_part(-self.p)
+        # p_deg = pt.degraded_scalar(-self.p, -self.p_prev_it, g)
+        p_deg = self.g*-self.p
+        # p_deg = -self.p
+        n = ufl.FacetNormal(self.msh)
+
+
+        # elastic_energy = (self.g*ψplus + ψminus)*ufl.dx - (\
+        #      ufl.dot(f, self.u) \
+        #     + pw(v)*ufl.inner(ufl.grad(g), v)\
+        #     # - ufl.inner(ufl.div(pw(v)*v),g)\
+        #      )* ufl.dx \
+        #     - self.material.C1 * g * pw(v) *  ufl.dot(n, v) * self.ds
+        # # total_energy = self.internal_energy(v,d) - self.external_energy(v,d)
+
+        # F = ufl.derivative(total_energy,v,ufl.TestFunction(self.V))
+
+
+        F = (ufl.inner(σ, mf.ε(v))\
+            #  - (1-g)*ufl.inner(p_ext, ufl.div(v_v))
+              - ufl.inner(f, v) 
+             - p_ext* ufl.inner(ufl.grad(self.g), v)\
+            # - mf.overburden_pressure(self.msh, self.params.ρistar, self.u, self.params.ucstar)*ufl.inner(ufl.grad(g), v_v)
+              ) * ufl.dx \
+            + self.g*p_ext * ufl.inner(n, v) * ufl.ds 
+        
+
+        J = ufl.derivative(F,self.w,ufl.TrialFunction(self.U))
+            
+        
+        self.problem = solvers.SNESProblem(F, self.u, bcs=self.bc_u)
 
         self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
         # self.solver.setType("newtonls")
-        opts = PETSc.Options()
-        opts["snes_type"] = "newtonls"
-        opts["snes_linesearch_type"] = "bt"
+        # opts = PETSc.Options()
+        # opts["snes_type"] = "newtonls"
+        # opts["snes_linesearch_type"] = "bt"
 
-        self.solver.setFromOptions()
+        # self.elastic_solver.setFromOptions()
 
         self.solver.setTolerances(rtol=1.0e-7, max_it=50)
         self.solver.getKSP().setType("preonly")
-        self.solver.getKSP().setTolerances(rtol=1.0e-7)
+        # #non zero initial guess
+        # self.solver.getKSP().setInitialGuessNonzero(True)
+        # self.solver.getKSP().setTolerances(rtol=1.0e-7)
         self.solver.getKSP().getPC().setType("lu")
-        # self.solver.getKSP().getPC().setFactorSolverType("mumps")
+        # self.solver.getKSP().getPC().subPCType.setType("ilu")
+        # # self.solver.getKSP().getPC().setFieldSplitType(1)
+        self.solver.getKSP().getPC().setFactorSolverType("mumps")
+        
  
 
-
-
-    def solve(self,v,d,u):
-
-        ρratio = self.material.ρratio
-        ν = self.material.ν
-        C1 = self.material.C1
-
-
-        n = ufl.FacetNormal(self.msh)
-
-    
-        pw = lambda v: self.pw(v + u*self.dt)
-
-        f = mf.body_force(self.msh, ρratio)
-        g = self.g(d)
-
-    
-        
-        internal_energy = mf.degraded_free_energy(mf.ε(v), g, ν, self.material.ψcritstar) * ufl.dx
-
-        # internal_energy = g*mf.free_energy(mf.ε(v),ν) * ufl.dx
-        # internal_energy = 0.5*g*ufl.inner(mf.ε(v),mf.ε(v)) * ufl.dx
-
-        external_energy =  self.material.C1 *( \
-             g * ufl.dot(f, v) \
-            + pw(v)*ufl.inner(ufl.grad(g), v)\
-            # - ufl.inner(ufl.div(pw(v)*v),g)\
-             )* ufl.dx \
-            - self.material.C1 * g * pw(v) *  ufl.dot(n, v) * self.ds
-    
-
-        total_energy = internal_energy - external_energy
-        # total_energy = self.internal_energy(v,d) - self.external_energy(v,d)
-
-        F = ufl.derivative(total_energy,v,ufl.TestFunction(self.V))
-
-   
-        J = ufl.derivative(F,v,ufl.TrialFunction(self.V))
-        # self.problem = NonlinearProblem(F, v, self.bcs)
-        
-        # self.solver = NewtonSolver(MPI.COMM_WORLD, self.problem)
-        # self.solver.convergence_criterion = "incremental"
-        # self.solver.nonlinearity_solver = "snes"
-        # self.solver.rtol = 1e-7
-        # self.solver.atol = 1e-7
-        # self.solver.max_it = 50
-
-        # opts = PETSc.Options()
-
-        # opts_s_prefix = self.solver.getOptionsPrefix()
-        # opts[f"{opts_s_prefix}snes_linesearch_type"] = "bt"
-        # self.solver.setFromOptions()
-        # # self.solver.report = True
-        # # self.solver.error_on_nonconvergence = False
-
-    
-        # ksp = self.solver.krylov_solver
-        
-        # option_prefix = ksp.getOptionsPrefix()
-        # opts[f"{option_prefix}ksp_type"] = "preonly"
-        # # opts[f"{option_prefix}ksp_rtol"] = 1.0e-8
-        # opts[f"{option_prefix}pc_type"] = "lu"
-        # opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
-        # opts[f"{option_prefix}pc_hypre_type"] = "boomeramg"
-        # opts[f"{option_prefix}pc_hypre_boomeramg_max_iter"] = 1
-        # opts[f"{option_prefix}pc_hypre_boomeramg_cycle_type"] = "v"
-        # ksp.setFromOptions()
-
-        # n, converged = self.solver.solve(v)
-
-    
-        # assert(converged)
-
-        # self.problem = solvers.NonlinearPDE_SNESProblem(F, J, v, bcs=self.bcs)
-        self.problem = solvers.SNESProblem(F, v, bcs=self.bcs)
-
-       
         self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(F,jit_options=dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))))
         self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(J,jit_options = dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))),P=None)
+
         
+    
+    def update_history(self):
 
-        self.solver.solve(None, v.x.petsc_vec)
-        self.v_old.x.array[:] = v.x.array[:]
-
-        # return v
-
-    def solve_linearised(self,d,u):
-
-        v = ufl.TrialFunction(self.V)
-        w = ufl.TestFunction(self.V)
-
-        ν = self.material.ν; C1 = self.material.C1
-
-        f = mf.body_force(self.msh, self.material.ρratio)
-        g = self.g(d)
-        n = ufl.FacetNormal(self.msh)
-        
-        pw = self.pw(self.v_old + u*self.dt)
-
-        # a = ufl.inner(pt.degraded_stress_P(v,self.v_old,g,ν),mf.ε(w))*ufl.dx 
-        a = ufl.inner(g*mf.cauchy_stress(mf.ε(v),ν),mf.ε(w))*ufl.dx
-             
-        L = C1*( g*ufl.dot(f,w) - pw*ufl.inner(ufl.div(w),g) )*ufl.dx
-            #  + C1*g*pw(u)*ufl.inner(n,w)*ufl.ds
-
-        problem = LinearProblem(a, L, self.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-
-        v = problem.solve()
-        self.v_old.x.array[:] = v.x.array[:]
-        # self.problem = NonlinearProblem(F, u, self.bcs)
-        
-        # self.solver = NewtonSolver(MPI.COMM_WORLD, self.problem)
-        # self.solver.convergence_criterion = "incremental"
-        # self.solver.rtol = 1e-7
-        # self.solver.atol = 1e-7
-        # self.solver.max_it = 100
-        # # self.solver.report = True
-        # # self.solver.error_on_nonconvergence = False
+        H = mf.history_function(self.ε_e,self.Hprev,
+                                self.params.ν, self.params.ψcritstar)
+        self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
 
         
 
-        # ksp = self.solver.krylov_solver
-        # opts = PETSc.Options()
-        # option_prefix = ksp.getOptionsPrefix()
-        # opts[f"{option_prefix}ksp_type"] = "preonly"
-        # # opts[f"{option_prefix}ksp_rtol"] = 1.0e-8
-        # opts[f"{option_prefix}pc_type"] = "lu"
-        # opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
-        # # opts[f"{option_prefix}pc_hypre_type"] = "boomeramg"
-        # # opts[f"{option_prefix}pc_hypre_boomeramg_max_iter"] = 1
-        # # opts[f"{option_prefix}pc_hypre_boomeramg_cycle_type"] = "v"
-        # ksp.setFromOptions()
+    def solve(self):
+        self.solver.solve(None, self.u.x.petsc_vec)
+        # self.w.x.scatter_forward()
+        self.u_prev_it.x.array[:] = self.u.x.array[:]
 
-        # n, converged = self.solver.solve(u)
-
-        # self.v_old.x.array[:] = u.x.array[:]
-
-        return v
+    def solve_damage(self):
+        self.damage_solver.solve(None, self.d.x.petsc_vec)
 
 
-
-
-
-
-
+    def timestep(self):
+        self.u_prev_time.x.array[:] = self.u.x.array[:]
+        self.d_prev_time.x.array[:] = self.d.x.array[:]
+        # self.d_prev_time.x.array[:] = self.d.x.array[:]
+        # self.w.x.array[:] = 0.0

@@ -85,7 +85,7 @@ class vtx_writer:
 
         self.vtx = io.VTXWriter(MPI.COMM_WORLD,
                    filename + ".bp",
-                   self.functions)
+                   self.functions, mesh_policy=io.VTXMeshPolicy.reuse)
         
 
 

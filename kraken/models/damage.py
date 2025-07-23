@@ -71,28 +71,28 @@ def setup_damage_bounded(model, w=lambda d: d):
         C3 = model.params.C3; l = model.params.lstar
         ψcrit = model.params.ψcritstar; ν = model.params.ν
 
-        model.d_lb = fem.Function(model.D, name="damage_lb")
-        model.d_ub = fem.Function(model.D, name="damage_ub")
-        model.d_lb.x.array[:] = 0.0
-        model.d_ub.x.array[:] = 1.0
+        d_ub = fem.Function(model.D, name="damage_ub")
+        d_ub.x.array[:] = 1.0
         
 
     
         s = np.linspace(0,1,500)
         c0 = 4*np.trapezoid(np.sqrt(w(s)),s)
 
-        g = mf.degradation_default(model.d)
+        H = ufl.max_value(es.free_energy_plus_dp(model.ε_e,ν) - ψcrit,0) 
 
-        H = ufl.max_value(es.free_energy_plus_spectral(model.ε_e,ν) - ψcrit,0)
+        # R = es.cauchy_stress(model.ε_e, ν) + mf.water_pressure(model.msh,model.u)*ufl.Identity(model.msh.geometry.dim)
+        # H = mf.clayton_driving_function(R, model.params.σcritstar)
 
 
       
         
 
         dissipated_energy = (1/C3) * mf.crack_density_function(model.d,l,w, c0)*ufl.dx
-        elastic_energy = g * H * ufl.dx
+        elastic_energy = model.g * H * ufl.dx
+        # pressure_work = -pw*ufl.inner(ufl.grad(g), model.u) * ufl.dx
        
-        total_energy = dissipated_energy + elastic_energy #- self.external_energy_without_surface()
+        total_energy = dissipated_energy + elastic_energy 
 
 
 
@@ -109,14 +109,15 @@ def setup_damage_bounded(model, w=lambda d: d):
 
         
         model.damage_solver.setType("vinewtonrsls")
-        model.damage_solver.setVariableBounds(model.d_lb.x.petsc_vec,model.d_ub.x.petsc_vec)
+        model.damage_solver.setVariableBounds(model.d_prev_time.x.petsc_vec,d_ub.x.petsc_vec)
         
 
         
         model.damage_solver.setTolerances(rtol=1.0e-9, max_it=50)
-        model.damage_solver.getKSP().setType("preonly")
+        model.damage_solver.getKSP().setType("cg")
         model.damage_solver.getKSP().setTolerances(rtol=1.0e-9)
-        model.damage_solver.getKSP().getPC().setType("lu")
+        model.damage_solver.getKSP().getPC().setType("jacobi")
+        model.damage_solver.getKSP().getPC().setFactorSolverType("mumps")
 
 
 

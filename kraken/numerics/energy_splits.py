@@ -4,6 +4,9 @@ from .invariants import eigenstate, matrix_function
 def λoverμ(ν):
     return 2*ν/(1-2*ν)
 
+def Koverμ(ν):
+    return λoverμ(ν) + 2/3
+
 def cauchy_stress(ε,ν):
     D = ufl.shape(ε)[0]
     return λoverμ(ν)*ufl.tr(ε)*ufl.Identity(D) + 2*ε 
@@ -38,6 +41,22 @@ def negative_part(x,eps=1e-6):
     return 0.5*(x-abs(x))
     # return 0.5*(x - (x**2 + eps**2)**0.5)
 
+def free_energy_plus_dp(ε, ν):
+    K = Koverμ(ν)
+    I1 = ufl.tr(ε)
+    J2 = ufl.inner(ε, ε)
+    B = -1/ufl.sqrt(3.0)
+
+    ψ1 = 0.5*K*I1**2 + 2*J2
+    ψ2 = (-3*B*K*I1 + 2*ufl.sqrt(J2+1e-9))**2 / (18*B**2*K + 2)
+
+    ψ = ufl.conditional(ufl.lt(-6*B*ufl.sqrt(J2+1e-9), I1), ψ1,
+                        ufl.conditional(2*ufl.sqrt(J2+1e-9) < 3*B*K*I1, 0.0, 
+                                         ψ2))
+    return ψ
+
+
+    
 
 
 

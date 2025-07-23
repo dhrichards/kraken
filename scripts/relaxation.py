@@ -48,7 +48,7 @@ params = kp.Params_with_uc()
 # material = Material_with_uc()
 params.L = 300.00
 params.l = 12.0
-params.dt = 60*60*2
+params.dt = 60*60*24
 params.ψcrit = 0.0
 params.Gc = 1.0
 params.patm = 0.0
@@ -80,28 +80,9 @@ model = kr.models.jakub2.viscoelastic_damage(msh, [u_bc,bc_d], params)
 
 #%%
 min_its = 10
-
-
-# H = mf.clayton_driving_function(es.cauchy_stress(model.ε_e, model.params.ν), model.params.σcritstar, mf.water_pressure_static(model.msh))
-
-gs = [4,6.8,7.5,8.5]
-
-
-for i in range(len(gs)):
-    model.params.g = gs[i]
-    model.setup_all()
-
-    kr.iterators.fixed_point(model,min_its=min_its)
-
-    kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
-                            msh, [model.u,model.d,es.free_energy_plus_dp(model.ε_e,model.params.ν)],
-                            ["u","d","pp"], t=i)
-    
-
-model.params.g = 9.8
 model.setup_all()
 
-
+solve_d = False
 
 
 for i in range(300):
@@ -109,13 +90,18 @@ for i in range(300):
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
-    if i > 20:
+    if i == 10:
+        solve_d = True
+        model.params.dt = 60*60*2
+        model.setup_all()
+
+    if i == 20:
         min_its = 3
 
-    kr.iterators.fixed_point(model,min_its=min_its,tol=1e-5,solve_damage=True)#tol=-1, max_its = 10)
+    kr.iterators.fixed_point(model,min_its=min_its,tol=1e-5,solve_damage=solve_d)#tol=-1, max_its = 10)
 
-    kr.utilities.write_xdmf(path + "/iceberg" + str(i) + ".xdmf",
-                            msh, [model.u,model.d,es.free_energy_plus_dp(model.ε_e,params.ν)],["u","d","pp"], t=i)
+    kr.utilities.write_xdmf(path + "/relax" + str(i) + ".xdmf",
+                            msh, [model.u,model.d],["u","d"], t=i)
 
     model.timestep()
    

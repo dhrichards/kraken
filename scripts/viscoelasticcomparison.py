@@ -47,8 +47,8 @@ params = kp.Params_with_uc()
 
 # material = Material_with_uc()
 params.L = 300.00
-params.l = 30
-params.dt = 60*60*2
+params.l = 100
+params.dt = 60*60*24
 params.ψcrit = 0.5
 params.Gc = 1.0
 params.patm = 0.0
@@ -60,62 +60,54 @@ Hw = params.ρistar*nondim_height
 
 refineH = (2.5,0.3)
 msh = kr.utilities.create_refined_mesh(16e3, 300, params,
-                                     aspect_ratios=(30,1), refine=refineH,
+                                     aspect_ratios=(1,1), refine=refineH,
                                      cell_factor=2.1)
 
 
 no_bc = lambda V: []
 bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
-u_bc_mixed = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
 
-u_bc_2 = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
+# u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 models = []
 
-# models.append(kr.models.jakub2.viscoelastic_damage(msh, [u_bc_mixed,bc_d], params))
+models.append(kr.models.jakub2.viscoelastic_damage(msh, [u_bc,bc_d], params))
 # models.append(kr.models.jakub3.viscoelastic_damage(msh, [u_bc_mixed,bc_d], params))
-models.append(kr.models.stokes.viscoelastic_damage(msh, [u_bc_2,bc_d], params))
+models.append(kr.models.jakub3.viscoelastic_damage(msh, [u_bc,bc_d], params))
 
 
 #%%
-min_its = 5
-
-
-functions = []
-names = []
-for model in models:
-    functions.append(model.u)
-    # functions.append(model.ε_e)
-
-
-for i in range(len(functions)):
-    names.append("u" + (str(i+1)))
-    # names.append("eps" + (str(i+1)))
-
+min_its = 10
 
 
 
 
 for model in models:
-    model.setup()
+    model.setup_all()
 
 
 
-
-
-vtx = kr.utilities.vtx_writer(path + "/viscoelasticcomparison", msh, functions,names)
-
-for i in range(50):
+for i in range(500):
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
+
+
     for model in models:
         kr.iterators.fixed_point(model,min_its=min_its,tol=1e-5,solve_damage=False)#tol=-1, max_its = 10)
 
-    vtx.write(functions,i)
-
+    kr.utilities.write_xdmf(path + "/viscoelasticcomparison" + str(i) + ".xdmf", msh, 
+                            [models[0].u,models[1].u,
+                                models[0].p,models[1].p,
+                                es.free_energy_plus_spectral(models[0].ε_e,params.ν),
+                                es.free_energy_plus_spectral(models[1].ε_e,params.ν)],
+                                ["u1","u2",
+                                 "p1","p2",
+                                 "f1","f2"], t=i)
     for model in models:
         model.timestep()
+        # model.p_prev_time.x.array[:] = model.p.x.array[:]
 

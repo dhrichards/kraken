@@ -21,7 +21,7 @@ def fixed_point(model, max_its=100, tol=1e-4, min_its=2, solve_damage=True):
             
             if solve_damage:
                 model.solve_damage()
-            model.solve_displacement()
+            model.solve()
    
             
 

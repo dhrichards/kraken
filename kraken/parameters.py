@@ -20,7 +20,7 @@ class Params_with_uc:
         self.L = 100 # Characteristic length
         self.l = 0.5 # Regularisation length
         self.slope_angle = 0.0
-        self.σc =  0.1e6 # tensile strength
+        self.σcrit =  0.1e6 # tensile strength
         self.ψcrit = 1.0 
         self.dt = secperyr # Characteristic time in seconds
         self.patm = 1e5 # Atmospheric pressure
@@ -31,7 +31,7 @@ class Params_with_uc:
     @property
     def q(self):
         """Calculate the paramerter q for Lo et al. degradation model."""
-        a = 3*self.Gc*self.E / (8*self.l*self.σc**2)
+        a = 3*self.Gc*self.E / (8*self.l*self.σcrit**2)
         q = 1.0
         for i in range(100):
             q = a/np.log((1+q)/q)
@@ -98,6 +98,14 @@ class Params_with_uc:
     def ρistar(self):
         return self.ρi/self.ρc
     
+    @property
+    def σc(self):
+        return self.μ*self.ucstar
+    
+    @property
+    def σcritstar(self):
+        """Non dimensional tensile strength."""
+        return self.σcrit / self.σc
     
     
     @property

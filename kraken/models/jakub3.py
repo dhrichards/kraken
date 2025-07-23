@@ -4,7 +4,7 @@ from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
 import numpy as np
-from kraken.models import surface
+from kraken.models import damage
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
 from kraken.numerics import projection_tensors as pt
@@ -18,9 +18,7 @@ class viscoelastic_damage:
         self.msh = msh
         self.params = params
 
-        self.free_energy_plus = es.free_energy_plus_spectral
-
-
+      
         self.u_el = bufl.element("CG", self.msh.basix_cell(), 2, shape=(self.msh.geometry.dim,))
         self.p_el = bufl.element("CG", self.msh.basix_cell(), 1)
 
@@ -52,7 +50,13 @@ class viscoelastic_damage:
         self.u_v = self.u_v_prev_time + self.du_v
         self.u_e = self.u_e_prev_time + self.du_e
         self.p = self.p_prev_time + self.dp
+        
+        # self.e_el = bufl.element("DG", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,self.msh.geometry.dim))
+        # self.E = fem.functionspace(self.msh, self.e_el)
+        # self.ε_e_prev_time = fem.Function(self.E, name="elastic strain tensor")
+        # self.ε_e = mf.ε(self.du_e) + self.ε_e_prev_time
         self.ε_e = mf.ε(self.u_e)
+    
 
         self.V = fem.functionspace(self.msh, ("Lagrange", 1, (self.msh.geometry.dim, )))
         self.D = fem.functionspace(self.msh, ("Lagrange", 1))
@@ -67,17 +71,17 @@ class viscoelastic_damage:
 
       
         self.d = fem.Function(self.D, name="damage")
+        self.g = mf.degradation_default(self.d)
         self.d_prev_time = fem.Function(self.D, name="damage previous time")
         self.Hprev = fem.Function(self.H_space, name="history")
-        self.H = mf.history_function(self.ε_e, self.Hprev,
-                                    self.params.ν, self.params.ψcritstar)
+
+
+    def setup_all(self):
+        self.setup()
+        damage.setup_damage_bounded(self, lambda d: d**2)
+
 
     def setup(self):
-        self.setup_displacement()
-        self.setup_damage()
-
-
-    def setup_displacement(self):
 
 
         w_test = ufl.TestFunction(self.W)
@@ -86,43 +90,45 @@ class viscoelastic_damage:
 
         δt = self.params.dtstar
     
-        g = mf.degradation_default(self.d, 1e-3)
-
+    
         η = mf.viscosity(mf.ε(self.du_v_prev_it/δt), self.params.n, 1.e-8)
 
       
-        σ0 = es.cauchy_stress(mf.ε(self.du_e), self.params.ν)
-        # σplus = es.stress_plus_amor(mf.ε(self.u_e), self.params.ν)
-        # σplus = σ0 - self.params.ρistar*(z+self.params.δ)*ufl.Identity(self.msh.geometry.dim)
+        σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
+        # σplus = es.stress_plus_spectral(self.ε_e, self.params.ν)
         # σminus = σ0 - σplus
-        # σ = g*σplus + σminus
-        σ = g*σ0
+        # σ = self.g*σplus + σminus
+        σ = self.g*σ0
 
-        # σ = pt.degraded_stress(self.u_e, 
-        #                        self.du_e_prev_it+self.u_e_prev_time, 
-        #                        g, self.params.ν)
+        # σ = pt.degraded_stress(self.ε_e, 
+                            #    mf.ε(self.du_e_prev_it) + mf.ε(self.u_e_prev_time), 
+                            #    self.g, self.params.ν)
 
-        p_ext = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
-        f = mf.body_force(self.msh, self.params.ρistar, self.params.slope_angle)
+        p_ext = mf.water_pressure(self.msh,self.du,self.params.ucstar) +self.params.patmstar
+        f = self.g*mf.body_force(self.msh, self.params.ρistar, self.params.slope_angle)
 
         # p_deg = g*es.positive_part(-self.p) + es.negative_part(-self.p)
-        p_deg = pt.degraded_scalar(-self.dp, -self.dp_prev_it, g)
-        # p_deg = g*-self.p
-
-        Iprime = 2*self.d
-        
+        p_prev_it = self.p_prev_time + self.dp_prev_it
+        # p_deg = pt.degraded_scalar(-self.p, -p_prev_it, self.g)
+        p_deg = self.g*-self.p
 
         F = (ufl.inner(σ, mf.ε(v_v))\
-              - g*ufl.inner(f, v_v) 
-             + p_ext*ufl.inner(Iprime*ufl.grad(self.d), v_v)\
+            #  - (1-g)*ufl.inner(p_ext, ufl.div(v_v))
+              - ufl.inner(f, v_v) 
+             - p_ext* ufl.inner(ufl.grad(self.g), v_v)\
+            # - mf.overburden_pressure(self.msh, self.params.ρistar, self.u, self.params.ucstar)*ufl.inner(ufl.grad(g), v_v)
               ) * ufl.dx \
-            + g*p_ext * ufl.inner(n, v_v) * ufl.ds \
-            + g*η*ufl.inner(mf.ε(self.du_v/δt), mf.ε(v)) * ufl.dx \
-            + g*ufl.inner(-self.p, ufl.div(v)) * ufl.dx \
-            - ufl.inner(σ, mf.ε(v)) * ufl.dx \
-            - g*ufl.inner(ufl.div(self.du_v/δt), q) * ufl.dx \
-            # - ufl.inner(pt.degraded_scalar(ufl.div(du_v),-self.p_prev_it,g), q) * ufl.dx 
-            
+            + self.g*p_ext * ufl.inner(n, v_v) * ufl.ds \
+            + (
+                self.g*η*ufl.inner(mf.ε(self.du_v)/δt, mf.ε(v))\
+                + ufl.inner(-self.p, ufl.div(v))  \
+            -    ufl.inner(σ, mf.ε(v))
+             ) * ufl.dx \
+            + (
+                - ufl.inner(ufl.div(self.du_v), q) \
+                # - ufl.inner(pt.degraded_scalar(ufl.div(self.du_v),-p_prev_it,self.g), q)\
+                # - ufl.inner(g*es.positive_part(ufl.div(dot_u_v)) + es.negative_part(ufl.div(dot_u_v)), q)\
+            ) * ufl.dx 
 
         J = ufl.derivative(F,self.dw,ufl.TrialFunction(self.W))
             
@@ -141,7 +147,7 @@ class viscoelastic_damage:
         self.solver.getKSP().setType("preonly")
         self.solver.getKSP().setTolerances(rtol=1.0e-7)
         self.solver.getKSP().getPC().setType("lu")
-        # self.solver.getKSP().getPC().setFactorSolverType("mumps")
+        self.solver.getKSP().getPC().setFactorSolverType("mumps")
  
 
         self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(F,jit_options=dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))))
@@ -152,139 +158,43 @@ class viscoelastic_damage:
 
 
 
-        
-
-    def setup_damage(self):
-
-        C3 = self.params.C3; l = self.params.lstar
-        ψcrit = self.params.ψcritstar; ν = self.params.ν
-        η = self.params.crack_viscosity
-
-    
-        H = mf.history_function(mf.ε(self.du_e),self.Hprev,ν,ψcrit,
-                                    self.free_energy_plus)
-
-
-        v = ufl.TestFunction(self.D)
-
-        # dissipated_energy = (1/C3) * mf.crack_density_function(self.d,l)*ufl.dx
-        # elastic_energy = g * H * ufl.dx
-       
-        # total_energy = dissipated_energy + elastic_energy #- self.external_energy_without_surface()
-
-
-
-        # F = ufl.derivative(total_energy,self.d,ufl.TestFunction(self.D))
-        # 
-
-
-        F = (η*(ufl.inner(self.d,v) - ufl.inner(self.d_prev_time,v))/self.params.dtstar \
-                + ufl.inner(self.d,v) + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
-                - C3*l*2*(1-self.d)*H*v) * ufl.dx
-        J = ufl.derivative(F,self.d,ufl.TrialFunction(self.D))
-
-
-        self.damage_problem = solvers.SNESProblem(F, self.d, bcs=self.bc_d)
-
-        self.damage_solver = PETSc.SNES().create(MPI.COMM_WORLD)
-
-        self.damage_solver.setFunction(self.damage_problem.F, fem.petsc.create_vector(fem.form(F)))
-        self.damage_solver.setJacobian(self.damage_problem.J, fem.petsc.create_matrix(fem.form(J)),P=None)
-
-
-        
-        self.damage_solver.setType("newtonls")
-
-        
-        
-        self.damage_solver.setTolerances(rtol=1.0e-9, max_it=50)
-        self.damage_solver.getKSP().setType("preonly")
-        self.damage_solver.getKSP().setTolerances(rtol=1.0e-9)
-        self.damage_solver.getKSP().getPC().setType("lu")
-
+   
     def update_history(self):
 
-    
-
-
-        h, g = ufl.TrialFunction(self.H_space), ufl.TestFunction(self.H_space)
-
-        H = mf.history_function(mf.ε(self.du_e),self.Hprev,
+        H = mf.history_function(self.ε_e,self.Hprev,
                                 self.params.ν,self.params.ψcritstar)
 
-        a = ufl.inner(h,g) * ufl.dx
-        L = ufl.inner(H,g) * ufl.dx
+        self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
 
-        problem = fem.petsc.LinearProblem(a, L, 
-                [], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-        
-        temp = problem.solve()
-
-        self.Hprev.x.array[:] = temp.x.array[:]
-
-        # interpolate the history function
-        # self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
-
-    def solve_displacement(self):
+    def solve(self):
         self.solver.solve(None, self.dw.x.petsc_vec)
+        self.dw.x.scatter_forward()
         self.dw_prev_it.x.array[:] = self.dw.x.array[:]
 
     def solve_damage(self):
         self.damage_solver.solve(None, self.d.x.petsc_vec)
 
-    def fixed_point(self, max_its=100, tol=1e-4, min_its=2, solve_damage=True):
-        L2_old = 0.0
+    # def update_strain_tensor(self):
+    #     temp = fem.Function(self.E, name="elastic strain tensor")
+    #     temp.interpolate(fem.Expression(mf.ε(self.du_e), self.E.element.interpolation_points()))
 
-        one = fem.Function(self.D)
-        one.x.array[:] = 1.0
-        area = fem.assemble_scalar(fem.form(ufl.inner(one,one)*ufl.dx))
-
-        area = np.sqrt(MPI.COMM_WORLD.allreduce(area, op=MPI.SUM))
-
-
-        
-        for i in range(max_its):
-            
-            if solve_damage:
-                self.solve_damage()
-            self.solve_displacement()
-   
-            
-
-            L2_ = ufl.inner(self.d,self.d)*ufl.dx
-            L2_rank = fem.assemble_scalar(fem.form(L2_))
-            L2 = np.sqrt(MPI.COMM_WORLD.allreduce(L2_rank, op=MPI.SUM))
-
-            error_L2 = np.abs(L2 - L2_old)/area
-            if MPI.COMM_WORLD.rank == 0:
-                print(f"iteration {i}, error {error_L2}")
-
-            if i>min_its-1:
-                if error_L2 < tol:
-                    break
-
-            L2_old = L2
-
-        # Update history function as finished fixed point iteration
-        self.update_history()
-        
-
+    #     self.ε_e_prev_time.x.array[:] += temp.x.array[:]
+       
 
 
 
     
-    def lagrangian_update(self):
+    def timestep(self):
+
+        # self.update_strain_tensor()
         
-        uhh = fem.Function(self.V)
-        uhh.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
-        self.msh.geometry.x[:,:self.msh.geometry.dim] += self.params.ucstar*uhh.x.array.reshape((-1, self.msh.geometry.dim))
+        du = fem.Function(self.V)
+        du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+        self.msh.geometry.x[:,:self.msh.geometry.dim] += self.params.ucstar*du.x.array.reshape((-1, self.msh.geometry.dim))
         
         self.w_prev_time.x.array[:] += self.dw.x.array[:]
-        # self.d_prev_time.x.array[:] = self.d.x.array[:]
+        self.d_prev_time.x.array[:] = self.d.x.array[:]
         # self.w.x.array[:] = 0.0
 
 
-    def timestep(self):
-        self.w_prev_time.x.array[:] += self.dw.x.array[:]
-        self.dw_prev_it.x.array[:] = 0.0
         
