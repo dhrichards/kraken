@@ -47,9 +47,9 @@ params = kp.Params_with_uc()
 
 # material = Material_with_uc()
 params.L = 300.00
-params.l = 8.0
-params.dt = 60*60*48
-params.ψcrit = 0.0
+params.l = 100
+params.dt = 60*60*24
+params.ψcrit = 0.5
 params.Gc = 1.0
 params.patm = 0.0
 
@@ -58,50 +58,50 @@ nondim_height = true_height/params.L
 Hw = params.ρistar*nondim_height
 
 
-refineH = (1.4,0.3)
-msh = kr.utilities.create_refined_mesh(true_length, true_height, params,
-                                     aspect_ratios=(100,1), refine=refineH,
+refineH = (2.5,0.3)
+msh = kr.utilities.create_refined_mesh(16e3, 300, params,
+                                     aspect_ratios=(1,1), refine=refineH,
                                      cell_factor=2.1)
-# msh.geometry.x[:,1] += 0.5
+
 
 no_bc = lambda V: []
 bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
-u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
+u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary)]
+u_bc2 = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
+models = []
 
-model = kr.models.jakub3.viscoelastic_damage(msh, [u_bc,bc_d], params)
-
-# model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
-#                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
+models.append(kr.models.elasticity.elastic_damage(msh, [u_bc2,bc_d], params))
+# models.append(kr.models.jakub3.viscoelastic_damage(msh, [u_bc_mixed,bc_d], params))
+models.append(kr.models.elasticitywpressure.elastic_damage(msh, [u_bc,bc_d], params))
 
 
 #%%
 min_its = 10
-model.setup_all()
-
-solve_d = False
 
 
-for i in range(300):
 
-    if MPI.COMM_WORLD.rank == 0:
-        print("Iteration: ", i)
 
-    if i == 10:
-        solve_d = True
-        # model.params.dt = 60*60*24
-        model.setup_all()
+for model in models:
+    model.setup_all()
 
-    if i == 20:
-        min_its = 3
 
-    kr.iterators.fixed_point(model,min_its=min_its,tol=1e-5,solve_damage=solve_d)#tol=-1, max_its = 10)
 
-    kr.utilities.write_xdmf(path + "/relax" + str(i) + ".xdmf",
-                            msh, [model.u,model.d,es.free_energy_plus_dp(model.ε_e,params.ν)],["u","d","pp"], t=i)
 
+for model in models:
+    kr.iterators.fixed_point(model,min_its=min_its,tol=1e-5,solve_damage=False)#tol=-1, max_its = 10)
+
+kr.utilities.write_xdmf(path + "/elasticcomparison.xdmf", msh, 
+                        [models[0].u,models[1].u,
+                            # models[0].p,models[1].p,
+                            es.free_energy_plus_spectral(models[0].ε_e,params.ν),
+                            es.free_energy_plus_spectral(models[1].ε_e,params.ν)],
+                            ["u1","u2",
+                                # "p1","p2",
+                                "f1","f2"], t=0)
+for model in models:
     model.timestep()
-   
+    # model.p_prev_time.x.array[:] = model.p.x.array[:]
+

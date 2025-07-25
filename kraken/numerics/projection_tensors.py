@@ -40,6 +40,14 @@ def degraded_stress_jakub(u, u_prev, g, ν):
     σminus = σ - σplus
     return g*σplus + σminus
 
+
+def degraded_deviatoric(εD,ε_prev, g, ν):
+    P = projection_tensor(ε_prev)
+    i,j,k,l = ufl.indices(4)
+    σD = 2*εD
+    σDplus = 2*ufl.as_tensor(P[i,j,k,l]*εD[k,l],(i,j))
+    σDminus = σD - σDplus
+    return g*σDplus + σDminus
     
 
 

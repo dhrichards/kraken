@@ -69,7 +69,7 @@ class viscoelastic_damage:
         self.setup_momentum()
         # self.setup_damage()
         # damage.setup_damage_non_linear(self)
-        damage.setup_damage_bounded(self, lambda d: d**2)
+        damage.setup_damage_bounded(self, lambda d: d, es.free_energy_plus_dp)
 
 
     def setup_momentum(self):
@@ -86,15 +86,14 @@ class viscoelastic_damage:
         η = mf.viscosity(mf.ε(dot_u_v_prev_it), self.params.n, 1.e-8)
 
         σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
-        # ψplus = es.free_energy_plus_dp(self.ε_e, self.params.ν)
-        # σplus = ufl.diff(ψplus, self.ε_e)
-        # σplus = es.stress_plus_spectral(mf.ε(self.u_e), self.params.ν)
+        
+        # σplus = es.stress_plus_dp(mf.ε(self.u_e), self.params.ν)
         # σplus = es.stress_plus_amor(self.ε_e, self.params.ν)
         # σminus = σ0 - σplus
         # σ = self.g*σplus + σminus
         σ = self.g*σ0
 
-        # σ = pt.degraded_stress(self.ε_e, mf.ε(self.u_e_prev_it), g, self.params.ν)
+        # σ = pt.degraded_stress(self.ε_e, mf.ε(self.u_e_prev_it), self.g, self.params.ν)
 
         p_ext = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
 
@@ -111,16 +110,18 @@ class viscoelastic_damage:
         # p_deg = -self.p
         n = ufl.FacetNormal(self.msh)
 
-
-        # elastic_energy = (self.g*ψplus + ψminus)*ufl.dx - (\
-        #      ufl.dot(f, self.u) \
-        #     + pw(v)*ufl.inner(ufl.grad(g), v)\
-        #     # - ufl.inner(ufl.div(pw(v)*v),g)\
+        # ψ = es.free_energy(self.ε_e, self.params.ν)
+        # ψplus = es.free_energy_plus_dp(self.ε_e, self.params.ν)
+        # ψminus = ψ - ψplus
+        # elastic_energy = (\
+        #     self.g*ψ
+        #     # self.g*ψplus + ψminus \
+        #     - ufl.dot(f, self.u) \
+        #     - p_ext*ufl.inner(ufl.grad(self.g), self.u)\
         #      )* ufl.dx \
-        #     - self.material.C1 * g * pw(v) *  ufl.dot(n, v) * self.ds
-        # # total_energy = self.internal_energy(v,d) - self.external_energy(v,d)
-
-        # F = ufl.derivative(total_energy,v,ufl.TestFunction(self.V))
+        #     + self.g * p_ext *  ufl.dot(n, self.u) * ufl.ds
+        
+        # F = ufl.derivative(elastic_energy,self.u,v_v)
 
 
         F = (ufl.inner(σ, mf.ε(v_v))\
@@ -130,13 +131,14 @@ class viscoelastic_damage:
             # - mf.overburden_pressure(self.msh, self.params.ρistar, self.u, self.params.ucstar)*ufl.inner(ufl.grad(g), v_v)
               ) * ufl.dx \
             + self.g*p_ext * ufl.inner(n, v_v) * ufl.ds \
-            + (
+        
+        F+= (
                 self.g*η*ufl.inner(mf.ε(dot_u_v), mf.ε(v))\
-                + ufl.inner(p_deg, ufl.div(v))  \
+                + ufl.inner(-self.p, ufl.div(v))  \
             -    ufl.inner(σ, mf.ε(v))
              ) * ufl.dx \
             + (
-                - self.g*ufl.inner(ufl.div(dot_u_v), q) \
+                - ufl.inner(ufl.div(dot_u_v), q) \
                 # - (self.g-mf.degradation_default(self.d_prev_time))*q/self.params.dtstar
                 # - ufl.inner(pt.degraded_scalar(ufl.div(dot_u_v),-self.p_prev_it,g), q)\
                 # - ufl.inner(g*es.positive_part(ufl.div(dot_u_v)) + es.negative_part(ufl.div(dot_u_v)), q)\

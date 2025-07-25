@@ -84,7 +84,7 @@ class viscoelastic_damage:
         self.η = mf.viscosity(mf.εD(dot_u_prev_it), self.params.n)
 
         
-        self.ε_e = self.η*mf.εD(dot_u) - self.p/(D*self.g*κ) * ufl.Identity(D)
+        self.ε_e = self.η*mf.ε(dot_u) #- self.p/(D*self.g*κ) * ufl.Identity(D)
 
         dot_p = (self.p_prev_it - self.p_prev_time)/self.params.dtstar
 
@@ -97,7 +97,7 @@ class viscoelastic_damage:
             ) * ufl.dx \
         + self.g * p_ext* ufl.inner(n, v) * ufl.ds \
         + (ufl.inner(ufl.div(self.u), q) \
-           +self.p*q/(self.g*κ)\
+        #    +self.p*q/(self.g*κ)\
               )* ufl.dx 
      
 

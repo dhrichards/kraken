@@ -78,7 +78,7 @@ class viscoelastic_damage:
 
     def setup_all(self):
         self.setup()
-        damage.setup_damage_bounded(self, lambda d: d**2)
+        damage.setup_damage_bounded(self, lambda d: d, es.free_energy_plus_dp)
 
 
     def setup(self):

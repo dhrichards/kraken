@@ -56,6 +56,23 @@ def free_energy_plus_dp(ε, ν):
     return ψ
 
 
+def stress_plus_dp(ε, ν):
+    K = Koverμ(ν)
+    I1 = ufl.tr(ε)
+    J2 = ufl.inner(ε, ε)
+    B = -1/ufl.sqrt(3.0)
+    δ = ufl.Identity(ufl.shape(ε)[0])
+    
+
+    σ1 = K*I1*δ + 2*ufl.dev(ε)
+    σ2 = ((18*B**2*K**2*I1 - 12*B*K*ufl.sqrt(J2+1e-9))*δ \
+          +(4 - 12*B*K*I1*0.5/ufl.sqrt(J2+1e-9))*ufl.dev(ε)
+          )/(18*B**2*K + 2)
+
+    return ufl.conditional(ufl.lt(-6*B*ufl.sqrt(J2+1e-9), I1), σ1,
+                        ufl.conditional(2*ufl.sqrt(J2+1e-9) < 3*B*K*I1, 0.0*δ, 
+                                         σ2))
+
     
 
 

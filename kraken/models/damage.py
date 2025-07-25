@@ -66,7 +66,7 @@ def setup_damage_non_linear(model):
 
     
    
-def setup_damage_bounded(model, w=lambda d: d):
+def setup_damage_bounded(model, w=lambda d: d, free_energy_plus=es.free_energy_plus_spectral):
 
         C3 = model.params.C3; l = model.params.lstar
         ψcrit = model.params.ψcritstar; ν = model.params.ν
@@ -79,7 +79,7 @@ def setup_damage_bounded(model, w=lambda d: d):
         s = np.linspace(0,1,500)
         c0 = 4*np.trapezoid(np.sqrt(w(s)),s)
 
-        H = ufl.max_value(es.free_energy_plus_dp(model.ε_e,ν) - ψcrit,0) 
+        H = ufl.max_value(free_energy_plus(model.ε_e,ν) - ψcrit,0) 
 
         # R = es.cauchy_stress(model.ε_e, ν) + mf.water_pressure(model.msh,model.u)*ufl.Identity(model.msh.geometry.dim)
         # H = mf.clayton_driving_function(R, model.params.σcritstar)

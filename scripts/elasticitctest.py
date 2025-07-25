@@ -26,7 +26,7 @@ def crack(x):
     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
 
 def fixed(x):
-    return x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height)#*(x[1]>-60))
+    return (x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height)) + (x[1]<(0.1-0.9*refineH[1]))
 
 
 ## check mpi size is correct
@@ -47,9 +47,9 @@ params = kp.Params_with_uc()
 
 # material = Material_with_uc()
 params.L = 300.00
-params.l = 8.0
-params.dt = 60*60*48
-params.ψcrit = 0.0
+params.l = 1.0
+params.dt = 60*60*2
+params.ψcrit = 1.0
 params.Gc = 1.0
 params.patm = 0.0
 
@@ -58,50 +58,41 @@ nondim_height = true_height/params.L
 Hw = params.ρistar*nondim_height
 
 
-refineH = (1.4,0.3)
+refineH = (1.3,0.2)
 msh = kr.utilities.create_refined_mesh(true_length, true_height, params,
-                                     aspect_ratios=(100,1), refine=refineH,
+                                     aspect_ratios=(300,300), refine=refineH,
                                      cell_factor=2.1)
 # msh.geometry.x[:,1] += 0.5
 
 no_bc = lambda V: []
 bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
-u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
 
-# u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
+u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
-model = kr.models.jakub3.viscoelastic_damage(msh, [u_bc,bc_d], params)
+model = kr.models.elasticity.elastic_damage(msh, [u_bc,bc_d], params)
 
 # model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
 #                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
 
 
 #%%
-min_its = 10
-model.setup_all()
-
-solve_d = False
+min_its = 5
 
 
-for i in range(300):
+# H = mf.clayton_driving_function(es.cauchy_stress(model.ε_e, model.params.ν), model.params.σcritstar, mf.water_pressure_static(model.msh))
 
-    if MPI.COMM_WORLD.rank == 0:
-        print("Iteration: ", i)
+gs = [1,5,6.8,7.5,8.5,9.8]
 
-    if i == 10:
-        solve_d = True
-        # model.params.dt = 60*60*24
-        model.setup_all()
 
-    if i == 20:
-        min_its = 3
+for i in range(len(gs)):
+    model.params.g = gs[i]
+    model.setup_all()
 
-    kr.iterators.fixed_point(model,min_its=min_its,tol=1e-5,solve_damage=solve_d)#tol=-1, max_its = 10)
+    kr.iterators.fixed_point(model,min_its=min_its)
 
-    kr.utilities.write_xdmf(path + "/relax" + str(i) + ".xdmf",
-                            msh, [model.u,model.d,es.free_energy_plus_dp(model.ε_e,params.ν)],["u","d","pp"], t=i)
+    kr.utilities.write_xdmf(path + "/elastictest" + str(i) + ".xdmf",
+                            msh, [model.u,model.d,es.free_energy_plus_spectral(model.ε_e,model.params.ν)],
+                            ["u","d","pp"], t=i)
+    
 
-    model.timestep()
-   
