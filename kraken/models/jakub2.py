@@ -1,9 +1,10 @@
 import numpy as np
-from dolfinx import fem
+from dolfinx import fem, default_scalar_type
 from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
 import numpy as np
+from kraken import parameters
 from kraken.models import damage
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
@@ -14,9 +15,9 @@ from petsc4py import PETSc
 
 
 class viscoelastic_damage:
-    def __init__(self, msh, bc_funcs, params):
+    def __init__(self, msh, bc_funcs):
         self.msh = msh
-        self.params = params
+        self.params = parameters.Params_with_uc(self.msh)
 
         self.u_el = bufl.element("CG", self.msh.basix_cell(), 2, shape=(self.msh.geometry.dim,))
         self.p_el = bufl.element("CG", self.msh.basix_cell(), 1)
@@ -58,18 +59,20 @@ class viscoelastic_damage:
       
         self.d = fem.Function(self.D, name="damage")
         # self.g = mf.degradation_Lo2023(self.d, 5)
-        self.g = mf.degradation_default(self.d)
+        self.g = es.degradation_default(self.d)
         self.d_prev_time = fem.Function(self.D, name="damage previous time")
         self.Hprev = fem.Function(self.H_space, name="history")
 
         self.V = fem.functionspace(self.msh, ("Lagrange", 1, (self.msh.geometry.dim, )))
-        
+
+       
+       
      
     def setup_all(self):
         self.setup_momentum()
         # self.setup_damage()
         # damage.setup_damage_non_linear(self)
-        damage.setup_damage_bounded(self, lambda d: d, es.free_energy_plus_dp)
+        damage.setup_damage_bounded(self, lambda d: d, es.free_energy_plus_lo)
 
 
     def setup_momentum(self):
@@ -86,18 +89,17 @@ class viscoelastic_damage:
         η = mf.viscosity(mf.ε(dot_u_v_prev_it), self.params.n, 1.e-8)
 
         σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
-        
-        # σplus = es.stress_plus_dp(mf.ε(self.u_e), self.params.ν)
-        # σplus = es.stress_plus_amor(self.ε_e, self.params.ν)
-        # σminus = σ0 - σplus
-        # σ = self.g*σplus + σminus
-        σ = self.g*σ0
+        σplus = es.stress_plus_lo(self.ε_e, self.params.ν)
+        σminus = σ0 - σplus
+        σ = self.g*σplus + σminus
+        # σ = self.g*σ0
 
         # σ = pt.degraded_stress(self.ε_e, mf.ε(self.u_e_prev_it), self.g, self.params.ν)
 
-        p_ext = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
+        p_w = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
+        p_i = mf.overburden_pressure(self.msh, self.params.ρistar) + self.params.patmstar
 
-        f = self.g*mf.body_force(self.msh, self.params.ρistar)
+        f = mf.body_force(self.msh, self.params.ρistar)
 
 
 
@@ -110,27 +112,15 @@ class viscoelastic_damage:
         # p_deg = -self.p
         n = ufl.FacetNormal(self.msh)
 
-        # ψ = es.free_energy(self.ε_e, self.params.ν)
-        # ψplus = es.free_energy_plus_dp(self.ε_e, self.params.ν)
-        # ψminus = ψ - ψplus
-        # elastic_energy = (\
-        #     self.g*ψ
-        #     # self.g*ψplus + ψminus \
-        #     - ufl.dot(f, self.u) \
-        #     - p_ext*ufl.inner(ufl.grad(self.g), self.u)\
-        #      )* ufl.dx \
-        #     + self.g * p_ext *  ufl.dot(n, self.u) * ufl.ds
-        
-        # F = ufl.derivative(elastic_energy,self.u,v_v)
 
-
-        F = (ufl.inner(σ, mf.ε(v_v))\
+        F = (
+            ufl.inner(σ, mf.ε(v_v))\
             #  - (1-g)*ufl.inner(p_ext, ufl.div(v_v))
               - ufl.inner(f, v_v) 
-             - p_ext* ufl.inner(ufl.grad(self.g), v_v)\
+            #  - p_i* ufl.inner(ufl.grad(self.g), v_v)\
             # - mf.overburden_pressure(self.msh, self.params.ρistar, self.u, self.params.ucstar)*ufl.inner(ufl.grad(g), v_v)
               ) * ufl.dx \
-            + self.g*p_ext * ufl.inner(n, v_v) * ufl.ds \
+            + p_w * ufl.inner(n, v_v) * ufl.ds \
         
         F+= (
                 self.g*η*ufl.inner(mf.ε(dot_u_v), mf.ε(v))\
@@ -177,7 +167,7 @@ class viscoelastic_damage:
     
     def update_history(self):
 
-        H = mf.history_function(self.ε_e,self.Hprev,
+        H = es.history_function(self.ε_e,self.Hprev,
                                 self.params.ν, self.params.ψcritstar)
         self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
 

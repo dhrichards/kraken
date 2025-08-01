@@ -5,6 +5,7 @@ import ufl
 import basix.ufl as bufl
 import numpy as np
 from kraken.models import damage
+from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
 from kraken.numerics import projection_tensors as pt
@@ -14,9 +15,9 @@ from petsc4py import PETSc
 
 
 class viscoelastic_damage:
-    def __init__(self, msh, bc_funcs, params):
+    def __init__(self, msh, bc_funcs):
         self.msh = msh
-        self.params = params
+        self.params = parameters.Params_with_uc(self.msh)
 
       
         self.u_el = bufl.element("CG", self.msh.basix_cell(), 2, shape=(self.msh.geometry.dim,))
@@ -71,14 +72,14 @@ class viscoelastic_damage:
 
       
         self.d = fem.Function(self.D, name="damage")
-        self.g = mf.degradation_default(self.d)
+        self.g = es.degradation_default(self.d)
         self.d_prev_time = fem.Function(self.D, name="damage previous time")
         self.Hprev = fem.Function(self.H_space, name="history")
 
 
     def setup_all(self):
         self.setup()
-        damage.setup_damage_bounded(self, lambda d: d, es.free_energy_plus_dp)
+        damage.setup_damage_bounded(self, lambda d: d, es.free_energy_plus_lo)
 
 
     def setup(self):
@@ -93,39 +94,50 @@ class viscoelastic_damage:
     
         η = mf.viscosity(mf.ε(self.du_v_prev_it/δt), self.params.n, 1.e-8)
 
-      
+        p_w = mf.water_pressure(self.msh,self.du,self.params.ucstar) +self.params.patmstar
+
+        p_i = mf.overburden_pressure(self.msh, self.params.ρistar) + self.params.patmstar
+    
+        δ = ufl.Identity(self.msh.geometry.dim)
         σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
-        # σplus = es.stress_plus_spectral(self.ε_e, self.params.ν)
-        # σminus = σ0 - σplus
-        # σ = self.g*σplus + σminus
-        σ = self.g*σ0
+        σplus = es.stress_plus_lo(self.ε_e, self.params.ν)
+        # # σplus = es.stress_plus_dp(self.ε_e, self.params.ν)
+        σminus = σ0 - σplus
+        # σminus = -mf.overburden_pressure(self.msh, self.params.ρistar)* ufl.Identity(self.msh.geometry.dim)
+        # # σminus = -p_ext*δ
+        # σplus = σ0 - σminus
+        σ = self.g*σplus + σminus
+        # σ = self.g*σ0
 
         # σ = pt.degraded_stress(self.ε_e, 
                             #    mf.ε(self.du_e_prev_it) + mf.ε(self.u_e_prev_time), 
                             #    self.g, self.params.ν)
 
-        p_ext = mf.water_pressure(self.msh,self.du,self.params.ucstar) +self.params.patmstar
-        f = self.g*mf.body_force(self.msh, self.params.ρistar, self.params.slope_angle)
+        
+
+        f = mf.body_force(self.msh, self.params.ρistar)
 
         # p_deg = g*es.positive_part(-self.p) + es.negative_part(-self.p)
         p_prev_it = self.p_prev_time + self.dp_prev_it
         # p_deg = pt.degraded_scalar(-self.p, -p_prev_it, self.g)
         p_deg = self.g*-self.p
 
+        p_crack = p_i #+ 0.1*p_w
+
         F = (ufl.inner(σ, mf.ε(v_v))\
             #  - (1-g)*ufl.inner(p_ext, ufl.div(v_v))
               - ufl.inner(f, v_v) 
-             - p_ext* ufl.inner(ufl.grad(self.g), v_v)\
+            #  - p_crack* ufl.inner(ufl.grad(self.g), v_v)\
             # - mf.overburden_pressure(self.msh, self.params.ρistar, self.u, self.params.ucstar)*ufl.inner(ufl.grad(g), v_v)
               ) * ufl.dx \
-            + self.g*p_ext * ufl.inner(n, v_v) * ufl.ds \
+            + p_w * ufl.inner(n, v_v) * ufl.ds \
             + (
                 self.g*η*ufl.inner(mf.ε(self.du_v)/δt, mf.ε(v))\
                 + ufl.inner(-self.p, ufl.div(v))  \
             -    ufl.inner(σ, mf.ε(v))
              ) * ufl.dx \
             + (
-                - ufl.inner(ufl.div(self.du_v), q) \
+                - self.g*ufl.inner(ufl.div(self.du_v), q) \
                 # - ufl.inner(pt.degraded_scalar(ufl.div(self.du_v),-p_prev_it,self.g), q)\
                 # - ufl.inner(g*es.positive_part(ufl.div(dot_u_v)) + es.negative_part(ufl.div(dot_u_v)), q)\
             ) * ufl.dx 
@@ -161,7 +173,7 @@ class viscoelastic_damage:
    
     def update_history(self):
 
-        H = mf.history_function(self.ε_e,self.Hprev,
+        H = es.history_function(self.ε_e,self.Hprev,
                                 self.params.ν,self.params.ψcritstar)
 
         self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))

@@ -33,7 +33,7 @@ def setup_damage_non_linear(model):
 
     C3 = model.params.C3; l = model.params.lstar
 
-    H = mf.history_function(model.ε_e, model.Hprev,
+    H = es.history_function(model.ε_e, model.Hprev,
                             model.params.ν, model.params.ψcritstar)
     
 
@@ -88,7 +88,7 @@ def setup_damage_bounded(model, w=lambda d: d, free_energy_plus=es.free_energy_p
       
         
 
-        dissipated_energy = (1/C3) * mf.crack_density_function(model.d,l,w, c0)*ufl.dx
+        dissipated_energy = (1/C3) * es.crack_density_function(model.d,l,w, c0)*ufl.dx
         elastic_energy = model.g * H * ufl.dx
         # pressure_work = -pw*ufl.inner(ufl.grad(g), model.u) * ufl.dx
        

@@ -26,7 +26,7 @@ def crack(x):
     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
 
 def fixed(x):
-    return (x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height)) + (x[1]<(0.1-0.9*refineH[1]))
+    return (x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height))# + (x[1]<(0.1-0.9*refineH[1]))
 
 
 ## check mpi size is correct
@@ -46,10 +46,10 @@ os.makedirs(path, exist_ok=True)
 params = kp.Params_with_uc()
 
 # material = Material_with_uc()
-params.L = 300.00
-params.l = 1.0
+params.L = true_height
+params.l = 8.0
 params.dt = 60*60*2
-params.ψcrit = 1.0
+params.ψcrit = 0.0
 params.Gc = 1.0
 params.patm = 0.0
 
@@ -58,9 +58,9 @@ nondim_height = true_height/params.L
 Hw = params.ρistar*nondim_height
 
 
-refineH = (1.3,0.2)
+refineH = (2.0,0.3)
 msh = kr.utilities.create_refined_mesh(true_length, true_height, params,
-                                     aspect_ratios=(300,300), refine=refineH,
+                                     aspect_ratios=(300,100), refine=refineH,
                                      cell_factor=2.1)
 # msh.geometry.x[:,1] += 0.5
 
@@ -70,29 +70,35 @@ bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
-model = kr.models.elasticity.elastic_damage(msh, [u_bc,bc_d], params)
+monolithic_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                           bc.internal_bc(V.sub(1), fixed, 0.0),]
+
+model = kr.models.monolithic.elastic_damage(msh, monolithic_bc, params)
 
 # model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
 #                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
 
 
 #%%
-min_its = 5
+min_its = 50
 
 
 # H = mf.clayton_driving_function(es.cauchy_stress(model.ε_e, model.params.ν), model.params.σcritstar, mf.water_pressure_static(model.msh))
 
-gs = [1,5,6.8,7.5,8.5,9.8]
+gs = [2,3,4,5,6,8.5,9,9.8]
 
 
 for i in range(len(gs)):
     model.params.g = gs[i]
     model.setup_all()
 
-    kr.iterators.fixed_point(model,min_its=min_its)
+    # kr.iterators.fixed_point(model,min_its=min_its,max_its=200)
+    model.solve()
 
     kr.utilities.write_xdmf(path + "/elastictest" + str(i) + ".xdmf",
                             msh, [model.u,model.d,es.free_energy_plus_spectral(model.ε_e,model.params.ν)],
                             ["u","d","pp"], t=i)
+    
+    # model.d_prev_time.x.array[:] = model.d.x.array[:]
     
 

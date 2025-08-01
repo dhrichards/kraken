@@ -15,7 +15,7 @@ def fixed_point(model, max_its=100, tol=1e-4, min_its=2, solve_damage=True):
 
         area = np.sqrt(MPI.COMM_WORLD.allreduce(area, op=MPI.SUM))
 
-
+        error_prev = 100
         
         for i in range(max_its):
             
@@ -34,9 +34,10 @@ def fixed_point(model, max_its=100, tol=1e-4, min_its=2, solve_damage=True):
                 print(f"iteration {i}, error {error_L2}")
 
             if i>min_its-1:
-                if error_L2 < tol:
+                if (error_L2 < tol) and (error_prev < tol):
                     break
-
+            
+            error_prev = error_L2
             L2_old = L2
 
         # Update history function as finished fixed point iteration

@@ -26,8 +26,7 @@ def crack(x):
     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
 
 def fixed(x):
-    return x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height)#*(x[1]>-60))
-
+    return (x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height))# + (x[0]>(nondim_length/2 - nondim_height/2))
 
 ## check mpi size is correct
 print(MPI.COMM_WORLD.size)
@@ -46,10 +45,10 @@ os.makedirs(path, exist_ok=True)
 params = kp.Params_with_uc()
 
 # material = Material_with_uc()
-params.L = 300.00
-params.l = 8.0
-params.dt = 60*60*48
-params.ψcrit = 0.0
+params.L = 200.00
+params.l = 13.0
+params.dt = 60*60*24
+params.ψcrit = 1.0
 params.Gc = 1.0
 params.patm = 0.0
 
@@ -58,7 +57,7 @@ nondim_height = true_height/params.L
 Hw = params.ρistar*nondim_height
 
 
-refineH = (1.4,0.3)
+refineH = (2.5,0.3)
 msh = kr.utilities.create_refined_mesh(true_length, true_height, params,
                                      aspect_ratios=(100,1), refine=refineH,
                                      cell_factor=2.1)
@@ -79,7 +78,7 @@ model = kr.models.jakub3.viscoelastic_damage(msh, [u_bc,bc_d], params)
 
 
 #%%
-min_its = 10
+min_its = 4
 model.setup_all()
 
 solve_d = False
@@ -92,13 +91,13 @@ for i in range(300):
 
     if i == 10:
         solve_d = True
-        # model.params.dt = 60*60*24
-        model.setup_all()
+        # model.params.dt = 60*60*12
+        # model.setup_all()
 
     if i == 20:
         min_its = 3
 
-    kr.iterators.fixed_point(model,min_its=min_its,tol=1e-5,solve_damage=solve_d)#tol=-1, max_its = 10)
+    kr.iterators.fixed_point(model,min_its=min_its,tol=1e-5,solve_damage=solve_d,max_its=300)#tol=-1, max_its = 10)
 
     kr.utilities.write_xdmf(path + "/relax" + str(i) + ".xdmf",
                             msh, [model.u,model.d,es.free_energy_plus_dp(model.ε_e,params.ν)],["u","d","pp"], t=i)

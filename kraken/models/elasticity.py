@@ -1,5 +1,5 @@
 import numpy as np
-from dolfinx import fem
+from dolfinx import fem, default_scalar_type
 from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
@@ -41,9 +41,11 @@ class elastic_damage:
       
         self.d = fem.Function(self.D, name="damage")
         # self.g = mf.degradation_Lo2023(self.d, 5)
-        self.g = mf.degradation_default(self.d)
+        self.g = es.degradation_default(self.d)
         self.d_prev_time = fem.Function(self.D, name="damage previous time")
         self.Hprev = fem.Function(self.H_space, name="history")
+
+        self.f_factor = fem.Constant(self.U, default_scalar_type(1.0))
 
       
      
@@ -51,7 +53,7 @@ class elastic_damage:
         self.setup_momentum()
         # self.setup_damage()
         # damage.setup_damage_non_linear(self)
-        damage.setup_damage_bounded(self, lambda d: d**2)
+        damage.setup_damage_bounded(self, lambda d: d, es.free_energy_plus_lo)
 
 
     def setup_momentum(self):
@@ -63,17 +65,30 @@ class elastic_damage:
         σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
         # ψplus = es.free_energy_plus_dp(self.ε_e, self.params.ν)
         # σplus = ufl.diff(ψplus, self.ε_e)
-        # σplus = es.stress_plus_spectral(mf.ε(self.u_e), self.params.ν)
-        # σplus = es.stress_plus_amor(self.ε_e, self.params.ν)
-        # σminus = σ0 - σplus
-        # σ = self.g*σplus + σminus
-        σ = self.g*σ0
+        σplus = es.stress_plus_lo(self.ε_e, self.params.ν)
+        # # σplus = es.stress_plus_dp(self.ε_e, self.params.ν)
+        # # σplus = es.stress_plus_amor(self.ε_e, self.params.ν)
+        σminus = σ0 - σplus
+        σ = self.g*σplus + σminus
+        # σ = self.g*σ0
 
         # σ = pt.degraded_stress(self.ε_e, mf.ε(self.u_prev_it), self.g, self.params.ν)
 
-        p_ext = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
+        p_w = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
+        p_i = mf.overburden_pressure(self.msh, self.params.ρistar) + self.params.patmstar
 
-        f = self.g*mf.body_force(self.msh, self.params.ρistar)
+        f = self.f_factor*mf.body_force(self.msh, self.params.ρistar)
+
+
+        # ε = ufl.variable(self.ε_e)
+        # ψ0 = es.free_energy(ε, self.params.ν)
+        # ψplus = es.free_energy_plus_lo(ε, self.params.ν)
+        # ψminus = ψ0 - ψplus
+        # ψ = self.g*ψplus + ψminus
+
+        # σ = ufl.diff(ψ, ε)
+
+
 
 
 
@@ -86,27 +101,27 @@ class elastic_damage:
         # p_deg = -self.p
         n = ufl.FacetNormal(self.msh)
 
-        ψ = es.free_energy(mf.ε(self.u), self.params.ν)
-        ψplus = es.free_energy_plus_spectral(self.ε_e, self.params.ν)
-        ψminus = ψ - ψplus
+        # ψ = es.free_energy(self.ε_e, self.params.ν)
+        # ψplus = es.free_energy_plus_lo(self.ε_e, self.params.ν)
+        # ψminus = ψ - ψplus
 
-        elastic_energy = (\
-            # self.g*ψ
-            self.g*ψplus + ψminus \
-            - ufl.dot(f, self.u) \
-            # - p_ext*ufl.inner(ufl.grad(self.g), self.u)\
-             )* ufl.dx \
-            + self.g * p_ext *  ufl.dot(n, self.u) * ufl.ds
+        # elastic_energy = (\
+        #     # self.g*ψ
+        #     self.g*ψplus + ψminus \
+        #     - ufl.dot(f, self.u) \
+        #     # - p_w*ufl.inner(ufl.grad(self.g), self.u)\
+        #      )* ufl.dx \
+        #     + p_w *  ufl.dot(n, self.u) * ufl.ds
         
-        F = ufl.derivative(elastic_energy,self.u,v)
+        # F = ufl.derivative(elastic_energy,self.u,v)
 
-        # F = (ufl.inner(σ, mf.ε(v))\
-        #     #  - (1-g)*ufl.inner(p_ext, ufl.div(v_v))
-        #       - ufl.inner(f, v) 
-        #     #  - p_ext* ufl.inner(ufl.grad(self.g), v)\
-        #     # - mf.overburden_pressure(self.msh, self.params.ρistar, self.u, self.params.ucstar)*ufl.inner(ufl.grad(g), v_v)
-        #       ) * ufl.dx \
-        #     + self.g*p_ext * ufl.inner(n, v) * ufl.ds 
+        F = (ufl.inner(σ, mf.ε(v))\
+            #  - (1-g)*ufl.inner(p_ext, ufl.div(v_v))
+              - ufl.inner(f, v) 
+            #  - p_i* ufl.inner(ufl.grad(self.g), v)\
+            # - mf.overburden_pressure(self.msh, self.params.ρistar, self.u, self.params.ucstar)*ufl.inner(ufl.grad(g), v_v)
+              ) * ufl.dx \
+            + p_w * ufl.inner(n, v) * ufl.ds 
         
 
         J = ufl.derivative(F,self.u,ufl.TrialFunction(self.U))
@@ -141,7 +156,7 @@ class elastic_damage:
     
     def update_history(self):
 
-        H = mf.history_function(self.ε_e,self.Hprev,
+        H = es.history_function(self.ε_e,self.Hprev,
                                 self.params.ν, self.params.ψcritstar)
         self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
 

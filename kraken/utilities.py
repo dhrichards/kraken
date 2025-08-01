@@ -190,22 +190,21 @@ def extract_line(points,msh,functions):
 
 
 
-def create_refined_mesh(length, height, 
-                        params, 
+def create_refined_mesh(nondim_length, nondim_height, 
+                        lstar,ρistar=0.9,
                         aspect_ratios=(100,100), refine = (2.2,0.3),
                         cell_factor=2.1, refine_right=True ):
     
-    nondim_length = length/params.L
-    nondim_height = height/params.L
+   
 
-    cell_size = params.lstar/cell_factor
+    cell_size = lstar/cell_factor
 
     aspect_ratio_x = aspect_ratios[0]
     aspect_ratio_z = aspect_ratios[1]
 
 
 
-    Hw = params.ρistar*nondim_height
+    Hw = ρistar*nondim_height
 
 
 

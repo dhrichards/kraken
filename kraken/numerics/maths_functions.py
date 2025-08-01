@@ -1,6 +1,5 @@
 import ufl
 from .invariants import eigenstate
-from . import energy_splits as es
 from dolfinx import fem, default_scalar_type
 
 def viscosity(ε, n, eps=1.e-11, A=1.0): 
@@ -14,45 +13,29 @@ def viscous_stress(ε,p,η,C2):
 def ε(u):
     return ufl.sym(ufl.grad(u))
 
+def dev3(A):
+    δ = ufl.Identity(ufl.shape(A)[0])
+    return A - ufl.tr(A)/3*δ
+
 def εD(u):
-    return ufl.dev(ε(u))
+    return dev3(ε(u))
 
 
 def largest_eigenvalue(A):
     λ, M = eigenstate(A)
     return λ[-1]
 
-def principal_stress(ε,λ,μ):
-    return largest_eigenvalue(es.cauchy_stress(ε,λ,μ))
+def positive_part(x,eps=1e-8):
+    # return 0.5*(x + (x**2 + eps**2)**0.5)
+    return ufl.max_value(0.0,x)
+    # return ufl.conditional(ufl.gt(x,0),x,0)
+    # return 0.5*(x + abs(x))
+    # return 0.5*(x + ufl.sign(x)*x)
 
 
-def degradation_default(d,k=1e-5):
-    return (1-k)*(1-d)**2 + k
-
-
-def degradation_Lo2023(d,q=1.0,k=1e-5):
-    ϕ = 1-d
-    g = (q+1)*(1 - (q/(q+1))**(ϕ**2) )
-    return (1-k)*g + k
-
-def crack_density_function(d,l,w=lambda d: d**2,cw=2):
-    return  (w(d)/l + l * ufl.inner(ufl.grad(d), ufl.grad(d)))/cw
-
-
-
-
-def degraded_free_energy(ε,g,ν,ψcrit,free_energy_plus=es.free_energy_plus_spectral):
-    ψplus = (free_energy_plus(ε,ν)-ψcrit)
-    # # ψplus = free_energy_plus(u,ν)
-    ψminus = es.free_energy(ε,ν) - ψplus
-    return g*ψplus + ψminus
-
-
-
-def history_function(ε,Hprev,ν,ψcrit,free_energy_plus=es.free_energy_plus_spectral):
-    ψp = es.free_energy_plus_spectral(ε,ν) - ψcrit
-    return ufl.max_value(ψp,Hprev)
-    # return ufl.conditional(ufl.gt(ψp,Hprev),ψp,Hprev)
+def negative_part(x,eps=1e-6):
+    return 0.5*(x-abs(x))
+    # return 0.5*(x - (x**2 + eps**2)**0.5)
 
 
 def water_pressure(msh,v,ucstar=1.0):
@@ -115,21 +98,14 @@ def body_force_with_water(msh,ρi,g):
     return g*ρi*f + (1-g)*ρw*f
 
 
-def overburden_pressure(msh,ρistar, u, ucstar=1.0):
+def overburden_pressure(msh,ρistar, uz=0.0, ucstar=1.0):
     x = ufl.SpatialCoordinate(msh)
-    z = x[msh.geometry.dim-1] + ucstar*u[msh.geometry.dim-1]
+    z = x[msh.geometry.dim-1] + ucstar*uz
     δ = 1 - ρistar
     zi = z - δ
     return -ρistar*zi
 
 
-def clayton_driving_function(σ, σ_crit,pw=0.0):
-    λ,_ = eigenstate(σ)
-    Dd = 0.0
-    for σa in λ:
-        Dd += (es.positive_part(σa+pw)/σ_crit)**2 - 1.0
-
-    return es.positive_part(Dd)
 
 
 def ice_density(msh,ρistar_bottom=0.9, ρistar_top=0.4):
@@ -140,4 +116,5 @@ def ice_density(msh,ρistar_bottom=0.9, ρistar_top=0.4):
 
     ρi = ρistar_bottom + (ρistar_top - ρistar_bottom) * ufl.exp(-z)
     return ρi
+
 

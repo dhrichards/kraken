@@ -1,41 +1,39 @@
+from dolfinx import fem, default_scalar_type
 from kraken.utilities import mesh_sizes
-import numpy as np
 secperyr = 31556926
 
 
 
 
 class Params_with_uc:
-    def __init__(self):
+    def __init__(self,msh):
 
         # Default material properties
-        self.ρi = 900 # Density of ice
-        self.ρw = 1000 # Density of water
-        self.g = 9.81 # Gravitational acceleration
-        self.E = 9.33e9 # Young's modulus
-        self.ν = 0.325 # Poisson's ratio
-        self.A = 1.2e-25 # Flow law parameter
-        self.n = 3.0 # Flow law exponent
-        self.Gc = 1.0 # Fracture toughness
-        self.L = 100 # Characteristic length
-        self.l = 0.5 # Regularisation length
-        self.slope_angle = 0.0
-        self.σcrit =  0.1e6 # tensile strength
-        self.ψcrit = 1.0 
-        self.dt = secperyr # Characteristic time in seconds
-        self.patm = 1e5 # Atmospheric pressure
-        self.crack_viscosity = 1e6 # dunno what the units are for this
+        self.ρi = fem.Constant(msh,default_scalar_type(900)) # Density of ice
+        self.ρw = fem.Constant(msh,default_scalar_type(1000)) # Density of water
+        self.g = fem.Constant(msh,default_scalar_type(9.81)) # Gravitational acceleration
+        self.E = fem.Constant(msh,default_scalar_type(9.33e9)) # Young's modulus
+        self.ν = fem.Constant(msh,default_scalar_type(0.325)) # Poisson's ratio
+        self.A = fem.Constant(msh,default_scalar_type(1.2e-25)) # Flow law parameter
+        self.n = fem.Constant(msh,default_scalar_type(3.0)) # Flow law exponent
+        self.Gc = fem.Constant(msh,default_scalar_type(1.0)) # Fracture toughness
+        self.L = fem.Constant(msh,default_scalar_type(100)) # Characteristic length
+        self.l = fem.Constant(msh,default_scalar_type(0.5)) # Regularisation length
+        # self.σcrit =  0.1e6 # tensile strength
+        self.ψcrit = fem.Constant(msh,default_scalar_type(1.0)) 
+        self.dt = fem.Constant(msh,default_scalar_type(secperyr)) # Characteristic time in seconds
+        self.patm = fem.Constant(msh,default_scalar_type(1e5)) # Atmospheric pressure
+        
 
 
-
-    @property
-    def q(self):
-        """Calculate the paramerter q for Lo et al. degradation model."""
-        a = 3*self.Gc*self.E / (8*self.l*self.σcrit**2)
-        q = 1.0
-        for i in range(100):
-            q = a/np.log((1+q)/q)
-        return q
+    # @property
+    # def q(self):
+    #     """Calculate the paramerter q for Lo et al. degradation model."""
+    #     a = 3*self.Gc*self.E / (8*self.l*self.σcrit**2)
+    #     q = 1.0
+    #     for i in range(100):
+    #         q = a/np.log((1+q)/q)
+    #     return q
         
 
     @property
@@ -102,10 +100,10 @@ class Params_with_uc:
     def σc(self):
         return self.μ*self.ucstar
     
-    @property
-    def σcritstar(self):
-        """Non dimensional tensile strength."""
-        return self.σcrit / self.σc
+    # @property
+    # def σcritstar(self):
+    #     """Non dimensional tensile strength."""
+    #     return self.σcrit / self.σc
     
     
     @property
