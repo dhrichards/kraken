@@ -34,7 +34,7 @@ true_length = 16e3
 true_height = 300
 
 L = true_height
-l = 11.0
+l = 20.0
 
 
 path = './outputs'
@@ -73,7 +73,7 @@ model.params.patm.value = 0.0
 
 
 #%%
-min_its = 25
+min_its = 2
 
 model.setup_all()
 gs = [2,3,4,5,6,7,8,9]
@@ -82,7 +82,9 @@ for i,g in enumerate(gs):
 
     model.params.g.value = g
 
-    kr.iterators.fixed_point(model, min_its=min_its, tol=1e-7)
+    print(model.params.ucstar_float)
+
+    kr.iterators.fixed_point(model, min_its=min_its, tol=1e-7,max_its=4)
 
     kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
                             msh, [model.u,model.d,

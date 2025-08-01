@@ -4,7 +4,7 @@ from dolfinx import fem, default_real_type, nls
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
 from kraken.numerics.maths_functions import ε
-from kraken.numerics import advection_numerics, solvers
+from kraken.numerics import solvers
 from petsc4py import PETSc
 from mpi4py import MPI
 import numpy as np

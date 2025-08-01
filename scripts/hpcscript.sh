@@ -2,11 +2,11 @@
 #SBATCH --output=/users/dancha/jobs/hires.%j.%N.out
 #SBATCH --error=/users/dancha/jobs/hires.%j.%N.err
 #SBATCH --job-name=icebergtest
-#SBATCH --ntasks=8
+#SBATCH --ntasks=32
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=256gb
+#SBATCH --mem=512gb
 #SBATCH --nodes=1
-#SBATCH --time=00:30:00
+#SBATCH --time=06:30:00
 #SBATCH --partition=rocky
 #SBATCH --account=rocky
 #SBATCH --mail-type=begin,end,fail,requeue

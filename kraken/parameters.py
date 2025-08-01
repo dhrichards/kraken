@@ -45,6 +45,11 @@ class Params_with_uc:
         return self.uc/self.L
     
     @property
+    def ucstar_float(self):
+        μ = self.E.value / (2 * (1 + self.ν.value))
+        return self.ρc.value * self.g.value * self.L.value / μ
+    
+    @property
     def τ(self):
         """Relaxation time."""
         return self.A**(-1) * self.ucstar**(1-self.n) * self.μ**(-self.n)

@@ -5,6 +5,7 @@ import ufl
 import basix.ufl as bufl
 import numpy as np
 from kraken.models import damage
+from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
 from kraken.numerics import projection_tensors as pt
@@ -14,9 +15,9 @@ from petsc4py import PETSc
 
 
 class elastic_damage:
-    def __init__(self, msh, bc_funcs, params):
+    def __init__(self, msh, bc_funcs):
         self.msh = msh
-        self.params = params
+        self.params = parameters.Params_with_uc(self.msh)
 
         self.u_el = bufl.element("CG", self.msh.basix_cell(), 1, shape=(self.msh.geometry.dim,))
         
@@ -45,15 +46,13 @@ class elastic_damage:
         self.d_prev_time = fem.Function(self.D, name="damage previous time")
         self.Hprev = fem.Function(self.H_space, name="history")
 
-        self.f_factor = fem.Constant(self.U, default_scalar_type(1.0))
-
       
      
     def setup_all(self):
         self.setup_momentum()
         # self.setup_damage()
         # damage.setup_damage_non_linear(self)
-        damage.setup_damage_bounded(self, lambda d: d, es.free_energy_plus_lo)
+        damage.setup_damage_bounded(self, lambda d: d, lambda ε,ν: es.free_energy_plus_dp(ε, ν, -0.204))
 
 
     def setup_momentum(self):
@@ -65,9 +64,9 @@ class elastic_damage:
         σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
         # ψplus = es.free_energy_plus_dp(self.ε_e, self.params.ν)
         # σplus = ufl.diff(ψplus, self.ε_e)
-        σplus = es.stress_plus_lo(self.ε_e, self.params.ν)
-        # # σplus = es.stress_plus_dp(self.ε_e, self.params.ν)
-        # # σplus = es.stress_plus_amor(self.ε_e, self.params.ν)
+        # σplus = es.stress_plus_lo(self.ε_e, self.params.ν)
+        σplus = es.stress_plus_dp(self.ε_e, self.params.ν, -0.204)
+        # σplus = es.stress_plus_amor(self.ε_e, self.params.ν)
         σminus = σ0 - σplus
         σ = self.g*σplus + σminus
         # σ = self.g*σ0
@@ -77,7 +76,7 @@ class elastic_damage:
         p_w = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
         p_i = mf.overburden_pressure(self.msh, self.params.ρistar) + self.params.patmstar
 
-        f = self.f_factor*mf.body_force(self.msh, self.params.ρistar)
+        f = mf.body_force(self.msh, self.params.ρistar)
 
 
         # ε = ufl.variable(self.ε_e)
@@ -102,7 +101,7 @@ class elastic_damage:
         n = ufl.FacetNormal(self.msh)
 
         # ψ = es.free_energy(self.ε_e, self.params.ν)
-        # ψplus = es.free_energy_plus_lo(self.ε_e, self.params.ν)
+        # ψplus = es.free_energy_plus_dp(self.ε_e, self.params.ν)
         # ψminus = ψ - ψplus
 
         # elastic_energy = (\

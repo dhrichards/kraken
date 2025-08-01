@@ -109,6 +109,12 @@ class viscoelastic_damage:
         σ = self.g*σplus + σminus
         # σ = self.g*σ0
 
+        ε_e_prev_it = mf.ε(self.u_e_prev_time+self.du_e_prev_it)
+        σ0_prev_it = es.cauchy_stress(ε_e_prev_it, self.params.ν)
+        σplus_prev_it = es.stress_plus_lo(ε_e_prev_it, self.params.ν)
+        σminus_prev_it = σ0_prev_it - σplus_prev_it
+        σ_prev_it = self.g*σplus_prev_it + σminus_prev_it
+
         # σ = pt.degraded_stress(self.ε_e, 
                             #    mf.ε(self.du_e_prev_it) + mf.ε(self.u_e_prev_time), 
                             #    self.g, self.params.ν)
@@ -134,7 +140,7 @@ class viscoelastic_damage:
             + (
                 self.g*η*ufl.inner(mf.ε(self.du_v)/δt, mf.ε(v))\
                 + ufl.inner(-self.p, ufl.div(v))  \
-            -    ufl.inner(σ, mf.ε(v))
+            -    ufl.inner(σ_prev_it, mf.ε(v))
              ) * ufl.dx \
             + (
                 - self.g*ufl.inner(ufl.div(self.du_v), q) \
@@ -202,7 +208,7 @@ class viscoelastic_damage:
         
         du = fem.Function(self.V)
         du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
-        self.msh.geometry.x[:,:self.msh.geometry.dim] += self.params.ucstar*du.x.array.reshape((-1, self.msh.geometry.dim))
+        self.msh.geometry.x[:,:self.msh.geometry.dim] += self.params.ucstar_float*du.x.array.reshape((-1, self.msh.geometry.dim))
         
         self.w_prev_time.x.array[:] += self.dw.x.array[:]
         self.d_prev_time.x.array[:] = self.d.x.array[:]

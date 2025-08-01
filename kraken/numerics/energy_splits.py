@@ -37,6 +37,20 @@ def free_energy(ε,ν):
 
 
 
+def free_energy_plus_dplike(ε, ν, γ=1):
+    εD = dev3(ε)
+    normεD = ufl.sqrt(ufl.inner(εD, εD)+1e-8)
+    K = Koverμ(ν)
+
+    ψ1 = free_energy(ε, ν)
+    ψ2 = (K*γ*ufl.tr(ε) + 2*normεD)**2 / (2*(K*γ**2 + 2))
+
+    return ufl.conditional(ufl.lt(normεD, ufl.tr(ε)/γ), ψ1,
+                           ufl.conditional(ufl.gt(normεD, -K*γ*ufl.tr(ε)/2), ψ2, 0)) 
+                                        
+
+
+
 def free_energy_plus_dp(ε, ν, B = -0.8/sqrt(3.0)):
     K = Koverμ(ν)
     I1 = ufl.tr(ε)
