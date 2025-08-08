@@ -60,26 +60,31 @@ class viscoelastic_damage:
     
 
         self.V = fem.functionspace(self.msh, ("Lagrange", 1, (self.msh.geometry.dim, )))
-        self.D = fem.functionspace(self.msh, ("Lagrange", 1))
+
+        self.bc_u = bc_funcs[0](self.W)
+
+        damage.setup_higher_order_spaces(self,bc_funcs[1])  
+        # self.D = fem.functionspace(self.msh, ("Lagrange", 1))
 
         # self.H_el = bufl.quadrature_element(
         #     self.msh.basix_cell(), value_shape=(), scheme="default", degree=1
         # )
-        self.H_space = fem.functionspace(self.msh, ("DG", 1))
+        # self.H_space = fem.functionspace(self.msh, ("DG", 1))
 
-        self.bc_u = bc_funcs[0](self.W)
-        self.bc_d = bc_funcs[1](self.D)
+        
+        # self.bc_d = bc_funcs[1](self.D)
 
-      
-        self.d = fem.Function(self.D, name="damage")
-        self.g = es.degradation_default(self.d)
-        self.d_prev_time = fem.Function(self.D, name="damage previous time")
-        self.Hprev = fem.Function(self.H_space, name="history")
+            
+        # self.d = fem.Function(self.D, name="damage")
+        # self.g = es.degradation_default(self.d)
+        # self.d_prev_time = fem.Function(self.D, name="damage previous time")
+        # self.Hprev = fem.Function(self.H_space, name="history")
 
 
     def setup_all(self):
         self.setup()
-        damage.setup_damage_bounded(self, lambda d: d, es.free_energy_plus_lo)
+        damage.setup_damage_higher_order(self, es.free_energy_plus_dp)
+        # damage.setup_damage_bounded(self, lambda d: d**2, free_energy_plus=es.free_energy_plus_dp)
 
 
     def setup(self):
@@ -100,47 +105,28 @@ class viscoelastic_damage:
     
         δ = ufl.Identity(self.msh.geometry.dim)
         σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
-        σplus = es.stress_plus_lo(self.ε_e, self.params.ν)
-        # # σplus = es.stress_plus_dp(self.ε_e, self.params.ν)
-        σminus = σ0 - σplus
-        # σminus = -mf.overburden_pressure(self.msh, self.params.ρistar)* ufl.Identity(self.msh.geometry.dim)
-        # # σminus = -p_ext*δ
-        # σplus = σ0 - σminus
-        σ = self.g*σplus + σminus
-        # σ = self.g*σ0
-
-        ε_e_prev_it = mf.ε(self.u_e_prev_time+self.du_e_prev_it)
-        σ0_prev_it = es.cauchy_stress(ε_e_prev_it, self.params.ν)
-        σplus_prev_it = es.stress_plus_lo(ε_e_prev_it, self.params.ν)
-        σminus_prev_it = σ0_prev_it - σplus_prev_it
-        σ_prev_it = self.g*σplus_prev_it + σminus_prev_it
-
-        # σ = pt.degraded_stress(self.ε_e, 
-                            #    mf.ε(self.du_e_prev_it) + mf.ε(self.u_e_prev_time), 
-                            #    self.g, self.params.ν)
+        σ = self.g*σ0
 
         
 
         f = mf.body_force(self.msh, self.params.ρistar)
+        fw = mf.water_body_force(self.msh)
 
-        # p_deg = g*es.positive_part(-self.p) + es.negative_part(-self.p)
-        p_prev_it = self.p_prev_time + self.dp_prev_it
-        # p_deg = pt.degraded_scalar(-self.p, -p_prev_it, self.g)
-        p_deg = self.g*-self.p
-
-        p_crack = p_i #+ 0.1*p_w
-
+        
         F = (ufl.inner(σ, mf.ε(v_v))\
             #  - (1-g)*ufl.inner(p_ext, ufl.div(v_v))
-              - ufl.inner(f, v_v) 
-            #  - p_crack* ufl.inner(ufl.grad(self.g), v_v)\
+              - self.g*ufl.inner(f, v_v) 
+             - p_w* ufl.inner(ufl.grad(self.g), v_v)\
+            # + p_i*ufl.inner(ufl.Dx(self.g, 0), v_v[0]) \
+            
+            #  + (1-self.g)*ufl.inner(fw, v_v) \
             # - mf.overburden_pressure(self.msh, self.params.ρistar, self.u, self.params.ucstar)*ufl.inner(ufl.grad(g), v_v)
               ) * ufl.dx \
             + p_w * ufl.inner(n, v_v) * ufl.ds \
             + (
                 self.g*η*ufl.inner(mf.ε(self.du_v)/δt, mf.ε(v))\
                 + ufl.inner(-self.p, ufl.div(v))  \
-            -    ufl.inner(σ_prev_it, mf.ε(v))
+            -    ufl.inner(σ, mf.ε(v))
              ) * ufl.dx \
             + (
                 - self.g*ufl.inner(ufl.div(self.du_v), q) \
@@ -190,7 +176,7 @@ class viscoelastic_damage:
         self.dw_prev_it.x.array[:] = self.dw.x.array[:]
 
     def solve_damage(self):
-        self.damage_solver.solve(None, self.d.x.petsc_vec)
+        self.damage_solver.solve(None, self.d_mixed.x.petsc_vec)
 
     # def update_strain_tensor(self):
     #     temp = fem.Function(self.E, name="elastic strain tensor")
@@ -205,13 +191,15 @@ class viscoelastic_damage:
     def timestep(self):
 
         # self.update_strain_tensor()
+        # self.update_history()
         
         du = fem.Function(self.V)
         du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
         self.msh.geometry.x[:,:self.msh.geometry.dim] += self.params.ucstar_float*du.x.array.reshape((-1, self.msh.geometry.dim))
         
         self.w_prev_time.x.array[:] += self.dw.x.array[:]
-        self.d_prev_time.x.array[:] = self.d.x.array[:]
+        # self.d_prev_time.x.array[:] = self.d.x.array[:]
+        
         # self.w.x.array[:] = 0.0
 
 

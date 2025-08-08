@@ -34,7 +34,7 @@ true_length = 16e3
 true_height = 300
 
 L = true_height
-l = 20.0
+l = 10.0
 
 
 path = './outputs'
@@ -47,11 +47,11 @@ nondim_height = true_height/L
 refineH = (2.0,0.3)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L,
                                      aspect_ratios=(100,1), refine=refineH,
-                                     cell_factor=2.1)
+                                     cell_factor=1)
 # msh.geometry.x[:,1] += 0.5
 
 no_bc = lambda V: []
-bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0)]
+bc_d = lambda V: [bc.internal_bc(V.sub(0), fixed, 0.0)]
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
@@ -76,15 +76,13 @@ model.params.patm.value = 0.0
 min_its = 2
 
 model.setup_all()
-gs = [2,3,4,5,6,7,8,9]
+gs = [2,4,6,8,9]
 
 for i,g in enumerate(gs):
 
     model.params.g.value = g
 
-    print(model.params.ucstar_float)
-
-    kr.iterators.fixed_point(model, min_its=min_its, tol=1e-7,max_its=4)
+    kr.iterators.fixed_point(model, min_its=min_its, tol=1e-5)
 
     kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
                             msh, [model.u,model.d,

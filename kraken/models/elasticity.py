@@ -29,22 +29,24 @@ class elastic_damage:
         self.u_prev_it = fem.Function(self.U, name="displacement previous iteration")
         self.u_prev_time = fem.Function(self.U, name="displacement previous time")
  
-        self.D = fem.functionspace(self.msh, ("Lagrange", 1))
+        # self.D = fem.functionspace(self.msh, ("Lagrange", 1))
 
         # self.H_el = bufl.quadrature_element(
         #     self.msh.basix_cell(), value_shape=(), scheme="default", degree=1
         # )
-        self.H_space = fem.functionspace(self.msh, ("DG", 1))
+        # self.H_space = fem.functionspace(self.msh, ("DG", 1))
+
+
 
         self.bc_u = bc_funcs[0](self.U)
-        self.bc_d = bc_funcs[1](self.D)
+        # self.bc_d = bc_funcs[1](self.D)
 
-      
-        self.d = fem.Function(self.D, name="damage")
+        damage.setup_higher_order_spaces(self,bc_funcs[1])
+        # self.d = fem.Function(self.D, name="damage")
         # self.g = mf.degradation_Lo2023(self.d, 5)
-        self.g = es.degradation_default(self.d)
-        self.d_prev_time = fem.Function(self.D, name="damage previous time")
-        self.Hprev = fem.Function(self.H_space, name="history")
+        # self.g = es.degradation_default(self.d)
+        # self.d_prev_time = fem.Function(self.D, name="damage previous time")
+        # self.Hprev = fem.Function(self.H_space, name="history")
 
       
      
@@ -52,30 +54,34 @@ class elastic_damage:
         self.setup_momentum()
         # self.setup_damage()
         # damage.setup_damage_non_linear(self)
-        damage.setup_damage_bounded(self, lambda d: d, lambda ε,ν: es.free_energy_plus_dp(ε, ν, -0.204))
+        # damage.setup_damage_bounded(self, lambda d: d, lambda ε,ν: es.free_energy_plus_lo(ε, ν))
+        damage.setup_damage_higher_order(self,es.free_energy_plus_dp)
 
 
     def setup_momentum(self):
 
 
         v = ufl.TestFunction(self.U)
+
+        p_w = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
+        p_i = mf.overburden_pressure(self.msh, self.params.ρistar) + self.params.patmstar
+
         
         
         σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
         # ψplus = es.free_energy_plus_dp(self.ε_e, self.params.ν)
         # σplus = ufl.diff(ψplus, self.ε_e)
         # σplus = es.stress_plus_lo(self.ε_e, self.params.ν)
-        σplus = es.stress_plus_dp(self.ε_e, self.params.ν, -0.204)
+        # σplus = es.stress_plus_lo(self.ε_e, self.params.ν)
         # σplus = es.stress_plus_amor(self.ε_e, self.params.ν)
-        σminus = σ0 - σplus
+        σminus = -p_i*ufl.Identity(self.msh.geometry.dim)
+        σplus = σ0 - σminus
         σ = self.g*σplus + σminus
-        # σ = self.g*σ0
+        σ = self.g*σ0
 
         # σ = pt.degraded_stress(self.ε_e, mf.ε(self.u_prev_it), self.g, self.params.ν)
 
-        p_w = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
-        p_i = mf.overburden_pressure(self.msh, self.params.ρistar) + self.params.patmstar
-
+        
         f = mf.body_force(self.msh, self.params.ρistar)
 
 
@@ -116,7 +122,7 @@ class elastic_damage:
 
         F = (ufl.inner(σ, mf.ε(v))\
             #  - (1-g)*ufl.inner(p_ext, ufl.div(v_v))
-              - ufl.inner(f, v) 
+              - self.g*ufl.inner(f, v) 
             #  - p_i* ufl.inner(ufl.grad(self.g), v)\
             # - mf.overburden_pressure(self.msh, self.params.ρistar, self.u, self.params.ucstar)*ufl.inner(ufl.grad(g), v_v)
               ) * ufl.dx \
@@ -167,11 +173,12 @@ class elastic_damage:
         self.u_prev_it.x.array[:] = self.u.x.array[:]
 
     def solve_damage(self):
-        self.damage_solver.solve(None, self.d.x.petsc_vec)
+        self.damage_solver.solve(None, self.d_mixed.x.petsc_vec)
 
 
     def timestep(self):
         self.u_prev_time.x.array[:] = self.u.x.array[:]
-        self.d_prev_time.x.array[:] = self.d.x.array[:]
+        self.update_history()
+        # self.d_prev_time.x.array[:] = self.d.x.array[:]
         # self.d_prev_time.x.array[:] = self.d.x.array[:]
         # self.w.x.array[:] = 0.0

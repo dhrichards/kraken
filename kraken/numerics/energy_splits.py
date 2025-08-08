@@ -218,6 +218,6 @@ def degraded_free_energy(ε,g,ν,ψcrit,free_energy_plus=free_energy_plus_spectr
 
 
 def history_function(ε,Hprev,ν,ψcrit,free_energy_plus=free_energy_plus_spectral):
-    ψp = free_energy_plus_spectral(ε,ν) - ψcrit
+    ψp = free_energy_plus(ε,ν) - ψcrit
     return ufl.max_value(ψp,Hprev)
     # return ufl.conditional(ufl.gt(ψp,Hprev),ψp,Hprev)

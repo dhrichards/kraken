@@ -41,5 +41,7 @@ def fixed_point(model, max_its=100, tol=1e-4, min_its=2, solve_damage=True):
             L2_old = L2
 
         # Update history function as finished fixed point iteration
-        model.update_history()
+        if solve_damage:
+            model.update_history()
+    
         

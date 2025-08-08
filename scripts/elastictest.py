@@ -17,9 +17,14 @@ def left_boundary(x):
 def right_boundary(x):
     return np.isclose(x[0], nondim_length/2)
 
-# def bottom_boundary(x):
-#     return np.isclose(x[1], -Hw)
+def bottom_boundary(x):
+    return np.isclose(x[1], -Hw)
 
+def top_boundary(x):
+    return np.isclose(x[1], nondim_height - Hw)
+
+def all_boundaries(x):
+    return left_boundary(x) + right_boundary(x) + bottom_boundary(x) + top_boundary(x)
 # def crack(x):
 #     x_c = nondim_length/2 - nondim_height
 #     l = params.lstar
@@ -38,21 +43,25 @@ os.makedirs(path, exist_ok=True)
 
 
 L = true_height
-l = 8.0
+l = 1.0
 
 
 nondim_length = true_length/L
 nondim_height = true_height/L
 
+Hw = 0.9
 
-refineH = (6.0,0.3)
+
+refineH = (1.4,0.3)
 msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L,
                                      aspect_ratios=(300,100), refine=refineH,
-                                     cell_factor=2.1)
+                                     cell_factor=1.0)
 # msh.geometry.x[:,1] += 0.5
 
 no_bc = lambda V: []
-bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0)]
+bc_d = lambda V: [bc.internal_bc(V.sub(0), fixed, 0.0),
+                #   bc.get_zero_bc(V.sub(1), all_boundaries)
+                  ]
 
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
@@ -85,7 +94,7 @@ for i in range(len(gs)):
     model.params.g.value = gs[i]
 
 
-    kr.iterators.fixed_point(model,min_its=min_its,max_its=200,tol=1e-6)
+    kr.iterators.fixed_point(model,min_its=min_its,max_its=50,tol=1e-6)
     # model.solve()
 
     kr.utilities.write_xdmf(path + "/elastictest" + str(i) + ".xdmf",
