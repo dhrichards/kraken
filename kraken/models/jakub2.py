@@ -47,6 +47,7 @@ class viscoelastic_damage:
         self.u_e_prev_it = self.u_prev_it - self.u_v_prev_it
 
         self.D = fem.functionspace(self.msh, ("Lagrange", 1))
+        
 
         # self.H_el = bufl.quadrature_element(
         #     self.msh.basix_cell(), value_shape=(), scheme="default", degree=1
@@ -65,13 +66,16 @@ class viscoelastic_damage:
 
         self.V = fem.functionspace(self.msh, ("Lagrange", 1, (self.msh.geometry.dim, )))
 
+        self.ρ = fem.Function(self.D, name="density")
+        self.ρ.x.array[:] = self.params.ρistar
+
        
        
      
     def setup_all(self):
         self.setup_momentum()
         # self.setup_damage()
-        # damage.setup_damage_non_linear(self)
+        # damage.setup_damage_non_linear(self, es.free_energy_plus_lo)
         damage.setup_damage_bounded(self, lambda d: d, es.free_energy_plus_lo)
 
 
@@ -98,17 +102,12 @@ class viscoelastic_damage:
 
         p_w = mf.water_pressure(self.msh,self.u,self.params.ucstar) +self.params.patmstar
         p_i = mf.overburden_pressure(self.msh, self.params.ρistar) + self.params.patmstar
+        p_crack = mf.water_pressure_static(self.msh,level=0.05) + self.params.patmstar
 
         f = mf.body_force(self.msh, self.params.ρistar)
 
 
 
-
-
-
-        # p_deg = g*es.positive_part(-self.p) + es.negative_part(-self.p)
-        # p_deg = pt.degraded_scalar(-self.p, -self.p_prev_it, g)
-        p_deg = self.g*-self.p
         # p_deg = -self.p
         n = ufl.FacetNormal(self.msh)
 
@@ -117,7 +116,8 @@ class viscoelastic_damage:
             ufl.inner(σ, mf.ε(v_v))\
             #  - (1-g)*ufl.inner(p_ext, ufl.div(v_v))
               - ufl.inner(f, v_v) 
-            #  - p_i* ufl.inner(ufl.grad(self.g), v_v)\
+             - p_crack* ufl.inner(ufl.grad(self.g), v_v)\
+            # - p_crack*ufl.inner(2*self.d*ufl.grad(self.d), v_v) \
             # - mf.overburden_pressure(self.msh, self.params.ρistar, self.u, self.params.ucstar)*ufl.inner(ufl.grad(g), v_v)
               ) * ufl.dx \
             + p_w * ufl.inner(n, v_v) * ufl.ds \
@@ -167,9 +167,10 @@ class viscoelastic_damage:
     
     def update_history(self):
 
-        H = es.history_function(self.ε_e,self.Hprev,
-                                self.params.ν, self.params.ψcritstar)
-        self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
+        # H = es.history_function(self.ε_e,self.Hprev,
+        #                         self.params.ν, self.params.ψcritstar)
+        # self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
+        self.d_prev_time.x.array[:] = self.d.x.array[:]
 
         
 
@@ -184,6 +185,6 @@ class viscoelastic_damage:
 
     def timestep(self):
         self.w_prev_time.x.array[:] = self.w.x.array[:]
-        self.d_prev_time.x.array[:] = self.d.x.array[:]
+        
         # self.d_prev_time.x.array[:] = self.d.x.array[:]
         # self.w.x.array[:] = 0.0

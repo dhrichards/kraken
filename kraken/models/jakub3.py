@@ -63,28 +63,36 @@ class viscoelastic_damage:
 
         self.bc_u = bc_funcs[0](self.W)
 
-        damage.setup_higher_order_spaces(self,bc_funcs[1])  
-        # self.D = fem.functionspace(self.msh, ("Lagrange", 1))
+        # damage.setup_higher_order_spaces(self,bc_funcs[1])  
+        self.D = fem.functionspace(self.msh, ("Lagrange", 1))
 
-        # self.H_el = bufl.quadrature_element(
-        #     self.msh.basix_cell(), value_shape=(), scheme="default", degree=1
-        # )
-        # self.H_space = fem.functionspace(self.msh, ("DG", 1))
+        self.H_el = bufl.quadrature_element(
+            self.msh.basix_cell(), value_shape=(), scheme="default", degree=1
+        )
+        self.H_space = fem.functionspace(self.msh, ("DG", 1))
 
         
-        # self.bc_d = bc_funcs[1](self.D)
+        self.bc_d = bc_funcs[1](self.D)
 
             
-        # self.d = fem.Function(self.D, name="damage")
-        # self.g = es.degradation_default(self.d)
-        # self.d_prev_time = fem.Function(self.D, name="damage previous time")
-        # self.Hprev = fem.Function(self.H_space, name="history")
+        self.d = fem.Function(self.D, name="damage")
+        self.g = es.degradation_default(self.d)
+        self.d_prev_time = fem.Function(self.D, name="damage previous time")
+        self.Hprev = fem.Function(self.H_space, name="history")
 
+        self.DG0 = fem.functionspace(self.msh, ("DG", 0))
+        self.areaf = ufl.TestFunction(self.DG0)
+        self.cell_area_form = fem.form(self.areaf * ufl.dx)
+        self.area_0 = np.copy(fem.assemble_vector(self.cell_area_form).array)
+
+        self.area_ratio = fem.Function(self.DG0)
+        self.area_ratio.x.array[:] = 1.0
 
     def setup_all(self):
         self.setup()
-        damage.setup_damage_higher_order(self, es.free_energy_plus_dp)
-        # damage.setup_damage_bounded(self, lambda d: d**2, free_energy_plus=es.free_energy_plus_dp)
+        # damage.setup_damage_higher_order(self, es.free_energy_plus_dp)
+        # damage.setup_damage_bounded(self, lambda d: d, free_energy_plus=es.free_energy_plus_lo)
+        damage.setup_damage_non_linear(self, es.free_energy_plus_lo)
 
 
     def setup(self):
@@ -105,7 +113,12 @@ class viscoelastic_damage:
     
         δ = ufl.Identity(self.msh.geometry.dim)
         σ0 = es.cauchy_stress(self.ε_e, self.params.ν)
-        σ = self.g*σ0
+        σplus = es.stress_plus_lo(self.ε_e, self.params.ν)
+        σminus = σ0 - σplus
+        # σ = self.g*σ0
+        # σminus = -p_i*δ
+        # σplus = σ0 - σminus
+        σ = self.g*σplus + σminus
 
         
 
@@ -115,8 +128,9 @@ class viscoelastic_damage:
         
         F = (ufl.inner(σ, mf.ε(v_v))\
             #  - (1-g)*ufl.inner(p_ext, ufl.div(v_v))
-              - self.g*ufl.inner(f, v_v) 
-             - p_w* ufl.inner(ufl.grad(self.g), v_v)\
+              - (1/self.area_ratio)*ufl.inner(f, v_v) 
+            #  - p_w* ufl.inner(ufl.grad(self.g), v_v)\
+            - p_w*ufl.inner(2*self.d*ufl.grad(self.d), v_v) \
             # + p_i*ufl.inner(ufl.Dx(self.g, 0), v_v[0]) \
             
             #  + (1-self.g)*ufl.inner(fw, v_v) \
@@ -129,7 +143,7 @@ class viscoelastic_damage:
             -    ufl.inner(σ, mf.ε(v))
              ) * ufl.dx \
             + (
-                - self.g*ufl.inner(ufl.div(self.du_v), q) \
+                - ufl.inner(ufl.div(self.du_v), q) \
                 # - ufl.inner(pt.degraded_scalar(ufl.div(self.du_v),-p_prev_it,self.g), q)\
                 # - ufl.inner(g*es.positive_part(ufl.div(dot_u_v)) + es.negative_part(ufl.div(dot_u_v)), q)\
             ) * ufl.dx 
@@ -165,10 +179,11 @@ class viscoelastic_damage:
    
     def update_history(self):
 
-        H = es.history_function(self.ε_e,self.Hprev,
-                                self.params.ν,self.params.ψcritstar)
+        # H = es.history_function(self.ε_e,self.Hprev,
+        #                         self.params.ν,self.params.ψcritstar)
 
-        self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
+        # self.Hprev.interpolate(fem.Expression(H,self.H_space.element.interpolation_points()))
+        self.d_prev_time.x.array[:] = self.d.x.array[:]
 
     def solve(self):
         self.solver.solve(None, self.dw.x.petsc_vec)
@@ -176,7 +191,7 @@ class viscoelastic_damage:
         self.dw_prev_it.x.array[:] = self.dw.x.array[:]
 
     def solve_damage(self):
-        self.damage_solver.solve(None, self.d_mixed.x.petsc_vec)
+        self.damage_solver.solve(None, self.d.x.petsc_vec)
 
     # def update_strain_tensor(self):
     #     temp = fem.Function(self.E, name="elastic strain tensor")
@@ -199,6 +214,9 @@ class viscoelastic_damage:
         
         self.w_prev_time.x.array[:] += self.dw.x.array[:]
         # self.d_prev_time.x.array[:] = self.d.x.array[:]
+
+        self.area = fem.assemble_vector(self.cell_area_form).array
+        self.area_ratio.x.array[:] = self.area/self.area_0
         
         # self.w.x.array[:] = 0.0
 

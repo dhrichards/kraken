@@ -198,6 +198,10 @@ def degradation_default(d,k=1e-5):
     return (1-k)*(1-d)**2 + k
 
 
+def degradation_rational(d, m=3.0):
+    return ((1-d)**2)/((1-d)**2 + m*d*(1+d))
+
+
 def degradation_Lo2023(d,q=1.0,k=1e-5):
     ϕ = 1-d
     g = (q+1)*(1 - (q/(q+1))**(ϕ**2) )

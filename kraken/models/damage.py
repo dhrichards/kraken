@@ -10,6 +10,83 @@ from mpi4py import MPI
 import numpy as np
 
 
+class Damage:
+    def __init__(self, sim):
+        self.sim = sim
+
+
+
+
+
+
+
+class DamageLowerOrder(Damage):
+    def __init__(self, sim):
+        super().__init__(sim)
+
+        self.d_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
+        self.D = fem.functionspace(self.sim.msh, self.d_el)
+        self.d = fem.Function(self.D, name="damage")
+
+        self.g = es.degradation_default(self.d)
+
+        
+
+        self.bc_d = self.sim.bc_funcs[1](self.D)
+
+    def solve(self):
+        self.solver.solve(None, self.d.x.petsc_vec)
+
+
+
+class DamageBounded(DamageLowerOrder):
+    def __init__(self, sim):
+        super().__init__(sim)
+
+        self.d_prev_time = fem.Function(self.D, name="damage_prev_time")
+
+    def setup(self, w = lambda d: d**2,free_energy_plus=es.free_energy_plus_spectral):
+        C3 = self.sim.params.C3; l = self.sim.params.lstar
+        ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
+
+        s = np.linspace(0,1,500)
+        c0 = 4*np.trapezoid(np.sqrt(w(s)),s)
+        
+
+        H = ufl.max_value(free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
+
+        dissipated_energy = (1/C3) * es.crack_density_function(self.d, l, w, c0) * ufl.dx
+        elastic_energy = self.g * H * ufl.dx
+
+        total_energy = dissipated_energy + elastic_energy
+
+        self.F = ufl.derivative(total_energy, self.d, ufl.TestFunction(self.D))
+        self.J = ufl.derivative(self.F, self.d, ufl.TrialFunction(self.D))
+
+        self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
+
+
+        d_ub = fem.Function(self.D, name="damage_ub")
+        d_ub.x.array[:] = 1.0
+
+        self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
+        self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F)))
+        self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J)), P=None)
+
+        self.solver.setType("vinewtonrsls")
+        self.solver.setVariableBounds(self.d.x.petsc_vec, d_ub.x.petsc_vec)
+
+        self.solver.setTolerances(rtol=1.0e-9, max_it=50)
+        self.solver.getKSP().setType("cg")
+        self.solver.getKSP().setTolerances(rtol=1.0e-9)
+        self.solver.getKSP().getPC().setType("jacobi")
+
+    def update_history(self):
+        # Update the history variable
+        self.d_prev_time.x.array[:] = self.d.x.array[:]
+
+
+
 def initialise_damage(model):
     model.D = fem.functionspace(model.msh, ("Lagrange", 1))
 
@@ -39,9 +116,20 @@ def setup_damage_non_linear(model,free_energy_plus=es.free_energy_plus_dp):
 
     v = ufl.TestFunction(model.D)
 
+    # pw = mf.water_pressure(model.msh, model.u, model.params.ucstar) + model.params.patmstar
+    pw = mf.water_pressure_static(model.msh)
+    Iprime = 2*model.d
+    Iprimeprime = 2
+
 
     F = (ufl.inner(model.d,v) + l**2*ufl.inner(ufl.grad(model.d), ufl.grad(v)) \
             - C3*l*2*(1-model.d)*H*v) * ufl.dx
+    
+
+    # F += C3*(- ufl.inner(ufl.div(pw*model.u*Iprime),v) 
+    #     + Iprimeprime*ufl.inner(ufl.grad(model.d),model.u)*v) * ufl.dx
+    
+
     J = ufl.derivative(F,model.d,ufl.TrialFunction(model.D))
 
 
@@ -73,11 +161,19 @@ def setup_higher_order_spaces(model,bc_func):
     model.d_el_mixed = bufl.mixed_element([model.d_el, model.d_el])
     model.D_mixed = fem.functionspace(model.msh, model.d_el_mixed)
     model.d_mixed = fem.Function(model.D_mixed, name="damage_mixed")
+    model.d_mixed_prev_time = fem.Function(model.D_mixed, name="damage_mixed_prev_time")
+    # model.d_mixed_ub = fem.Function(model.D_mixed, name="damage_mixed_ub")
 
     
     model.D, _ = model.D_mixed.sub(0).collapse()
 
     model.d, model.lap = ufl.split(model.d_mixed)
+    model.d_prev_time, model.lap_lb = ufl.split(model.d_mixed_prev_time)
+    # model.d_ub, model.lap_ub = ufl.split(model.d_mixed_ub)
+
+    # model.lap_lb.x.array[:] = -16/(model.params.lstar**2)
+    # model.lap_ub.x.array[:] = 16/(model.params.lstar**2)
+    # model.d_ub.x.array[:] = 1.0
 
     model.H_space = fem.functionspace(model.msh, ("DG", 1))   
     model.Hprev = fem.Function(model.H_space, name="history")
@@ -120,19 +216,17 @@ def setup_damage_higher_order(model, free_energy_plus=es.free_energy_plus_spectr
     model.damage_solver.setJacobian(model.damage_problem.J, fem.petsc.create_matrix(fem.form(J)),P=None)
 
 
-
+    
     model.damage_solver.setType("newtonls")
 
-
-
+    
+    
     model.damage_solver.setTolerances(rtol=1.0e-9, max_it=50)
     model.damage_solver.getKSP().setType("preonly")
     model.damage_solver.getKSP().setTolerances(rtol=1.0e-9)
     model.damage_solver.getKSP().getPC().setType("lu")
-    # model.damage_solver.getKSP().getPC().setFactorSolverType("mumps")
 
-
-                    
+    
 
 
 
@@ -161,17 +255,25 @@ def setup_damage_bounded(model, w=lambda d: d, free_energy_plus=es.free_energy_p
 
 
 
-
+    # pw = mf.water_pressure(model.msh, model.u, model.params.ucstar) + model.params.patmstar
+    pw = mf.water_pressure_static(model.msh)
+    # Iprime = 2 - 2*model.d
+    Iprime = 2*model.d
+    Iprimeprime = 2
 
     dissipated_energy = (1/C3) * es.crack_density_function(model.d,l,w, c0)*ufl.dx
     elastic_energy = model.g * H * ufl.dx
-    # pressure_work = -pw*ufl.inner(ufl.grad(g), model.u) * ufl.dx
-
-    total_energy = dissipated_energy + elastic_energy 
+    pressure_work = -pw*ufl.inner(Iprime*ufl.grad(model.d), model.u) * ufl.dx
 
 
+    total_energy = dissipated_energy + elastic_energy #+ pressure_work
 
-    F = ufl.derivative(total_energy,model.d,ufl.TestFunction(model.D))
+    v = ufl.TestFunction(model.D)
+
+    F = ufl.derivative(total_energy,model.d,v)
+
+    # F += - ufl.inner(ufl.div(pw*model.u*Iprime),v) * ufl.dx \
+    #     + Iprimeprime*ufl.inner(ufl.grad(model.d),model.u)*v * ufl.dx
     J = ufl.derivative(F,model.d,ufl.TrialFunction(model.D))
 
     model.damage_problem = solvers.SNESProblem(F, model.d, bcs=model.bc_d)
@@ -193,8 +295,6 @@ def setup_damage_bounded(model, w=lambda d: d, free_energy_plus=es.free_energy_p
     model.damage_solver.getKSP().setTolerances(rtol=1.0e-9)
     model.damage_solver.getKSP().getPC().setType("jacobi")
     model.damage_solver.getKSP().getPC().setFactorSolverType("mumps")
-
-
 
 
 def setup_damage_linear(model):

@@ -1,0 +1,107 @@
+from .base import Damage
+import basix.ufl as bufl
+import ufl
+from dolfinx import fem, default_real_type, nls
+from kraken.numerics import maths_functions as mf
+from kraken.numerics import energy_splits as es
+from kraken.numerics.maths_functions import ε
+from kraken.numerics import solvers
+from petsc4py import PETSc
+from mpi4py import MPI
+import numpy as np
+
+
+
+class LowerOrder(Damage):
+    def __init__(self, sim, free_energy_plus=es.free_energy_plus_lo):
+        super().__init__(sim, free_energy_plus)
+
+        self.D = fem.functionspace(self.sim.msh, ("Lagrange", 1))
+        self.d = fem.Function(self.D, name="damage")
+
+        self.g = es.degradation_default(self.d)
+
+        
+
+        self.bc_d = self.sim.bc_funcs[1](self.D)
+        
+
+    def solve(self):
+        self.solver.solve(None, self.d.x.petsc_vec)
+
+
+
+class NonLinear(LowerOrder):
+    def setup_weak_form(self):
+        C3 = self.sim.params.C3; l = self.sim.params.lstar
+        ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
+
+        H = es.history_function(self.sim.momentum.ε_e, self.Hprev,
+                            self.sim.params.ν, self.sim.params.ψcritstar, 
+                            self.free_energy_plus)
+    
+
+        v = ufl.TestFunction(self.D)
+
+        
+        self.F = (ufl.inner(self.d,v) + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
+                - C3*l*2*(1-self.d)*H*v) * ufl.dx
+        
+
+        self.J = ufl.derivative(self.F,self.d,ufl.TrialFunction(self.D))
+
+
+        self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
+
+
+
+
+class Bounded(LowerOrder):
+    def __init__(self, sim, free_energy_plus=es.free_energy_plus_lo):
+        super().__init__(sim, free_energy_plus)
+
+        self.d_prev_time = fem.Function(self.D, name="damage_prev_time")
+
+    def setup_weak_form(self):
+        C3 = self.sim.params.C3; l = self.sim.params.lstar
+        ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
+
+        w = lambda d: d
+        s = np.linspace(0,1,500)
+        c0 = 4*np.trapezoid(np.sqrt(w(s)),s)
+        
+
+        H = ufl.max_value(self.free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
+
+        dissipated_energy = (1/C3) * es.crack_density_function(self.d, l, w, c0) * ufl.dx
+        elastic_energy = self.g * H * ufl.dx
+
+        total_energy = dissipated_energy + elastic_energy
+
+        self.F = ufl.derivative(total_energy, self.d, ufl.TestFunction(self.D))
+        self.J = ufl.derivative(self.F, self.d, ufl.TrialFunction(self.D))
+
+        self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
+
+    def setup_solver(self):
+        d_ub = fem.Function(self.D, name="damage_ub")
+        d_ub.x.array[:] = 1.0
+
+        self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
+        self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F)))
+        self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J)), P=None)
+
+        self.solver.setType("vinewtonrsls")
+        self.solver.setVariableBounds(self.d_prev_time.x.petsc_vec, d_ub.x.petsc_vec)
+
+        self.solver.setTolerances(rtol=1.0e-9, max_it=50)
+        self.solver.getKSP().setType("cg")
+        self.solver.getKSP().setTolerances(rtol=1.0e-9)
+        self.solver.getKSP().getPC().setType("jacobi")
+        self.solver.getKSP().getPC().setFactorSolverType("mumps")
+
+    def update_history(self):
+        # Update the history variable
+        self.d_prev_time.x.array[:] = self.d.x.array[:]
+
+

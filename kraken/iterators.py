@@ -23,7 +23,6 @@ def fixed_point(model, max_its=100, tol=1e-4, min_its=2, solve_damage=True):
                 model.solve_damage()
             model.solve()
    
-            
 
             L2_ = ufl.inner(model.d,model.d)*ufl.dx
             L2_rank = fem.assemble_scalar(fem.form(L2_))
@@ -32,6 +31,7 @@ def fixed_point(model, max_its=100, tol=1e-4, min_its=2, solve_damage=True):
             error_L2 = np.abs(L2 - L2_old)/area
             if MPI.COMM_WORLD.rank == 0:
                 print(f"iteration {i}, error {error_L2}")
+                
 
             if i>min_its-1:
                 if (error_L2 < tol) and (error_prev < tol):
@@ -40,8 +40,9 @@ def fixed_point(model, max_its=100, tol=1e-4, min_its=2, solve_damage=True):
             error_prev = error_L2
             L2_old = L2
 
-        # Update history function as finished fixed point iteration
-        if solve_damage:
-            model.update_history()
+        
+
+
+
     
         

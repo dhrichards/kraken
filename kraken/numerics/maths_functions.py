@@ -38,18 +38,20 @@ def negative_part(x,eps=1e-6):
     # return 0.5*(x - (x**2 + eps**2)**0.5)
 
 
-def water_pressure(msh,v,ucstar=1.0):
+def water_pressure(msh,v,ucstar=1.0, level = 0.0):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1] + ucstar*v[msh.geometry.dim-1]
+    z = z - level
     return ufl.max_value(0.0,-z) 
     # return ufl.conditional(ufl.gt(z,0),0.0,-ρw*g*z)
     # return 0.5*(-z + (z**2 + eps**2)**0.5)
 
-def water_pressure_static(msh):
+def water_pressure_static(msh,level=0.0):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1]
+    z = z - level
     return ufl.max_value(0.0,-z) 
-    # return ufl.conditional(ufl.gt(z,0),0.0,-ρw*g*z)
+    # return ufl.conditional(ufl.gt(z,level),0.0,-ρw*g*z)
     # return 0.5*(-z + (z**2 + eps**2)**0.5)
 
 
