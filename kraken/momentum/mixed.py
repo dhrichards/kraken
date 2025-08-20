@@ -33,6 +33,30 @@ class MixedDisplacement(Momentum):
         self.bc_u = self.sim.bc_funcs[0](self.W)
 
 
+    # def setup_weak_form(self):
+
+    #     w_test = ufl.TestFunction(self.W)
+    #     v, v_v, q = ufl.split(w_test)
+    #     n = ufl.FacetNormal(self.sim.msh)
+
+    #     g = self.sim.damage.g
+    #     η = mf.viscosity(mf.ε(self.vel), self.sim.params.n, 1.e-8)
+
+    #     σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
+    #     σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
+    #     σminus = σ0 - σplus
+    #     σ = g * σplus + σminus
+
+    #     f = mf.body_force(self.sim.msh, self.sim.params.ρistar)
+
+
+
+
+
+
+
+
+
     
 
 class SmallDisplacement(MixedDisplacement):
@@ -143,6 +167,7 @@ class SemiLagrangian(MixedDisplacement):
 
         self.ε_e = mf.ε(self.u_e)
 
+
     def setup_momentum(self):
         
         w_test = ufl.TestFunction(self.W)
@@ -156,7 +181,8 @@ class SemiLagrangian(MixedDisplacement):
         η = mf.viscosity(mf.ε(self.du_v_prev_it/δt), self.sim.params.n, 1.e-8)
 
         p_w = mf.water_pressure(self.sim.msh,self.du,self.sim.params.ucstar) +self.sim.params.patmstar
-        p_crack = mf.water_pressure_static(self.sim.msh,level=0.0) + self.sim.params.patmstar
+        # p_crack = mf.water_pressure_static(self.sim.msh,level=0.0) + self.sim.params.patmstar
+        p_crack = p_w
 
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
@@ -171,7 +197,8 @@ class SemiLagrangian(MixedDisplacement):
         
         self.F = (ufl.inner(σ, mf.ε(v_v))\
               - ufl.inner(f, v_v) 
-             - p_crack* ufl.inner(ufl.grad(g), v_v)\
+            #  - p_crack* ufl.inner(ufl.grad(g), v_v)\
+            - p_crack*ufl.inner(ufl.Dx(g, 0), v[0]) \
                 ) * ufl.dx \
             + p_w * ufl.inner(n, v_v) * ufl.ds \
             + (

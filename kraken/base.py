@@ -16,9 +16,9 @@ class Simulation:
         self.damage = DamageSolver(self)
 
 
-    def setup(self, **kwargs):
+    def setup(self):
         self.momentum.setup()
-        self.damage.setup(**kwargs)
+        self.damage.setup()
 
 
         

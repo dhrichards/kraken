@@ -34,7 +34,7 @@ def fixed(x):
     return (x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height))# + (x[1]<(0.1-0.9*refineH[1]))
 
 
-true_length = 4e3
+true_length = 8e3
 true_height = 300
 
 
@@ -52,9 +52,9 @@ nondim_height = true_height/L
 Hw = 0.9
 
 
-refineH = (3.4,0.3)
+refineH = (4.4,0.3)
 msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L,
-                                     aspect_ratios=(1,1), refine=refineH,
+                                     aspect_ratios=(300,1), refine=refineH,
                                      cell_factor=2.1)
 # msh.geometry.x[:,1] += 0.5
 
@@ -68,7 +68,7 @@ u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
 
 
-model = kr.base.Simulation(msh, [u_bc, no_bc],
+model = kr.base.Simulation(msh, [u_bc, bc_d],
                            kr.momentum.elastic.Elasticity,
                            kr.damage.higherorder.HigherOrder)
 
@@ -99,7 +99,7 @@ for i in range(len(gs)):
     model.params.g.value = gs[i]
 
 
-    model.fixed_point(min_its=3,solve_damage=True)
+    model.fixed_point(min_its=3,solve_damage=True,max_its=200)
 
     kr.utilities.write_xdmf(path + "/elastictest" + str(i) + ".xdmf",
                             msh, [model.momentum.u, model.damage.d],
