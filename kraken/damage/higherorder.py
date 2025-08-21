@@ -16,7 +16,6 @@ class HigherOrder(Damage):
     def __init__(self, sim, free_energy_plus=es.free_energy_plus_lo):
         super().__init__(sim, free_energy_plus=es.free_energy_plus_lo)
 
-        self.d_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
 
         self.d_el_mixed = bufl.mixed_element([self.d_el, self.d_el])
 

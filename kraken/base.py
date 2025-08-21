@@ -21,6 +21,11 @@ class Simulation:
         self.damage.setup()
 
 
+    def timestep(self):
+        self.damage.timestep()
+        self.momentum.timestep()
+
+
         
     def fixed_point(self, max_its=100, tol=1e-4, min_its=2, solve_damage=True):
             L2_old = 0.0

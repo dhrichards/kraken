@@ -16,7 +16,8 @@ class LowerOrder(Damage):
     def __init__(self, sim, free_energy_plus=es.free_energy_plus_lo):
         super().__init__(sim, free_energy_plus)
 
-        self.D = fem.functionspace(self.sim.msh, ("Lagrange", 1))
+
+        self.D = fem.functionspace(self.sim.msh, self.d_el)
         self.d = fem.Function(self.D, name="damage")
 
         self.g = es.degradation_default(self.d)
@@ -100,8 +101,28 @@ class Bounded(LowerOrder):
         self.solver.getKSP().getPC().setType("jacobi")
         self.solver.getKSP().getPC().setFactorSolverType("mumps")
 
-    def update_history(self):
+    def timestep(self):
         # Update the history variable
         self.d_prev_time.x.array[:] = self.d.x.array[:]
+
+
+class PressurisedCrack(Bounded):
+    def setup_weak_form(self):
+        super().setup_weak_form()
+
+ 
+        pw = mf.water_pressure(self.sim.msh, self.sim.momentum.u, self.sim.params.ucstar) + self.sim.params.patmstar
+        # pw = mf.water_pressure_static(self.sim.msh)
+        # Iprime = 2 - 2*model.d
+        Iprime = 2*self.d
+
+        pressure_work = +pw*ufl.inner(Iprime*ufl.Dx(self.d,0), self.sim.momentum.u[0]) * ufl.dx
+
+        self.F += ufl.derivative(pressure_work, self.d, ufl.TestFunction(self.D))
+
+        self.J = ufl.derivative(self.F, self.d, ufl.TrialFunction(self.D))
+
+        self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
+
 
 

@@ -20,10 +20,16 @@ class Momentum:
         self.V = fem.functionspace(self.sim.msh, ("Lagrange", 1, (self.sim.msh.geometry.dim, )))
 
 
+
     def setup(self):
         self.setup_momentum()
         self.setup_solver()
 
+    def water_pressure(self,u):
+        return mf.water_pressure(self.sim.msh, u, self.sim.params.ucstar) + self.sim.params.patmstar
+    
+    def crack_pressure(self, u):
+        return mf.overburden_pressure(self.sim.msh, self.sim.params.ρistar) + self.sim.params.patmstar
 
     
     def setup_solver(self):
@@ -41,6 +47,9 @@ class Momentum:
 
         self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F,jit_options=dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))))
         self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J,jit_options = dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))),P=None)
+
+
+    
 
     def solve(self):
         pass

@@ -107,7 +107,7 @@ class WithGamma(Damage):
         self.damage_solver.solve(None, self.d.x.petsc_vec)
 
 
-    def update_history(self):
+    def timestep(self):
         self.γ_prev.interpolate(fem.Expression(self.γ, self.Γ.element.interpolation_points()))
 
 

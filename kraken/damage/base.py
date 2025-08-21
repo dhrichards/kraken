@@ -2,11 +2,14 @@ from kraken.numerics import energy_splits as es
 from dolfinx import fem
 from petsc4py import PETSc
 from mpi4py import MPI
+import basix.ufl as bufl
 
 class Damage:
     def __init__(self, sim, free_energy_plus=es.free_energy_plus_lo):
         self.sim = sim
         self.free_energy_plus = free_energy_plus
+
+        self.d_el = bufl.element("CG", self.sim.msh.basix_cell(), 2)
 
         self.H_space = fem.functionspace(self.sim.msh, ("DG", 1))
         self.Hprev = fem.Function(self.H_space, name="history")
@@ -35,7 +38,7 @@ class Damage:
 
 
 
-    def update_history(self):
+    def timestep(self):
         H = es.history_function(self.sim.momentum.ε_e, self.Hprev,
                                 self.sim.params.ν, self.sim.params.ψcritstar,
                                 self.free_energy_plus)
