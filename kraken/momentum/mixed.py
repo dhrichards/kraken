@@ -28,12 +28,21 @@ class MixedDisplacement(Momentum):
 
         self.w = fem.Function(self.W, name="mixed function")
         self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
-
+        
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
         self.u_prev_time, self.u_v_prev_time, self.p_prev_time = ufl.split(self.w_prev_time)
         self.u_e_prev_time = self.u_prev_time - self.u_v_prev_time
 
         self.bc_u = self.sim.bc_funcs[0](self.W)
+
+        self.DG0 = fem.functionspace(self.sim.msh, ("DG", 0))
+        self.areaf = ufl.TestFunction(self.DG0)
+        self.cell_area_form = fem.form(self.areaf * ufl.dx)
+        self.area_0 = np.copy(fem.assemble_vector(self.cell_area_form).array)
+
+        self.area_ratio = fem.Function(self.DG0)
+        self.area_ratio.x.array[:] = 1.0
+
 
 
     def setup_momentum(self):
@@ -52,7 +61,8 @@ class MixedDisplacement(Momentum):
         σminus = σ0 - σplus
         σ = g * σplus + σminus
 
-        f = mf.body_force(self.sim.msh, self.sim.params.ρistar)
+        self.ρ = self.sim.params.ρistar/self.area_ratio
+        f = self.ρ*mf.body_force(self.sim.msh)
 
         
         self.F = (
@@ -69,7 +79,7 @@ class MixedDisplacement(Momentum):
              ) * ufl.dx
         
         self.F += (
-                - ufl.inner(ufl.div(self.vel), q) \
+                - 1e5*ufl.inner(ufl.div(self.vel), q) \
                 ) * ufl.dx 
         
 
@@ -81,6 +91,7 @@ class MixedDisplacement(Momentum):
 
     def solve(self):
         self.solver.solve(None, self.w.x.petsc_vec)
+        # assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
         # self.w.x.scatter_forward()
         self.w_prev_it.x.array[:] = self.w.x.array[:]
 
@@ -105,9 +116,8 @@ class SmallDisplacement(MixedDisplacement):
         self.vel = (self.u_v-self.u_v_prev_time)/self.sim.params.dtstar
         self.vel_prev_it = (self.u_v_prev_it-self.u_v_prev_time)/self.sim.params.dtstar
 
-        self.pw = mf.water_pressure(self.sim.msh, self.u, self.sim.params.ucstar) + self.sim.params.patmstar
-        self.p_crack = mf.water_pressure(self.sim.msh, self.u, self.sim.params.ucstar, level=0.0) + self.sim.params.patmstar
-
+        self.pw = self.water_pressure(self.u)
+        self.p_crack = self.crack_pressure(self.u)
     
   
     
@@ -135,13 +145,18 @@ class SemiLagrangian(MixedDisplacement):
         self.u_e = self.u_e_prev_time + self.du_e
         self.p =  self.p_prev_time + self.dp
 
+        self.u_prev_it = self.u_prev_time + self.du_prev_it
+        self.u_v_prev_it = self.u_v_prev_time + self.du_v_prev_it
+        self.u_e_prev_it = self.u_e_prev_time + self.du_e_prev_it
+
         self.ε_e = mf.ε(self.u_e)
-        self.vel = self.du_v/self.sim.params.dtstar
+        self.vel = self.du/self.sim.params.dtstar
         self.vel_prev_it = self.du_v_prev_it/self.sim.params.dtstar
 
-        self.pw = mf.water_pressure(self.sim.msh, self.du, self.sim.params.ucstar) + self.sim.params.patmstar
-        self.p_crack = mf.water_pressure(self.sim.msh, self.du, self.sim.params.ucstar, level=0.01) + self.sim.params.patmstar
+        self.pw = self.water_pressure(self.du)
+        self.p_crack = self.crack_pressure(self.du)
 
+        
 
     
     def timestep(self):
@@ -151,6 +166,9 @@ class SemiLagrangian(MixedDisplacement):
         self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
         
         self.w_prev_time.x.array[:] += self.w.x.array[:]
+
+        self.area = fem.assemble_vector(self.cell_area_form).array
+        self.area_ratio.x.array[:] = self.area/self.area_0
 
         
         

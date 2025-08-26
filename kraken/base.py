@@ -14,20 +14,28 @@ class Simulation:
 
         self.momentum = MomentumSolver(self)
         self.damage = DamageSolver(self)
+        # self.mass = Mass(self)
+
 
 
     def setup(self):
+        
         self.momentum.setup()
         self.damage.setup()
+        # self.mass.setup()
+        
 
 
     def timestep(self):
+        # self.mass.solve()
+        # self.mass.timestep()
         self.damage.timestep()
         self.momentum.timestep()
+        # self.mass.timestep()
 
 
         
-    def fixed_point(self, max_its=100, tol=1e-4, min_its=2, solve_damage=True):
+    def fixed_point(self, max_its=100, tol=1e-4, min_its=2, solve_damage=True, solve_mass=True):
             L2_old = 0.0
 
             one = fem.Function(self.damage.D)
@@ -43,6 +51,8 @@ class Simulation:
                 if solve_damage:
                     self.damage.solve()
                 self.momentum.solve()
+                # if solve_mass:
+                #     self.mass.solve()
     
                 
 

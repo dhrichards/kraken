@@ -34,7 +34,9 @@ true_length = 16e3
 true_height = 300
 
 L = true_height
-l = 3.0
+l = 4.0
+ρi = 900
+ρsw = 1027
 
 
 path = './outputs'
@@ -44,9 +46,9 @@ os.makedirs(path, exist_ok=True)
 nondim_length = true_length/L
 nondim_height = true_height/L
 
-refineH = (2.0,0.4)
-msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L,
-                                     aspect_ratios=(300,1), refine=refineH,
+refineH = (2.0,0.3)
+msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, ρistar = ρi/ρsw,
+                                     aspect_ratios=(300,100), refine=refineH,
                                      cell_factor=1.1)
 # msh.geometry.x[:,1] += 0.5
 
@@ -62,11 +64,11 @@ model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangian,
                            kr.damage.higherorder.HigherOrder)
 
-
 model.params.L.value = L
 model.params.l.value = l
 model.params.dt.value = 60*60*12
-# model.params.ρi.value = 917
+model.params.ρi.value = ρi
+model.params.ρw.value = ρsw
 model.params.ψcrit.value = 1.0
 model.params.Gc.value = 1.0
 model.params.patm.value = 0.0
@@ -99,22 +101,25 @@ for i,g in enumerate(gs):
     #                               t=i)
 
     kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
-                            msh, [model.momentum.u,model.damage.d,
+                            msh, [model.momentum.u,model.damage.d,model.mass.ρ,
                                   model.momentum.u_e, model.momentum.u_v,],
-                                  ["u","d",
+                                  ["u","d","ρ",
                                 "ue","uv"],
                                   t=i)
     
     # model.d_prev_time.x.array[:] = model.d.x.array[:]
     
-    
+#%%
 
 model.params.g.value = 9.8
+model.momentum.timestep()
+model.momentum.w0.x.array[:] = model.momentum.w.x.array[:]
+
 from dolfinx import fem
 import ufl
 min_its = 5
 
-for i in range(900):
+for i in range(300):
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
@@ -145,10 +150,14 @@ for i in range(900):
     #                                ], t=i)
 
     kr.utilities.write_xdmf(path + "/iceberg" + str(i) + ".xdmf",
-                            msh, [model.momentum.u, model.damage.d,
-                                  model.momentum.u_e, model.momentum.u_v],
-                                  ["u", "d",
-                                "ue", "uv"],
+                            msh, [model.momentum.u, model.damage.d,model.momentum.ρ,
+                                  model.momentum.u_e, model.momentum.u_v,
+                                  ufl.div(model.momentum.vel),ufl.div(model.momentum.du_e),
+                                  ],
+                                  ["u", "d","ρ",
+                                "ue", "uv",
+                                "div_uv","div_ue"
+                                ],
                                   t=i)
 
     model.timestep()

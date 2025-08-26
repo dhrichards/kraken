@@ -55,16 +55,11 @@ def water_pressure_static(msh,level=0.0):
     # return 0.5*(-z + (z**2 + eps**2)**0.5)
 
 
-def body_force(msh,ρistar, α=0.0):
+def body_force(msh):
     if msh.geometry.dim == 2:
-        f = fem.Constant(msh, default_scalar_type((
-                        ρistar*ufl.sin(α*ufl.pi/180), 
-                        -ρistar*ufl.cos(α*ufl.pi/180))))
+        f = fem.Constant(msh, default_scalar_type((0.0, -1.0)))
     else:
-        f = fem.Constant(msh, default_scalar_type((
-            ρistar*ufl.sin(α*ufl.pi/180),
-            0.0,
-            -ρistar*ufl.cos(α*ufl.pi/180))))
+        f = fem.Constant(msh, default_scalar_type((0.0, 0.0,-1.0)))
     return f
 
 def external_density(msh):

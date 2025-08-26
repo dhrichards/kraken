@@ -19,6 +19,10 @@ class Momentum:
 
         self.V = fem.functionspace(self.sim.msh, ("Lagrange", 1, (self.sim.msh.geometry.dim, )))
 
+        
+
+
+
 
 
     def setup(self):
@@ -29,7 +33,7 @@ class Momentum:
         return mf.water_pressure(self.sim.msh, u, self.sim.params.ucstar) + self.sim.params.patmstar
     
     def crack_pressure(self, u):
-        return mf.overburden_pressure(self.sim.msh, self.sim.params.ρistar) + self.sim.params.patmstar
+        return mf.water_pressure(self.sim.msh, u, self.sim.params.ucstar, level=0.0) + self.sim.params.patmstar
 
     
     def setup_solver(self):
@@ -38,15 +42,18 @@ class Momentum:
         self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
 
 
-        self.solver.setTolerances(rtol=1.0e-7, max_it=50)
+        self.solver.setTolerances(rtol=1.0e-4, max_it=50, atol=1e-6)
         self.solver.getKSP().setType("preonly")
         # self.solver.getKSP().setTolerances(rtol=1.0e-7)
         self.solver.getKSP().getPC().setType("lu")
         self.solver.getKSP().getPC().setFactorSolverType("mumps")
  
 
-        self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F,jit_options=dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))))
-        self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J,jit_options = dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))),P=None)
+        # self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F,jit_options=dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))))
+        # self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J,jit_options = dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))),P=None)
+
+        self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F)))
+        self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J)),P=None)
 
 
     

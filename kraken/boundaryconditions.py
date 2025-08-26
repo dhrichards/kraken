@@ -19,6 +19,17 @@ def get_boundary_dofs(V,boundary):
 
     return boundary_dofs_x
 
+def get_vec(V, val, dtype=default_scalar_type):
+    try :
+        Vcollapse, _ = V.collapse()
+        vec = fem.Function(Vcollapse)
+        vec.x.array[:] = val
+        return vec
+    except RuntimeError:
+        if V.value_size == 1:
+            return dtype(val)
+        else:
+            return dtype(np.array([val]*V.value_size))
 
 
 def get_zero_vec(V,dtype=default_scalar_type):

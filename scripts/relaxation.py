@@ -17,8 +17,8 @@ def left_boundary(x):
 def right_boundary(x):
     return np.isclose(x[0], nondim_length/2)
 
-# def bottom_boundary(x):
-#     return np.isclose(x[1], -Hw)
+def bottom_boundary(x):
+    return np.isclose(x[1], -Hw)
 
 # def crack(x):
 #     x_c = nondim_length/2 - nondim_height
@@ -26,53 +26,53 @@ def right_boundary(x):
 #     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
 
 def fixed(x):
-    return (x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height))# + (x[0]>(nondim_length/2 - nondim_height/2))
+    return (x[0]<(nondim_length/2 - refineH[0]*0.98*nondim_height))# + (x[0]>(nondim_length/2 - nondim_height/2))
+
+
 
 true_length = 16e3
 true_height = 300
+
+L = true_height
+l = 4.0
 
 
 path = './outputs'
 os.makedirs(path, exist_ok=True)
 
 
-L = true_height
-l = 20.0
-
-
 nondim_length = true_length/L
 nondim_height = true_height/L
 
-
-refineH = (1.8,0.4)
+refineH = (2.0,0.3)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L,
-                                     aspect_ratios=(100,100), refine=refineH,
-                                     cell_factor=2.0)
+                                     aspect_ratios=(300,1), refine=refineH,
+                                     cell_factor=2)
 # msh.geometry.x[:,1] += 0.5
 
-no_bc = lambda V: []
-bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0)]
+d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
-# model = kr.models.jakub3.viscoelastic_damage(msh, [u_bc,bc_d])
-
-model = kr.base.Simulation(msh, [u_bc, bc_d],
+# model = kr.models.jakub2.viscoelastic_damage(msh, [u_bc,d_bc])
+model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangian,
                            kr.damage.higherorder.HigherOrder)
 
 
-# model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
-#                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
 model.params.L.value = L
 model.params.l.value = l
-model.params.dt.value = 60*60*72*3
+model.params.dt.value = 60*60*12
 model.params.ψcrit.value = 1.0
 model.params.Gc.value = 1.0
 model.params.patm.value = 0.0
+
+# model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
+#                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
+
 
 #%%
 min_its = 4
@@ -80,7 +80,6 @@ model.setup()
 
 solve_d = False
 
-pw = mf.water_pressure(model.msh, model.momentum.du, model.params.ucstar) + model.params.patmstar
 
 
 for i in range(300):
@@ -89,25 +88,28 @@ for i in range(300):
         print("Iteration: ", i)
 
     if i == 10:
-        solve_d = False
+        solve_d = True
         # model.params.dt = 60*60*12
         # model.setup_all()
 
     if i == 20:
         min_its = 3
 
-    model.fixed_point(min_its=min_its,tol=1e-4,solve_damage=solve_d,max_its=300)#tol=-1, max_its = 10)
+    model.fixed_point(min_its=min_its,tol=1e-6,solve_damage=solve_d,max_its=300)#tol=-1, max_its = 10)
 
     kr.utilities.write_xdmf(path + "/relax" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                   model.momentum.u_e, model.momentum.u_v,
-                                  pw],
+                                  model.momentum.ρ],
                                   ["u","d",
                                    "ue", "uv",
-                                   "pw"],
+                                   "ρ"],
                                      t=i)
 
-    model.momentum.timestep()
+    if solve_d:
+        model.timestep()
+    else:
+        model.momentum.timestep()
     # if i >= 10:
         # model.damage.update_history()
    
