@@ -4,7 +4,7 @@
 #SBATCH --job-name=icebergtest
 #SBATCH --ntasks=32
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=512gb
+#SBATCH --mem=0
 #SBATCH --nodes=1
 #SBATCH --time=06:30:00
 #SBATCH --partition=rocky
