@@ -34,7 +34,7 @@ def fixed(x):
     return (x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height))# + (x[1]<(0.1-0.9*refineH[1]))
 
 
-true_length = 8e3
+true_length = 16e3
 true_height = 300
 
 
@@ -43,18 +43,16 @@ os.makedirs(path, exist_ok=True)
 
 
 L = true_height
-l = 6.0
+l = 2.3
 
 
 nondim_length = true_length/L
 nondim_height = true_height/L
 
-Hw = 0.9
 
-
-refineH = (4.4,0.3)
-msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L,
-                                     aspect_ratios=(300,1), refine=refineH,
+refineH = (1.5,0.3)
+msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L, 0.9,
+                                     aspect_ratios=(300,100), refine=refineH,
                                      cell_factor=2.1)
 # msh.geometry.x[:,1] += 0.5
 
@@ -70,15 +68,15 @@ u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
 model = kr.base.Simulation(msh, [u_bc, bc_d],
                            kr.momentum.elastic.Elasticity,
-                           kr.damage.higherorder.HigherOrder)
+                           kr.damage.lowerorder.Bounded)
 
 # model = kr.models.elasticity.elastic_damage(msh, [u_bc,no_bc])
-
+model.damage.g = es.degradation_rational(model.damage.d)
 
 model.params.L.value = L
 model.params.l.value = l
 model.params.dt.value = 60*60*2
-model.params.ψcrit.value = 1.0
+model.params.ψcrit.value = 1.0/(4*l)
 model.params.Gc.value = 1.0
 model.params.patm.value = 0.0
 
@@ -89,10 +87,9 @@ model.params.patm.value = 0.0
 #%%
 
 
-model.momentum.setup()
-model.damage.setup()
+model.setup()
 
-gs = [2,4,6,8,9,9.8]
+gs = [9.8]
 
 
 for i in range(len(gs)):

@@ -1,6 +1,7 @@
 import ufl
 from .invariants import eigenstate
 from dolfinx import fem, default_scalar_type
+import numpy as np
 
 def viscosity(ε, n, eps=1.e-11, A=1.0): 
     return 0.5* A**(-1/n) * (ufl.inner(ε, ε) / 2 + eps)**((1 - n) / (2 * n))
@@ -105,13 +106,26 @@ def overburden_pressure(msh,ρistar, uz=0.0, ucstar=1.0):
 
 
 
-def ice_density(msh,ρistar_bottom=0.9, ρistar_top=0.4):
+def ice_density(msh,ρistar,ρfstar,Dstar):
+    x = ufl.SpatialCoordinate(msh)
+
+    Hwstar = flotation_height(ρistar,ρfstar,Dstar)
+    z = x[msh.geometry.dim-1] + Hwstar
+
+    
+    return ρistar - (ρistar - ρfstar)*ufl.exp(-(1.0-z)/Dstar)
+
+def ice_E(msh,params):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1]
-    
+
+    E0 = 1.0
+    Ef = 1.5/params.E
+    D = 32.5/params.L
+
+    return E0 - (E0 - Ef)*ufl.exp(-(1-z)/D)
 
 
-    ρi = ρistar_bottom + (ρistar_top - ρistar_bottom) * ufl.exp(-z)
-    return ρi
 
-
+def flotation_height(ρistar,ρfstar,Dstar):
+    return ρistar - (ρistar - ρfstar)*(Dstar - Dstar*np.exp(-1/Dstar))

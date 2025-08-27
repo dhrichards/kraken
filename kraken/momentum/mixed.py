@@ -61,6 +61,7 @@ class MixedDisplacement(Momentum):
         σminus = σ0 - σplus
         σ = g * σplus + σminus
 
+        # self.ρ = mf.ice_density(self.sim.msh,self.sim.params.ρi/self.sim.params.ρw,350/self.sim.params.ρw,32.5/300)/self.area_ratio
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
@@ -79,7 +80,7 @@ class MixedDisplacement(Momentum):
              ) * ufl.dx
         
         self.F += (
-                - 1e5*ufl.inner(ufl.div(self.vel), q) \
+                - ufl.inner(ufl.div(self.vel), q) \
                 ) * ufl.dx 
         
 

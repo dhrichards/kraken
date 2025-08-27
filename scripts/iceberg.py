@@ -34,9 +34,11 @@ true_length = 16e3
 true_height = 300
 
 L = true_height
-l = 4.0
+l = 12.0
 ρi = 900
-ρsw = 1027
+ρf = 350
+ρsw = 1000
+D = 32.5
 
 
 path = './outputs'
@@ -46,10 +48,13 @@ os.makedirs(path, exist_ok=True)
 nondim_length = true_length/L
 nondim_height = true_height/L
 
+# flotation_height = mf.flotation_height(ρi/ρsw,ρf/ρsw,D/L)
+flotation_height = ρi/ρsw
+
 refineH = (2.0,0.3)
-msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, ρistar = ρi/ρsw,
-                                     aspect_ratios=(300,100), refine=refineH,
-                                     cell_factor=1.1)
+msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
+                                     aspect_ratios=(300,1), refine=refineH,
+                                     cell_factor=1.5)
 # msh.geometry.x[:,1] += 0.5
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
@@ -82,7 +87,7 @@ min_its = 10
 
 # model.setup_all()
 model.setup()
-gs = [8,9]
+gs = [6,8,9]
 
 for i,g in enumerate(gs):
 
@@ -101,9 +106,9 @@ for i,g in enumerate(gs):
     #                               t=i)
 
     kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
-                            msh, [model.momentum.u,model.damage.d,model.mass.ρ,
+                            msh, [model.momentum.u,model.damage.d,
                                   model.momentum.u_e, model.momentum.u_v,],
-                                  ["u","d","ρ",
+                                  ["u","d",
                                 "ue","uv"],
                                   t=i)
     
@@ -112,8 +117,6 @@ for i,g in enumerate(gs):
 #%%
 
 model.params.g.value = 9.8
-model.momentum.timestep()
-model.momentum.w0.x.array[:] = model.momentum.w.x.array[:]
 
 from dolfinx import fem
 import ufl

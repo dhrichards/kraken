@@ -35,6 +35,8 @@ true_height = 300
 
 L = true_height
 l = 4.0
+ρi = 900
+ρsw = 1027
 
 
 path = './outputs'
@@ -45,9 +47,9 @@ nondim_length = true_length/L
 nondim_height = true_height/L
 
 refineH = (2.0,0.3)
-msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L,
-                                     aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=2)
+msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, ρistar = 0,
+                                     aspect_ratios=(300,100), refine=refineH,
+                                     cell_factor=1.4)
 # msh.geometry.x[:,1] += 0.5
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
@@ -62,10 +64,11 @@ model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangian,
                            kr.damage.higherorder.HigherOrder)
 
-
 model.params.L.value = L
 model.params.l.value = l
 model.params.dt.value = 60*60*12
+model.params.ρi.value = ρi
+model.params.ρw.value = ρsw
 model.params.ψcrit.value = 1.0
 model.params.Gc.value = 1.0
 model.params.patm.value = 0.0

@@ -35,7 +35,7 @@ class Elasticity(Momentum):
         g = self.sim.damage.g
 
         p_w = mf.water_pressure(self.sim.msh,self.u,self.sim.params.ucstar) +self.sim.params.patmstar
-        p_crack = mf.water_pressure(self.sim.msh, self.u, self.sim.params.ucstar, level=0.02) + self.sim.params.patmstar
+        p_crack = mf.water_pressure(self.sim.msh, self.u, self.sim.params.ucstar, level=0.00) + self.sim.params.patmstar
 
         
         
@@ -48,7 +48,7 @@ class Elasticity(Momentum):
         # σ = pt.degraded_stress(self.ε_e, mf.ε(self.u_prev_it), self.g, self.params.ν)
 
         
-        f = mf.body_force(self.sim.msh, self.sim.params.ρistar)
+        f = self.sim.params.ρistar*mf.body_force(self.sim.msh)
 
         n = ufl.FacetNormal(self.sim.msh)
 
