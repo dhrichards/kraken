@@ -35,7 +35,7 @@ class Momentum:
     def crack_pressure(self, u):
         # x = ufl.SpatialCoordinate(self.sim.msh)
         # return ufl.conditional(ufl.gt(x[0],25.666),1.0,0.0)*
-        return mf.water_pressure(self.sim.msh, u, self.sim.params.ucstar, level=0.02) + self.sim.params.patmstar
+        return mf.water_pressure(self.sim.msh, u, self.sim.params.ucstar, level=0.00) + self.sim.params.patmstar
 
     
     def setup_solver(self):

@@ -31,10 +31,10 @@ def fixed(x):
 
 
 true_length = 16e3
-true_height = 300
+true_height = 400
 
 L = true_height
-l = 12.0
+l = 6.0
 ρi = 900
 ρf = 350
 ρsw = 1000
@@ -60,7 +60,8 @@ msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotat
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
+                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
+                        ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
@@ -94,7 +95,7 @@ for i,g in enumerate(gs):
     model.params.g.value = g
 
     # kr.iterators.fixed_point(model, min_its=min_its, tol=1e-5)
-    model.fixed_point(min_its=min_its, tol=1e-5)
+    model.fixed_point(min_its=min_its, tol=1e-5,max_its=200)
 
     # kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
     #                         msh, [model.u, model.d,
@@ -107,11 +108,13 @@ for i,g in enumerate(gs):
 
     kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
-                                  model.momentum.u_e, model.momentum.u_v,],
+                                #   model.momentum.u_e, model.momentum.u_v,
+                                ],
                                   ["u","d",
-                                "ue","uv"],
+                                # "ue","uv"
+                                ],
                                   t=i)
-    
+    model.damage.timestep()
     # model.d_prev_time.x.array[:] = model.d.x.array[:]
     
 #%%

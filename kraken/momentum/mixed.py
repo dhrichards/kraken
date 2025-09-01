@@ -65,18 +65,17 @@ class MixedDisplacement(Momentum):
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
-        
         self.F = (
-            ufl.inner(σ, mf.ε(v_v)) - ufl.inner(f, v_v) 
-            #  - self.p_crack* ufl.inner(ufl.grad(g), v_v)\
-            - self.p_crack*ufl.inner(ufl.Dx(g,0), v_v[0]) \
+            ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
+             - self.p_crack* ufl.inner(ufl.grad(g), v)\
+            # - self.p_crack*ufl.inner(ufl.Dx(g,0), v[0]) \
               ) * ufl.dx \
-            + self.pw * ufl.inner(n, v_v) * ufl.ds \
+            + self.pw * ufl.inner(n, v) * ufl.ds \
         
         self.F+= (
-                g*η*ufl.inner(mf.ε(self.vel), mf.ε(v))\
-                + ufl.inner(-self.p, ufl.div(v))  \
-            -    ufl.inner(σ, mf.ε(v))
+                g*η*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
+                + ufl.inner(-self.p, ufl.div(v_v))  \
+            -    ufl.inner(σ, mf.ε(v_v))
              ) * ufl.dx
         
         self.F += (
