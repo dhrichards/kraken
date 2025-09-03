@@ -31,10 +31,10 @@ def fixed(x):
 
 
 true_length = 16e3
-true_height = 400
+true_height = 300
 
 L = true_height
-l = 6.0
+l = 5.0
 ρi = 900
 ρf = 350
 ρsw = 1000
@@ -51,7 +51,7 @@ nondim_height = true_height/L
 # flotation_height = mf.flotation_height(ρi/ρsw,ρf/ρsw,D/L)
 flotation_height = ρi/ρsw
 
-refineH = (2.0,0.3)
+refineH = (2.5,0.4)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
                                      aspect_ratios=(300,1), refine=refineH,
                                      cell_factor=1.5)
@@ -72,7 +72,7 @@ model = kr.base.Simulation(msh, [u_bc, d_bc],
 
 model.params.L.value = L
 model.params.l.value = l
-model.params.dt.value = 60*60*12
+model.params.dt.value = 60*60*24*3
 model.params.ρi.value = ρi
 model.params.ρw.value = ρsw
 model.params.ψcrit.value = 1.0
@@ -95,7 +95,7 @@ for i,g in enumerate(gs):
     model.params.g.value = g
 
     # kr.iterators.fixed_point(model, min_its=min_its, tol=1e-5)
-    model.fixed_point(min_its=min_its, tol=1e-5,max_its=200)
+    model.fixed_point(min_its=min_its, tol=1e-5,max_its=50)
 
     # kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
     #                         msh, [model.u, model.d,
@@ -111,7 +111,7 @@ for i,g in enumerate(gs):
                                 #   model.momentum.u_e, model.momentum.u_v,
                                 ],
                                   ["u","d",
-                                # "ue","uv"
+                                "ue","uv"
                                 ],
                                   t=i)
     model.damage.timestep()
@@ -157,12 +157,12 @@ for i in range(300):
 
     kr.utilities.write_xdmf(path + "/iceberg" + str(i) + ".xdmf",
                             msh, [model.momentum.u, model.damage.d,model.momentum.ρ,
-                                  model.momentum.u_e, model.momentum.u_v,
-                                  ufl.div(model.momentum.vel),ufl.div(model.momentum.du_e),
+                                #   model.momentum.u_e, model.momentum.u_v,
+                                #   ufl.div(model.momentum.vel),ufl.div(model.momentum.du_e),
                                   ],
                                   ["u", "d","ρ",
                                 "ue", "uv",
-                                "div_uv","div_ue"
+                                # "div_uv","div_ue"
                                 ],
                                   t=i)
 

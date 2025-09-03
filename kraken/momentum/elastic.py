@@ -34,16 +34,23 @@ class Elasticity(Momentum):
 
         g = self.sim.damage.g
 
-        p_w = mf.water_pressure(self.sim.msh,self.u,self.sim.params.ucstar) +self.sim.params.patmstar
-        p_crack = mf.water_pressure(self.sim.msh, self.u, self.sim.params.ucstar, level=0.00) + self.sim.params.patmstar
+        p_w = self.water_pressure(self.u)
+        p_crack = self.crack_pressure(self.u)
 
         
         
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
-        σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
-        σminus = σ0 - σplus
-        σ = g*σplus + σminus
-        # σ = self.g*σ0
+        # σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
+        # σminus = σ0 - σplus
+
+        # σminus = mf.overburden_pressure(self.sim.msh,self.sim.params.ρi/self.sim.params.ρw,self.u[1],self.sim.params.ucstar)*ufl.Identity(self.sim.msh.geometry.dim)
+        # σplus = σ0 - σminus
+        # σ = g*σplus + σminus
+        σ = g*σ0
+
+        # σplus = es.stress_plus_amor(self.ε_e, self.sim.params.ν)
+        # σminus = σ0 - σplus
+        # σ = g*σplus + σminus
 
         # σ = pt.degraded_stress(self.ε_e, mf.ε(self.u_prev_it), self.g, self.params.ν)
 
@@ -60,7 +67,7 @@ class Elasticity(Momentum):
 
 
         self.F = (ufl.inner(σ, mf.ε(v))\
-              - ufl.inner(f, v) 
+              - g*ufl.inner(f, v) 
               -p_crack*ufl.inner(ufl.Dx(g, 0), v[0]) \
             #  + p_crack* ufl.inner(Iprime*ufl.grad(d), v)\
               ) * ufl.dx \

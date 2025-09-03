@@ -30,8 +30,8 @@ class MixedDisplacement(Momentum):
         self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
         
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
-        self.u_prev_time, self.u_v_prev_time, self.p_prev_time = ufl.split(self.w_prev_time)
-        self.u_e_prev_time = self.u_prev_time - self.u_v_prev_time
+        self.u_prev_time, self.u_e_prev_time, self.p_prev_time = ufl.split(self.w_prev_time)
+        self.u_v_prev_time = self.u_prev_time - self.u_e_prev_time
 
         self.bc_u = self.sim.bc_funcs[0](self.W)
 
@@ -54,32 +54,32 @@ class MixedDisplacement(Momentum):
 
         
 
-        η = mf.viscosity(mf.εD(self.vel_prev_it), self.sim.params.n, 1.e-8)
+        η = mf.viscosity(mf.ε(self.vel_prev_it), self.sim.params.n, 1.e-8)
 
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
-        # σplus = mf.dev3(σ0)
         σminus = σ0 - σplus
-        # σminus = ufl.tr(σ0)/self.sim.msh.geometry.dim*ufl.Identity(self.sim.msh.geometry.dim)
-        # σplus = σ0 - σminus
         σ = g * σplus + σminus
-        # σ = g*σ0
 
-        
+        # σminus = -mf.overburden_pressure(self.sim.msh,self.sim.params.ρi/self.sim.params.ρw)*ufl.Identity(self.sim.msh.geometry.dim)
+        # σplus = σ0 - σminus
+        # σ = g*σ0
+        # self.ρ = mf.ice_density(self.sim.msh,self.sim.params.ρi/self.sim.params.ρw,350/self.sim.params.ρw,32.5/300)/self.area_ratio
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
-        g_v = es.degradation_default(self.sim.damage.d,0.01)
-
+       
         self.F = (
-            ufl.inner(σ, mf.ε(v)) - g*ufl.inner(f, v) 
+            g*η*ufl.inner(mf.ε(self.vel), mf.ε(v))\
+                + ufl.inner(-self.p, ufl.div(v))  \
+            - ufl.inner(f, v) 
             #  - self.p_crack* ufl.inner(ufl.grad(g), v)\
             - self.p_crack*ufl.inner(ufl.Dx(g,0), v[0]) \
               ) * ufl.dx \
-            + g*self.pw * ufl.inner(n, v) * ufl.ds \
+            + self.pw * ufl.inner(n, v) * ufl.ds \
         
         self.F+= (
-                g*η*ufl.inner(mf.εD(self.vel), mf.ε(v_v))\
+                g*η*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
                 + ufl.inner(-self.p, ufl.div(v_v))  \
             -    ufl.inner(σ, mf.ε(v_v))
              ) * ufl.dx
@@ -111,11 +111,11 @@ class SmallDisplacement(MixedDisplacement):
     def __init__(self, sim):
         super().__init__(sim)
 
-        self.u, self.u_v, self.p = ufl.split(self.w)
-        self.u_e = self.u - self.u_v
+        self.u, self.u_e, self.p = ufl.split(self.w)
+        self.u_v = self.u - self.u_e
 
-        self.u_prev_it, self.u_v_prev_it, self.p_prev_it = ufl.split(self.w_prev_it)
-        self.u_e_prev_it = self.u_prev_it - self.u_v_prev_it
+        self.u_prev_it, self.u_e_prev_it, self.p_prev_it = ufl.split(self.w_prev_it)
+        self.u_v_prev_it = self.u_prev_it - self.u_e_prev_it
 
 
         self.ε_e = mf.ε(self.u_e)
@@ -140,11 +140,11 @@ class SemiLagrangian(MixedDisplacement):
         super().__init__(sim)
         
 
-        self.du, self.du_v, self.dp = ufl.split(self.w)
-        self.du_e = self.du - self.du_v
+        self.du, self.du_e, self.dp = ufl.split(self.w)
+        self.du_v = self.du - self.du_e
 
-        self.du_prev_it, self.du_v_prev_it, self.dp_prev_it = ufl.split(self.w_prev_it)
-        self.du_e_prev_it = self.du_prev_it - self.du_v_prev_it
+        self.du_prev_it, self.du_e_prev_it, self.dp_prev_it = ufl.split(self.w_prev_it)
+        self.du_v_prev_it = self.du_prev_it - self.du_e_prev_it
 
         self.u = self.u_prev_time + self.du
         self.u_v = self.u_v_prev_time + self.du_v

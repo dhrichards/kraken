@@ -43,14 +43,14 @@ os.makedirs(path, exist_ok=True)
 
 
 L = true_height
-l = 2.3
+l = 1
 
 
 nondim_length = true_length/L
 nondim_height = true_height/L
 
 
-refineH = (1.5,0.3)
+refineH = (2,0.3)
 msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L, 0.9,
                                      aspect_ratios=(300,100), refine=refineH,
                                      cell_factor=2.1)
@@ -68,15 +68,14 @@ u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
 model = kr.base.Simulation(msh, [u_bc, bc_d],
                            kr.momentum.elastic.Elasticity,
-                           kr.damage.lowerorder.Bounded)
+                           kr.damage.higherorder.HigherOrder)
 
 # model = kr.models.elasticity.elastic_damage(msh, [u_bc,no_bc])
-model.damage.g = es.degradation_rational(model.damage.d)
 
 model.params.L.value = L
 model.params.l.value = l
 model.params.dt.value = 60*60*2
-model.params.ψcrit.value = 1.0/(4*l)
+model.params.ψcrit.value = 1.0
 model.params.Gc.value = 1.0
 model.params.patm.value = 0.0
 
@@ -89,14 +88,14 @@ model.params.patm.value = 0.0
 
 model.setup()
 
-gs = [9.8]
+gs = [7.5,8,9,9.8]
 
 
 for i in range(len(gs)):
     model.params.g.value = gs[i]
 
 
-    model.fixed_point(min_its=3,solve_damage=True,max_its=200)
+    model.fixed_point(min_its=3,solve_damage=True,max_its=60,tol=1e-5)
 
     kr.utilities.write_xdmf(path + "/elastictest" + str(i) + ".xdmf",
                             msh, [model.momentum.u, model.damage.d],
