@@ -43,7 +43,7 @@ os.makedirs(path, exist_ok=True)
 
 
 L = true_height
-l = 1
+l = 6
 
 
 nondim_length = true_length/L
@@ -52,7 +52,7 @@ nondim_height = true_height/L
 
 refineH = (2,0.3)
 msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L, 0.9,
-                                     aspect_ratios=(300,100), refine=refineH,
+                                     aspect_ratios=(300,1), refine=refineH,
                                      cell_factor=2.1)
 # msh.geometry.x[:,1] += 0.5
 

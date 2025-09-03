@@ -58,12 +58,9 @@ class MixedDisplacement(Momentum):
 
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
-        # σplus = mf.dev3(σ0)
         σminus = σ0 - σplus
-        # σminus = ufl.tr(σ0)/self.sim.msh.geometry.dim*ufl.Identity(self.sim.msh.geometry.dim)
-        # σplus = σ0 - σminus
         σ = g * σplus + σminus
-        # σ = g*σ0
+      
 
         
         self.ρ = self.sim.params.ρistar/self.area_ratio
@@ -72,11 +69,11 @@ class MixedDisplacement(Momentum):
         g_v = es.degradation_default(self.sim.damage.d,0.01)
 
         self.F = (
-            ufl.inner(σ, mf.ε(v)) - g*ufl.inner(f, v) 
+            ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
             #  - self.p_crack* ufl.inner(ufl.grad(g), v)\
             - self.p_crack*ufl.inner(ufl.Dx(g,0), v[0]) \
               ) * ufl.dx \
-            + g*self.pw * ufl.inner(n, v) * ufl.ds \
+            + self.pw * ufl.inner(n, v) * ufl.ds \
         
         self.F+= (
                 g*η*ufl.inner(mf.εD(self.vel), mf.ε(v_v))\

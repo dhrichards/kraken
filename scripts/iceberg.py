@@ -34,7 +34,7 @@ true_length = 16e3
 true_height = 300
 
 L = true_height
-l = 5.0
+l = 4
 ρi = 900
 ρf = 350
 ρsw = 1000
@@ -54,13 +54,13 @@ flotation_height = ρi/ρsw
 refineH = (2.5,0.4)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
                                      aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=1.5)
+                                     cell_factor=2)
 # msh.geometry.x[:,1] += 0.5
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
+                        #    bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
                         ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
