@@ -40,20 +40,15 @@ class Elasticity(Momentum):
         
         
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
-        # σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
-        # σminus = σ0 - σplus
+        σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
+        σminus = σ0 - σplus
 
         # σminus = mf.overburden_pressure(self.sim.msh,self.sim.params.ρi/self.sim.params.ρw,self.u[1],self.sim.params.ucstar)*ufl.Identity(self.sim.msh.geometry.dim)
         # σplus = σ0 - σminus
-        # σ = g*σplus + σminus
-        σ = g*σ0
+        σ = g*σplus + σminus
+        # σ = g*σ0
 
-        # σplus = es.stress_plus_amor(self.ε_e, self.sim.params.ν)
-        # σminus = σ0 - σplus
-        # σ = g*σplus + σminus
-
-        # σ = pt.degraded_stress(self.ε_e, mf.ε(self.u_prev_it), self.g, self.params.ν)
-
+    
         
         f = self.sim.params.ρistar*mf.body_force(self.sim.msh)
 
