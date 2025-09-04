@@ -43,7 +43,7 @@ os.makedirs(path, exist_ok=True)
 
 
 L = true_height
-l = 6
+l = 3
 
 
 nondim_length = true_length/L

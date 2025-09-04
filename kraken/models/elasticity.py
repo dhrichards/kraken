@@ -73,7 +73,7 @@ class elastic_damage:
         σminus = σ0 - σplus
         σ = self.g*σplus + σminus
 
-        f = mf.body_force(self.msh, self.params.ρistar)
+        f = self.params.ρistar*mf.body_force(self.msh, self.params.ρistar)
 
 
 
