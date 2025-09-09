@@ -52,6 +52,7 @@ def free_energy_plus_dplike(ε, ν, γ=1):
 
 
 def free_energy_plus_dp(ε, ν, B = -0.666/sqrt(3.0)):
+    # B = -0.4
     K = Koverμ(ν)
     I1 = ufl.tr(ε)
     εD = dev3(ε)
@@ -67,6 +68,7 @@ def free_energy_plus_dp(ε, ν, B = -0.666/sqrt(3.0)):
 
 
 def stress_plus_dp(ε, ν, B = -0.666/sqrt(3.0)):
+    # B = -0.4
     εD = dev3(ε)
     K = Koverμ(ν)
     I1 = ufl.tr(ε)

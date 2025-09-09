@@ -5,10 +5,11 @@ from mpi4py import MPI
 import numpy as np
 
 class Simulation:
-    def __init__(self, msh, bc_funcs, MomentumSolver, DamageSolver):
+    def __init__(self, msh, bc_funcs, MomentumSolver, DamageSolver, level=0.0):
         self.msh = msh
         self.params = parameters.Params_with_uc(self.msh)
         self.bc_funcs = bc_funcs
+        self.level = level
 
 
 

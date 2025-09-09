@@ -219,7 +219,7 @@ def create_refined_mesh(nondim_length, nondim_height,
 
     msh = mesh.create_rectangle(MPI.COMM_WORLD,
                                 [np.array([0, 0]), np.array([new_length, new_height])],
-                                [nx,nz], mesh.CellType.quadrilateral)
+                                [nx,nz], mesh.CellType.triangle)
     
     
     x = msh.geometry.x[:,0]

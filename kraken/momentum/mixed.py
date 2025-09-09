@@ -27,6 +27,7 @@ class MixedDisplacement(Momentum):
         self.W = fem.functionspace(self.sim.msh, self.mixed_el)
 
         self.w = fem.Function(self.W, name="mixed function")
+        self.w.x.array[:] = 1.0
         self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
         
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
@@ -54,20 +55,32 @@ class MixedDisplacement(Momentum):
 
         
 
-        η = mf.viscosity(mf.εD(self.vel_prev_it), self.sim.params.n, 1.e-8)
+        η = mf.viscosity(mf.ε(self.vel_prev_it), self.sim.params.n, 1.e-8)
+        # η = mf.viscosity_stress(self.stress(self.ε_e_prev_it), self.sim.params.n, 1.e-8)
 
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
+        σ = self.stress(self.ε_e)
         σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
         σminus = σ0 - σplus
-        σ = g * σplus + σminus
-      
+
+    
+        P = pt.projection_tensor(self.ε_e_prev_it)
+        i,j,k,l = ufl.indices(4)
+        
+        τv0 = η*mf.ε(self.vel)
+        τvplus = ufl.as_tensor(P[i,j,k,l]*τv0[k,l],(i,j))
+        τvminus = τv0 - τvplus
+        τv = g*τvplus + τvminus
+
+        g_v = es.degradation_default(self.sim.damage.d,0.001)
+
+        τv = g_v*τv0
 
         
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
-        g_v = es.degradation_default(self.sim.damage.d,0.01)
-
+        
         self.F = (
             ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
             #  - self.p_crack* ufl.inner(ufl.grad(g), v)\
@@ -76,11 +89,12 @@ class MixedDisplacement(Momentum):
             + self.pw * ufl.inner(n, v) * ufl.ds \
         
         self.F+= (
-                g*η*ufl.inner(mf.εD(self.vel), mf.ε(v_v))\
+                ufl.inner(τv, mf.ε(v_v))\
                 + ufl.inner(-self.p, ufl.div(v_v))  \
             -    ufl.inner(σ, mf.ε(v_v))
              ) * ufl.dx
-        
+       
+       
         self.F += (
                 - ufl.inner(ufl.div(self.vel), q) \
                 ) * ufl.dx 
@@ -153,6 +167,7 @@ class SemiLagrangian(MixedDisplacement):
         self.u_e_prev_it = self.u_e_prev_time + self.du_e_prev_it
 
         self.ε_e = mf.ε(self.u_e)
+        self.ε_e_prev_it = mf.ε(self.u_e_prev_it)
         self.vel = self.du_v/self.sim.params.dtstar
         self.vel_prev_it = self.du_v_prev_it/self.sim.params.dtstar
 

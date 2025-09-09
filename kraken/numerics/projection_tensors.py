@@ -80,3 +80,11 @@ def tensor_commuter(A,B):
     i,j,k,l = ufl.indices(4)
     return ufl.as_tensor(A[i,k]*B[j,l] + A[i,l]*B[j,k],(i,j,k,l))
 
+
+
+def general_projection_tensor(σ0, σplus):
+    D = ufl.shape(σ0)[0]
+    invσ0 = ufl.inv(σ0)
+    i,j,k,l = ufl.indices(4)
+    P = ufl.as_tensor(σplus[i,j]*invσ0[l,k],(i,j,k,l))/D
+    return P

@@ -4,9 +4,20 @@ from dolfinx import fem, default_scalar_type
 import numpy as np
 
 def viscosity(ε, n, eps=1.e-11, A=1.0): 
-    return 0.5* A**(-1/n) * (ufl.inner(ε, ε) / 2 + eps)**((1 - n) / (2 * n))
+    εe2 = ufl.inner(ε, ε) / 2 + eps
+    return  A**(-1/n) * εe2**((1 - n) / (2 * n))
 
-def viscous_stress(ε,p,η,C2):
+def viscosity_stress(σD, n, eps=1.e-11, A=1.0):
+    τe2 = ufl.inner(σD, σD) / 2 + eps
+    return A**(-1)* τe2**((1 - n) / 2)
+
+
+def viscous_energy(ε, n):
+    η = viscosity(ε, n, 1.e-8)
+    return (n/(n+1))*η*ufl.inner(ε, ε) 
+
+
+def viscous_stress(ε,p,η,C2=1):
     D = ufl.shape(ε)[0]
     δ = ufl.Identity(D)
     return η*ε/C2 - p*δ

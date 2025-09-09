@@ -34,7 +34,7 @@ true_length = 16e3
 true_height = 300
 
 L = true_height
-l = 4
+l = 6
 ρi = 900
 ρf = 350
 ρsw = 1000
@@ -54,8 +54,8 @@ flotation_height = ρi/ρsw
 refineH = (2.5,0.4)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
                                      aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=2)
-# msh.geometry.x[:,1] += 0.5
+                                     cell_factor=1.3)
+
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
@@ -65,10 +65,11 @@ u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
-# model = kr.models.jakub2.viscoelastic_damage(msh, [u_bc,d_bc])
 model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangian,
-                           kr.damage.higherorder.HigherOrder)
+                           kr.damage.higherorder.HigherOrder, 0.06)
+
+
 
 model.params.L.value = L
 model.params.l.value = l
@@ -79,32 +80,20 @@ model.params.ψcrit.value = 1.0
 model.params.Gc.value = 1.0
 model.params.patm.value = 0.0
 
-# model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
-#                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
-
 
 #%%
 min_its = 10
 
 # model.setup_all()
 model.setup()
+
 gs = [6,8,9]
 
 for i,g in enumerate(gs):
 
     model.params.g.value = g
 
-    # kr.iterators.fixed_point(model, min_its=min_its, tol=1e-5)
     model.fixed_point(min_its=min_its, tol=1e-5,max_its=50)
-
-    # kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
-    #                         msh, [model.u, model.d,
-    #                               model.u_e, model.u_v,
-    #                               ufl.tr(mf.ε(model.u)), ufl.tr(mf.ε(model.u_v)), ufl.tr(model.ε_e)],
-    #                               ["u", "d",
-    #                                "ue", "uv",
-    #                                "tr_u", "tr_uv", "ε_e"],
-    #                               t=i)
 
     kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
@@ -134,28 +123,11 @@ for i in range(300):
     if i == 5:
         min_its = 3
 
-    # kr.iterators.fixed_point(model,min_its=min_its,tol=1e-5)#tol=-1, max_its = 10)
     model.fixed_point(min_its=min_its, tol=1e-5)
 
-    # one = fem.Function(model.D)
-    # one.x.array[:] = 1.0
-    # area = fem.assemble_scalar(fem.form(ufl.inner(one,one)*ufl.dx))
-    # area = np.sqrt(MPI.COMM_WORLD.allreduce(area, op=MPI.SUM))
-    # if MPI.COMM_WORLD.rank == 0:
-    #     print("Area: ", area)
 
-    # kr.utilities.write_xdmf(path + "/iceberg" + str(i) + ".xdmf",
-    #                         msh, [model.u,model.d,
-    #                               model.u_e, model.u_v,
-    #                             #   model.area_ratio,
-    #                               ufl.tr(mf.ε(model.u)),ufl.tr(mf.ε(model.u_v)),ufl.tr(model.ε_e)],
-    #                               ["u","d",
-    #                             "ue","uv",
-    #                             # "area_ratio",
-    #                             "tr_u","tr_uv", "ε_e"
-    #                                ], t=i)
 
-    kr.utilities.write_xdmf(path + "/iceberg" + str(i) + ".xdmf",
+    kr.utilities.write_xdmf(path + "/icebergold" + str(i) + ".xdmf",
                             msh, [model.momentum.u, model.damage.d,model.momentum.ρ,
                                 #   model.momentum.u_e, model.momentum.u_v,
                                 #   ufl.div(model.momentum.vel),ufl.div(model.momentum.du_e),

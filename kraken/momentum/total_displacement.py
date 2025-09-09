@@ -19,7 +19,7 @@ class TotalDisplacement(Momentum):
         super().__init__(sim)
 
         self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), 2, shape=(self.sim.msh.geometry.dim,))
-        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(2,2))
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 2, shape=(2,2))
         self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
 
         self.mixed_el = bufl.mixed_element([self.u_el, self.ε_el, self.p_el])
@@ -51,8 +51,7 @@ class TotalDisplacement(Momentum):
         g = self.sim.damage.g
 
         
-        εD_v_dot = mf.dev3(self.dε_v)/self.sim.params.dtstar
-        εD_v_dot_prev_it = mf.dev3(self.dε_v_prev_it)/self.sim.params.dtstar
+        
         η = mf.viscosity(self.dε_v_prev_it/self.sim.params.dtstar, self.sim.params.n, 1.e-8)
 
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
@@ -73,9 +72,9 @@ class TotalDisplacement(Momentum):
             + self.pw * ufl.inner(n, v) * ufl.ds \
         
         self.F += (
-                g*η*ufl.inner(self.dε_v/self.sim.params.dtstar, τ)\
+                η*ufl.inner(self.dε_v/self.sim.params.dtstar, τ)\
                 + ufl.inner(-self.p, ufl.tr(τ))  \
-            -    ufl.inner(σ, τ)
+            -    ufl.inner(σ0, τ)
              ) * ufl.dx
         
         self.F += (

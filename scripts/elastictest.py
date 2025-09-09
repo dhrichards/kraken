@@ -43,17 +43,17 @@ os.makedirs(path, exist_ok=True)
 
 
 L = true_height
-l = 3
+l = 5
 
 
 nondim_length = true_length/L
 nondim_height = true_height/L
 
 
-refineH = (2,0.3)
+refineH = (3,0.3)
 msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L, 0.9,
                                      aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=2.1)
+                                     cell_factor=2)
 # msh.geometry.x[:,1] += 0.5
 
 no_bc = lambda V: []
@@ -95,7 +95,7 @@ for i in range(len(gs)):
     model.params.g.value = gs[i]
 
 
-    model.fixed_point(min_its=3,solve_damage=True,max_its=60,tol=1e-5)
+    model.fixed_point(min_its=3,solve_damage=True,max_its=200,tol=1e-5)
 
     kr.utilities.write_xdmf(path + "/elastictest" + str(i) + ".xdmf",
                             msh, [model.momentum.u, model.damage.d],
