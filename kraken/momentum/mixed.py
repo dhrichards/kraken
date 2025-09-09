@@ -58,19 +58,12 @@ class MixedDisplacement(Momentum):
         η = mf.viscosity(mf.ε(self.vel_prev_it), self.sim.params.n, 1.e-8)
         # η = mf.viscosity_stress(self.stress(self.ε_e_prev_it), self.sim.params.n, 1.e-8)
 
-        σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
-        σ = self.stress(self.ε_e)
-        σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
-        σminus = σ0 - σplus
-
-    
-        P = pt.projection_tensor(self.ε_e_prev_it)
-        i,j,k,l = ufl.indices(4)
         
+        σ = self.stress(self.ε_e)
+        
+    
+       
         τv0 = η*mf.ε(self.vel)
-        τvplus = ufl.as_tensor(P[i,j,k,l]*τv0[k,l],(i,j))
-        τvminus = τv0 - τvplus
-        τv = g*τvplus + τvminus
 
         g_v = es.degradation_default(self.sim.damage.d,0.001)
 

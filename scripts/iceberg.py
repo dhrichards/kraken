@@ -40,6 +40,7 @@ l = 6
 ρsw = 1000
 D = 32.5
 
+level = 0.01
 
 path = './outputs'
 os.makedirs(path, exist_ok=True)
@@ -67,7 +68,7 @@ u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
 
 model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangian,
-                           kr.damage.higherorder.HigherOrder, 0.06)
+                           kr.damage.higherorder.HigherOrder, level=level)
 
 
 
@@ -127,7 +128,7 @@ for i in range(300):
 
 
 
-    kr.utilities.write_xdmf(path + "/icebergold" + str(i) + ".xdmf",
+    kr.utilities.write_xdmf(path + "/iceberglvl" + str(level*100) + "run" + str(i) + ".xdmf",
                             msh, [model.momentum.u, model.damage.d,model.momentum.ρ,
                                 #   model.momentum.u_e, model.momentum.u_v,
                                 #   ufl.div(model.momentum.vel),ufl.div(model.momentum.du_e),
