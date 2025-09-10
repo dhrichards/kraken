@@ -76,8 +76,8 @@ class MixedDisplacement(Momentum):
         
         self.F = (
             ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
-            #  - self.p_crack* ufl.inner(ufl.grad(g), v)\
-            - self.p_crack*ufl.inner(ufl.Dx(g,0), v[0]) \
+             - self.p_crack* ufl.inner(ufl.grad(g), v)\
+            # - self.p_crack*ufl.inner(ufl.Dx(g,0), v[0]) \
               ) * ufl.dx \
             + self.pw * ufl.inner(n, v) * ufl.ds \
         

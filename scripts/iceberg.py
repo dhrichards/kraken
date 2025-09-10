@@ -14,6 +14,10 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks, non dimensional")
 parser.add_argument("--split", type=str, default="lo", help="Energy split to use")
+parser.add_argument("--l", type=float, default=2, help="Regularization length scale in meters")
+parser.add_argument("--dt", type=float, default=60*60*24*3, help="Time step in seconds")
+parser.add_argument("--cellfactor", type=float, default=2, help="Mesh cell size factor")
+parser.add_argument("--psicrit", type=float, default=1.0, help="Critical energy threshold")
 
 args = parser.parse_args()
 level = args.level
@@ -23,6 +27,10 @@ filename = "iceberg_level" + str(level) + "_split" + split
 if MPI.COMM_WORLD.rank == 0:
     print("Level: ", level)
     print("Split: ", split)
+    print("Regularization length scale (m): ", args.l)
+    print("Time step (s): ", args.dt)
+    print("Mesh cell size factor: ", args.cellfactor)
+    print("Critical energy threshold: ", args.psicrit)
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -30,8 +38,8 @@ def left_boundary(x):
 def right_boundary(x):
     return np.isclose(x[0], nondim_length/2)
 
-def bottom_boundary(x):
-    return np.isclose(x[1], -Hw)
+# def bottom_boundary(x):
+#     return np.isclose(x[1], -Hw)
 
 # def crack(x):
 #     x_c = nondim_length/2 - nondim_height
@@ -47,10 +55,10 @@ true_length = 16e3
 true_height = 300
 
 L = true_height
-l = 30
+l = args.l
 ρi = 900
 ρf = 350
-ρsw = 1000
+ρsw = 1027
 D = 32.5
 
 # level = 0.02
@@ -68,7 +76,7 @@ flotation_height = ρi/ρsw
 refineH = (2.5,0.4)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
                                      aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=1.2)
+                                     cell_factor=args)
 
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
@@ -87,10 +95,10 @@ model = kr.base.Simulation(msh, [u_bc, d_bc],
 
 model.params.L.value = L
 model.params.l.value = l
-model.params.dt.value = 60*60*24*3
+model.params.dt.value = args.dt
 model.params.ρi.value = ρi
 model.params.ρw.value = ρsw
-model.params.ψcrit.value = 1.0
+model.params.ψcrit.value = args.psicrit
 model.params.Gc.value = 1.0
 model.params.patm.value = 0.0
 
