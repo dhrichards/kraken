@@ -13,8 +13,8 @@ import numpy as np
 
 
 class WithGamma(Damage):
-    def __init__(self, sim, free_energy_plus=es.free_energy_plus_lo):
-        super().__init__(sim, free_energy_plus)
+    def __init__(self, sim):
+        super().__init__(sim)
 
         self.D = fem.functionspace(self.sim.msh, ("Lagrange", 1))
         self.Γ = fem.functionspace(self.sim.msh, ("Lagrange", 1))
@@ -46,7 +46,7 @@ class WithGamma(Damage):
         
         ψc = self.sim.params.ψcritstar
         v = ufl.TestFunction(self.Γ)
-        ψp = self.free_energy_plus(self.sim.momentum.ε_e, 
+        ψp = self.sim.free_energy_plus(self.sim.momentum.ε_e, 
                                    self.sim.params.ν)
         
         gq = es.degradation_default(self.d)

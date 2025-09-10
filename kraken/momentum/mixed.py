@@ -65,7 +65,7 @@ class MixedDisplacement(Momentum):
        
         τv0 = η*mf.ε(self.vel)
 
-        g_v = es.degradation_default(self.sim.damage.d,0.001)
+        g_v = es.degradation_default(self.sim.damage.d,0.01)
 
         τv = g_v*τv0
 

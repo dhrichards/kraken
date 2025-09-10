@@ -13,8 +13,8 @@ import numpy as np
 
 
 class LowerOrder(Damage):
-    def __init__(self, sim, free_energy_plus=es.free_energy_plus_lo):
-        super().__init__(sim, free_energy_plus)
+    def __init__(self, sim):
+        super().__init__(sim)
 
 
         self.D = fem.functionspace(self.sim.msh, self.d_el)
@@ -39,7 +39,7 @@ class NonLinear(LowerOrder):
 
         H = es.history_function(self.sim.momentum.ε_e, self.Hprev,
                             self.sim.params.ν, self.sim.params.ψcritstar, 
-                            self.free_energy_plus)
+                            self.sim.free_energy_plus)
     
 
         v = ufl.TestFunction(self.D)
@@ -72,7 +72,7 @@ class Bounded(LowerOrder):
         c0 = 4*np.trapezoid(np.sqrt(w(s)),s)
         
 
-        H = ufl.max_value(self.free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
+        H = ufl.max_value(self.sim.free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
 
         dissipated_energy = (1/C3) * es.crack_density_function(self.d, l, w, c0) * ufl.dx
         elastic_energy = self.g * H * ufl.dx

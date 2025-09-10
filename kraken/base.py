@@ -1,15 +1,29 @@
 from kraken import parameters
+from kraken.numerics import energy_splits as es
 from dolfinx import fem
 import ufl
 from mpi4py import MPI
 import numpy as np
 
 class Simulation:
-    def __init__(self, msh, bc_funcs, MomentumSolver, DamageSolver, level=0.0):
+    def __init__(self, msh, bc_funcs, MomentumSolver, DamageSolver, level=0.0, split="lo"):
         self.msh = msh
         self.params = parameters.Params_with_uc(self.msh)
         self.bc_funcs = bc_funcs
         self.level = level
+
+        if split == "lo":
+            self.free_energy_plus = es.free_energy_plus_lo
+            self.stress_plus = es.stress_plus_lo
+        elif split == "spectral":
+            self.free_energy_plus = es.free_energy_plus_spectral
+            self.stress_plus = es.stress_plus_spectral
+        elif split == "dp":
+            self.free_energy_plus = es.free_energy_plus_dp
+            self.stress_plus = es.stress_plus_dp
+        elif split == "none":
+            self.free_energy_plus = es.free_energy
+            self.stress_plus = es.cauchy_stress
 
 
 

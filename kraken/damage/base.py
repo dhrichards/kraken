@@ -5,9 +5,8 @@ from mpi4py import MPI
 import basix.ufl as bufl
 
 class Damage:
-    def __init__(self, sim, free_energy_plus=es.free_energy_plus_lo):
+    def __init__(self, sim):
         self.sim = sim
-        self.free_energy_plus = free_energy_plus
 
         self.d_el = bufl.element("CG", self.sim.msh.basix_cell(), 2)
 
@@ -41,7 +40,7 @@ class Damage:
     def timestep(self):
         H = es.history_function(self.sim.momentum.ε_e, self.Hprev,
                                 self.sim.params.ν, self.sim.params.ψcritstar,
-                                self.free_energy_plus)
+                                self.sim.free_energy_plus)
         self.Hprev.interpolate(fem.Expression(H, self.H_space.element.interpolation_points()))
 
 

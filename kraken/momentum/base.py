@@ -41,7 +41,7 @@ class Momentum:
     def stress(self,ε):
         g = self.sim.damage.g
         σ0 = es.cauchy_stress(ε, self.sim.params.ν)
-        σplus = es.stress_plus_lo(ε, self.sim.params.ν)
+        σplus = self.sim.stress_plus(ε, self.sim.params.ν)
         σminus = σ0 - σplus
         return g*σplus + σminus
 

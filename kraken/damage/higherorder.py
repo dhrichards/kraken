@@ -13,8 +13,8 @@ import numpy as np
 
 
 class HigherOrder(Damage):
-    def __init__(self, sim, free_energy_plus=es.free_energy_plus_lo):
-        super().__init__(sim, free_energy_plus=es.free_energy_plus_lo)
+    def __init__(self, sim):
+        super().__init__(sim)
 
 
         self.d_el_mixed = bufl.mixed_element([self.d_el, self.d_el])
@@ -46,7 +46,7 @@ class HigherOrder(Damage):
 
         H = es.history_function(self.sim.momentum.ε_e, self.Hprev,
                             self.sim.params.ν, self.sim.params.ψcritstar,
-                            self.free_energy_plus)
+                            self.sim.free_energy_plus)
 
         mixed_test = ufl.TestFunction(self.W)
         v, q = ufl.split(mixed_test)

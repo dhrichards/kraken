@@ -9,7 +9,20 @@ import kraken.boundaryconditions as bc
 import kraken.numerics.maths_functions as mf
 import kraken.numerics.energy_splits as es
 import kraken as kr
+import argparse
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks, non dimensional")
+parser.add_argument("--split", type=str, default="lo", help="Energy split to use")
+
+args = parser.parse_args()
+level = args.level
+split = args.split
+
+filename = "iceberg_level" + str(level) + "_split" + split
+if MPI.COMM_WORLD.rank == 0:
+    print("Level: ", level)
+    print("Split: ", split)
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -40,7 +53,7 @@ l = 6
 ρsw = 1000
 D = 32.5
 
-level = 0.01
+# level = 0.02
 
 path = './outputs'
 os.makedirs(path, exist_ok=True)
@@ -55,20 +68,20 @@ flotation_height = ρi/ρsw
 refineH = (2.5,0.4)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
                                      aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=1.3)
+                                     cell_factor=1.2)
 
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                        #    bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
+                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
                         ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
 model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangian,
-                           kr.damage.higherorder.HigherOrder, level=level)
+                           kr.damage.higherorder.HigherOrder, level=level, split=split)
 
 
 
@@ -94,7 +107,7 @@ for i,g in enumerate(gs):
 
     model.params.g.value = g
 
-    model.fixed_point(min_its=min_its, tol=1e-5,max_its=50)
+    model.fixed_point(min_its=min_its, tol=1e-5,max_its=200)
 
     kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
