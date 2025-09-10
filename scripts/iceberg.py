@@ -47,7 +47,7 @@ true_length = 16e3
 true_height = 300
 
 L = true_height
-l = 6
+l = 30
 ρi = 900
 ρf = 350
 ρsw = 1000
@@ -109,7 +109,7 @@ for i,g in enumerate(gs):
 
     model.fixed_point(min_its=min_its, tol=1e-5,max_its=200)
 
-    kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
+    kr.utilities.write_xdmf(path + "/" + filename + "gravity" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                 #   model.momentum.u_e, model.momentum.u_v,
                                 ],
@@ -141,7 +141,7 @@ for i in range(300):
 
 
 
-    kr.utilities.write_xdmf(path + "/iceberglvl" + str(level*100) + "run" + str(i) + ".xdmf",
+    kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u, model.damage.d,model.momentum.ρ,
                                 #   model.momentum.u_e, model.momentum.u_v,
                                 #   ufl.div(model.momentum.vel),ufl.div(model.momentum.du_e),
