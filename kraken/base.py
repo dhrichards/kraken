@@ -11,6 +11,7 @@ class Simulation:
         self.params = parameters.Params_with_uc(self.msh)
         self.bc_funcs = bc_funcs
         self.level = level
+        self.T = -20.0  # Default temperature
 
         if split == "lo":
             self.free_energy_plus = es.free_energy_plus_lo

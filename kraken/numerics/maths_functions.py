@@ -140,3 +140,23 @@ def ice_E(msh,params):
 
 def flotation_height(ρistar,ρfstar,Dstar):
     return ρistar - (ρistar - ρfstar)*(Dstar - Dstar*np.exp(-1/Dstar))
+
+
+def rate_factor(T):
+    # https://elmerice.elmerfem.org/wiki/doku.php?id=problems:rheology
+    R = 8.314
+    Q = ufl.conditional(ufl.gt(T,-10),115e3,60e3)
+    A0 = ufl.conditional(ufl.gt(T,-10),2.42736e-02,2.89165e-13)
+    # Q = 60e3
+    # A0 = 2.89165e-13
+    return A0*ufl.exp(-Q/(R*(T+273.15)))
+
+
+def temperature(msh,ρistar,Ts=-20.0,Tb=-2.0):
+    x = ufl.SpatialCoordinate(msh)
+    z = x[msh.geometry.dim-1]
+    δ = 1 - ρistar
+    z = z - δ
+    #linear profile
+    T = -(Tb - Ts)*z + Ts
+    return T

@@ -46,11 +46,12 @@ class Direct(Stokes):
 
         self.bc_u = self.sim.bc_funcs[0](self.W)
 
-        self.vel = (self.u - self.u_prev_time)/ self.sim.params.dt
-        self.vel_prev_it = (self.u_prev_it - self.u_prev_time) / self.sim.params.dt
+        self.vel = (self.u - self.u_prev_time)/ self.sim.params.dtstar
+        self.vel_prev_it = (self.u_prev_it - self.u_prev_time) / self.sim.params.dtstar
 
         self.pw = self.water_pressure(self.u)
         self.ε_e = mf.ε(self.u)
+        
 
     def setup_momentum(self):
         w_test = ufl.TestFunction(self.W)
@@ -58,9 +59,11 @@ class Direct(Stokes):
         n = ufl.FacetNormal(self.sim.msh)
 
         g = self.sim.damage.g
-        η = mf.viscosity(mf.ε(self.vel_prev_it), self.sim.params.n, 1.e-8)
+        A = mf.rate_factor(self.sim.T)/self.sim.params.A
+        η = mf.viscosity(mf.ε(self.vel_prev_it), self.sim.params.n, A=A)
+        self.η=η
 
-        f = mf.body_force(self.sim.msh, self.sim.params.ρistar)
+        f = self.sim.params.ρistar*mf.body_force(self.sim.msh)
 
         self.F= (
                 g*η*ufl.inner(mf.ε(self.vel), mf.ε(v))\
@@ -71,7 +74,7 @@ class Direct(Stokes):
         
         
         self.F += (
-                - g*ufl.inner(ufl.div(self.vel), q) \
+                + g*ufl.inner(ufl.div(self.vel), q) \
                 ) * ufl.dx 
 
         self.J = ufl.derivative(self.F, self.w, ufl.TrialFunction(self.W))

@@ -3,7 +3,7 @@ from mpi4py import MPI
 import numpy as np
 import ufl
 import os
-from dolfinx import io
+from dolfinx import io, mesh
 import kraken.parameters as kp
 import kraken.boundaryconditions as bc
 import kraken.numerics.maths_functions as mf
@@ -34,7 +34,7 @@ true_length = 16e3
 true_height = 300
 
 L = true_height
-l = 75
+l = 20
 ρi = 900
 ρf = 350
 ρsw = 1000
@@ -54,14 +54,15 @@ flotation_height = ρi/ρsw
 refineH = (3.5,0.4)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
                                      aspect_ratios=(1,1), refine=refineH,
-                                     cell_factor=1.5)
+                                     cell_factor=1.5, cell_type=mesh.CellType.quadrilateral)
 # msh.geometry.x[:,1] += 0.5
 
 d_bc = lambda V: []#bc.internal_bc(V, fixed, 0.0)]
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
+                        #    bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
                         ]
+
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
@@ -69,6 +70,8 @@ u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
 model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangian,
                            kr.damage.higherorder.HigherOrder)
+
+model.T = mf.temperature(msh,ρi/ρsw,-80,-2)
 model.damage.free_energy_plus = es.free_energy_plus_dp
 model.params.L = L
 model.params.l = l
@@ -107,39 +110,42 @@ for i,g in enumerate(gs):
     #                                "ue", "uv",
     #                                "tr_u", "tr_uv", "ε_e"],
     #                               t=i)
-    η = mf.viscosity(mf.ε(model.momentum.du_v)/model.params.dtstar, model.params.n, 1.e-8)
-    # η = mf.viscosity(model.momentum.ε_v/model.params.dtstar, model.params.n,0)
-    # τv = η*mf.εD(model.momentum.u_v)
-    # σv = η*(model.momentum.ε_v/model.params.dtstar) - model.momentum.p*ufl.Identity(2)
-    τv = η*mf.ε(model.momentum.du_v)/model.params.dtstar
+    # η = mf.viscosity(mf.ε(model.momentum.du_v)/model.params.dtstar, model.params.n, 1.e-8)
+    # # η = mf.viscosity(model.momentum.ε_v/model.params.dtstar, model.params.n,0)
+    # # τv = η*mf.εD(model.momentum.u_v)
+    # # σv = η*(model.momentum.ε_v/model.params.dtstar) - model.momentum.p*ufl.Identity(2)
+    # τv = η*mf.ε(model.momentum.du_v)/model.params.dtstar
     
-    σv = τv - model.momentum.p*ufl.Identity(2)
+    # σv = τv - model.momentum.p*ufl.Identity(2)
     
     
-    σe = (model.momentum.stress(model.momentum.ε_e))
-    τe = ufl.dev(σe)
+    # σe = (model.momentum.stress(model.momentum.ε_e))
+    # τe = ufl.dev(σe)
+    T = mf.temperature(msh,ρi/ρsw)
 
-    η2 = mf.viscosity_stress(τv, 3,1e-20)
+    # η2 = mf.viscosity_stress(τv, 3,1e-20)
 
     kr.utilities.write_xdmf(path + "/iceberggravity" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                 #   model.momentum.u_e, model.momentum.u_v,
-                                    η, σv, σe,η2,
-                                    τv, τe,
-                                    -model.momentum.p,ufl.tr(σe),η/(η2*ufl.inner(τv,τv)),
-                                    ufl.div(σv), ufl.div(σe),
+                                    # η, σv, σe,η2,
+                                    mf.rate_factor(model.T),model.T,
+                                    # τv, τe,
+                                    # -model.momentum.p,ufl.tr(σe),η/(η2*ufl.inner(τv,τv)),
+                                    # ufl.div(σv), ufl.div(σe),
                                     # ufl.tr(model.momentum.ε_v)
-                                    ufl.div(model.momentum.du_v),
-                                    es.free_energy_plus_spectral(model.momentum.ε_e,model.params.ν),mf.viscous_energy(model.momentum.du_v/model.params.dtstar,model.params.n)
+                                    # ufl.div(model.momentum.du_v),
+                                    # es.free_energy_plus_spectral(model.momentum.ε_e,model.params.ν),mf.viscous_energy(model.momentum.du_v/model.params.dtstar,model.params.n)
                                 ],
                                   ["u","d",
                                 # "ue","uv",
-                                "η","σv","σe","η2",
-                                "τv","τe",
-                                "minusp","tr_σe","ratio",
-                                "div_σv","div_σe",
-                                "div_ε_v",
-                                "ψe","ψv"
+                                # "η","σv","σe","η2",
+                                "A","T",
+                                # "τv","τe",
+                                # "minusp","tr_σe","ratio",
+                                # "div_σv","div_σe",
+                                # "div_ε_v",
+                                # "ψe","ψv"
                                 ],
                                   t=i)
     model.damage.timestep()

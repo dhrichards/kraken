@@ -18,12 +18,13 @@ parser.add_argument("--l", type=float, default=2, help="Regularization length sc
 parser.add_argument("--dt", type=float, default=60*60*24*3, help="Time step in seconds")
 parser.add_argument("--cellfactor", type=float, default=2, help="Mesh cell size factor")
 parser.add_argument("--psicrit", type=float, default=1.0, help="Critical energy threshold")
+parser.add_argument("--height", type=float, default=300, help="Height of iceberg in meters")
 
 args = parser.parse_args()
 level = args.level
 split = args.split
 
-filename = "iceberg_level" + str(level) + "_split" + split
+filename = "iceberg_level" + str(level) + "height" + str(args.height) +"_"
 if MPI.COMM_WORLD.rank == 0:
     print("Level: ", level)
     print("Split: ", split)
@@ -52,13 +53,13 @@ def fixed(x):
 
 
 true_length = 16e3
-true_height = 300
+true_height = args.height
 
 L = true_height
 l = args.l
 ρi = 900
 ρf = 350
-ρsw = 1027
+ρsw = 1000
 D = 32.5
 
 # level = 0.02
@@ -76,7 +77,7 @@ flotation_height = ρi/ρsw
 refineH = (2.5,0.4)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
                                      aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=args)
+                                     cell_factor=args.cellfactor)
 
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
@@ -92,7 +93,7 @@ model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.damage.higherorder.HigherOrder, level=level, split=split)
 
 
-
+model.T = mf.temperature(msh,ρi/ρsw,-20,-2)
 model.params.L.value = L
 model.params.l.value = l
 model.params.dt.value = args.dt
@@ -109,7 +110,7 @@ min_its = 10
 # model.setup_all()
 model.setup()
 
-gs = [6,8,9]
+gs = [8,8.5,9,9.4]
 
 for i,g in enumerate(gs):
 
@@ -145,7 +146,7 @@ for i in range(300):
     if i == 5:
         min_its = 3
 
-    model.fixed_point(min_its=min_its, tol=1e-5)
+    model.fixed_point(min_its=min_its, tol=1e-5, max_its=300)
 
 
 

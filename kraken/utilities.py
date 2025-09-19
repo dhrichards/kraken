@@ -193,7 +193,7 @@ def extract_line(points,msh,functions):
 def create_refined_mesh(nondim_length, nondim_height, 
                         lstar,Hw,
                         aspect_ratios=(100,100), refine = (2.2,0.3),
-                        cell_factor=2.1, refine_right=True ):
+                        cell_factor=2.1, refine_right=True, cell_type = mesh.CellType.triangle):
     
    
 
@@ -219,7 +219,7 @@ def create_refined_mesh(nondim_length, nondim_height,
 
     msh = mesh.create_rectangle(MPI.COMM_WORLD,
                                 [np.array([0, 0]), np.array([new_length, new_height])],
-                                [nx,nz], mesh.CellType.triangle)
+                                [nx,nz], cell_type)
     
     
     x = msh.geometry.x[:,0]
