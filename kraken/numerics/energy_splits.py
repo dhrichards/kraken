@@ -51,7 +51,7 @@ def free_energy_plus_dplike(ε, ν, γ=1):
 
 
 
-def free_energy_plus_dp(ε, ν, B = -0.666/sqrt(3.0)):
+def free_energy_plus_dp(ε, ν, B = -0.125):
     # B = -0.4
     K = Koverμ(ν)
     I1 = ufl.tr(ε)
@@ -67,7 +67,7 @@ def free_energy_plus_dp(ε, ν, B = -0.666/sqrt(3.0)):
     return ψ
 
 
-def stress_plus_dp(ε, ν, B = -0.666/sqrt(3.0)):
+def stress_plus_dp(ε, ν, B = -0.125):
     # B = -0.4
     εD = dev3(ε)
     K = Koverμ(ν)
@@ -94,11 +94,17 @@ def free_energy_plus_amor(ε,ν):
     return 0.5*κ*positive_part(ufl.tr(ε))**2 + \
             ufl.inner(dev3(ε),dev3(ε))
 
-def free_energy_plus_star(ε,ν,γ=4):
+def free_energy_plus_star(ε,ν,γ=1):
     κ = Koverμ(ν)
     return 0.5*κ*(positive_part(ufl.tr(ε))**2 \
                   - γ*negative_part(ufl.tr(ε))**2) \
             + ufl.inner(dev3(ε),dev3(ε)) 
+
+def stress_plus_star(ε,ν,γ=1):
+    D = ufl.shape(ε)[0]
+    I = ufl.Identity(D)
+    κ = Koverμ(ν)
+    return (κ*positive_part(ufl.tr(ε)) - 2*γ*negative_part(ufl.tr(ε)))*I + 2*dev3(ε)
 
 
 def free_energy_plus_spectral(ε,ν):

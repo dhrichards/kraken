@@ -22,6 +22,12 @@ class Simulation:
         elif split == "dp":
             self.free_energy_plus = es.free_energy_plus_dp
             self.stress_plus = es.stress_plus_dp
+        elif split == "star":
+            self.free_energy_plus = es.free_energy_plus_star
+            self.stress_plus = es.stress_plus_star
+        elif split == "amor":
+            self.free_energy_plus = es.free_energy_plus_amor
+            self.stress_plus = es.stress_plus_amor
         elif split == "none":
             self.free_energy_plus = es.free_energy
             self.stress_plus = es.cauchy_stress

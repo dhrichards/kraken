@@ -15,21 +15,23 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks, non dimensional")
 parser.add_argument("--split", type=str, default="lo", help="Energy split to use")
 parser.add_argument("--l", type=float, default=2, help="Regularization length scale in meters")
-parser.add_argument("--dt", type=float, default=60*60*24*3, help="Time step in seconds")
+parser.add_argument("--dt", type=float, default=3, help="Time step in days")
 parser.add_argument("--cellfactor", type=float, default=2, help="Mesh cell size factor")
 parser.add_argument("--psicrit", type=float, default=1.0, help="Critical energy threshold")
 parser.add_argument("--height", type=float, default=300, help="Height of iceberg in meters")
+parser.add_argument("--Gc", type=float, default=1.0, help="Gc")
+parser.add_argument("--type", type=str, default="relaxation", help="gravity loop initilisation or relaxation first")
 
 args = parser.parse_args()
 level = args.level
 split = args.split
 
-filename = "iceberg_level" + str(level) + "height" + str(args.height) +"_"
+filename = args.type + "_" + args.split + "_level" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc) +"dt" + str(args.dt) + "_"
 if MPI.COMM_WORLD.rank == 0:
     print("Level: ", level)
     print("Split: ", split)
     print("Regularization length scale (m): ", args.l)
-    print("Time step (s): ", args.dt)
+    print("Time step (days): ", args.dt)
     print("Mesh cell size factor: ", args.cellfactor)
     print("Critical energy threshold: ", args.psicrit)
 
@@ -62,7 +64,6 @@ l = args.l
 ρsw = 1000
 D = 32.5
 
-# level = 0.02
 
 path = './outputs'
 os.makedirs(path, exist_ok=True)
@@ -93,10 +94,10 @@ model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.damage.higherorder.HigherOrder, level=level, split=split)
 
 
-model.T = mf.temperature(msh,ρi/ρsw,-20,-2)
+# model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
 model.params.L.value = L
 model.params.l.value = l
-model.params.dt.value = args.dt
+model.params.dt.value = args.dt*24*60*60
 model.params.ρi.value = ρi
 model.params.ρw.value = ρsw
 model.params.ψcrit.value = args.psicrit
@@ -110,26 +111,29 @@ min_its = 10
 # model.setup_all()
 model.setup()
 
-gs = [8,8.5,9,9.4]
 
-for i,g in enumerate(gs):
+if args.type == "iceberg":
+    gs = [8,8.5,9,9.4]
 
-    model.params.g.value = g
+    for i,g in enumerate(gs):
 
-    model.fixed_point(min_its=min_its, tol=1e-5,max_its=200)
+        model.params.g.value = g
 
-    kr.utilities.write_xdmf(path + "/" + filename + "gravity" + str(i) + ".xdmf",
-                            msh, [model.momentum.u,model.damage.d,
-                                #   model.momentum.u_e, model.momentum.u_v,
-                                ],
-                                  ["u","d",
-                                "ue","uv"
-                                ],
-                                  t=i)
-    model.damage.timestep()
-    # model.d_prev_time.x.array[:] = model.d.x.array[:]
-    
-#%%
+        model.fixed_point(min_its=min_its, tol=1e-5,max_its=200)
+
+        kr.utilities.write_xdmf(path + "/" + filename + "gravity" + str(i) + ".xdmf",
+                                msh, [model.momentum.u,model.damage.d,
+                                    #   model.momentum.u_e, model.momentum.u_v,
+                                    ],
+                                    ["u","d",
+                                    "ue","uv"
+                                    ],
+                                    t=i)
+        model.damage.timestep()
+ 
+        model.momentum.timestep()
+
+
 
 model.params.g.value = 9.8
 
@@ -137,22 +141,36 @@ from dolfinx import fem
 import ufl
 min_its = 5
 
-for i in range(300):
+if args.type == "relaxation":
+    solve_d = False
+else:
+    solve_d = True
+
+for i in range(600):
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
     
-    if i == 5:
+    if i == 20:
         min_its = 3
 
-    model.fixed_point(min_its=min_its, tol=1e-5, max_its=300)
+
+    if i == 10:
+        solve_d = True
+
+
+    if i == 10 and args.type == "relaxation":
+        tol = 1e-7
+    else:
+        tol = 1e-5
+    model.fixed_point(min_its=min_its, tol=tol, max_its=300, solve_damage=solve_d)
 
 
 
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u, model.damage.d,model.momentum.ρ,
-                                #   model.momentum.u_e, model.momentum.u_v,
+                                  model.momentum.u_e, model.momentum.u_v,
                                 #   ufl.div(model.momentum.vel),ufl.div(model.momentum.du_e),
                                   ],
                                   ["u", "d","ρ",

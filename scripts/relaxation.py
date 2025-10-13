@@ -9,7 +9,30 @@ import kraken.boundaryconditions as bc
 import kraken.numerics.maths_functions as mf
 import kraken.numerics.energy_splits as es
 import kraken as kr
+import argparse
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks, non dimensional")
+parser.add_argument("--split", type=str, default="lo", help="Energy split to use")
+parser.add_argument("--l", type=float, default=2, help="Regularization length scale in meters")
+parser.add_argument("--dt", type=float, default=3, help="Time step in days")
+parser.add_argument("--cellfactor", type=float, default=2, help="Mesh cell size factor")
+parser.add_argument("--psicrit", type=float, default=1.0, help="Critical energy threshold")
+parser.add_argument("--height", type=float, default=300, help="Height of iceberg in meters")
+parser.add_argument("--Gc", type=float, default=1.0, help="Gc")
+
+args = parser.parse_args()
+level = args.level
+split = args.split
+
+filename = "iceberg_level" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc) +"_"
+if MPI.COMM_WORLD.rank == 0:
+    print("Level: ", level)
+    print("Split: ", split)
+    print("Regularization length scale (m): ", args.l)
+    print("Time step (days): ", args.dt)
+    print("Mesh cell size factor: ", args.cellfactor)
+    print("Critical energy threshold: ", args.psicrit)
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -17,8 +40,8 @@ def left_boundary(x):
 def right_boundary(x):
     return np.isclose(x[0], nondim_length/2)
 
-def bottom_boundary(x):
-    return np.isclose(x[1], -Hw)
+# def bottom_boundary(x):
+#     return np.isclose(x[1], -Hw)
 
 # def crack(x):
 #     x_c = nondim_length/2 - nondim_height
@@ -31,12 +54,14 @@ def fixed(x):
 
 
 true_length = 16e3
-true_height = 300
+true_height = args.height
 
 L = true_height
-l = 3.0
+l = args.l
 ρi = 900
+ρf = 350
 ρsw = 1000
+D = 32.5
 
 
 path = './outputs'
@@ -46,36 +71,37 @@ os.makedirs(path, exist_ok=True)
 nondim_length = true_length/L
 nondim_height = true_height/L
 
-refineH = (2.0,0.3)
-msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, ρi/ρsw,
+# flotation_height = mf.flotation_height(ρi/ρsw,ρf/ρsw,D/L)
+flotation_height = ρi/ρsw
+
+refineH = (2.5,0.4)
+msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
                                      aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=2)
-# msh.geometry.x[:,1] += 0.5
+                                     cell_factor=args.cellfactor)
+
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
+                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
+                        ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
-# model = kr.models.jakub2.viscoelastic_damage(msh, [u_bc,d_bc])
 model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangian,
-                           kr.damage.higherorder.HigherOrder)
+                           kr.damage.higherorder.HigherOrder, level=level, split=split)
 
+
+# model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
 model.params.L.value = L
 model.params.l.value = l
-model.params.dt.value = 60*60*12
+model.params.dt.value = args.dt*24*60*60
 model.params.ρi.value = ρi
 model.params.ρw.value = ρsw
-model.params.ψcrit.value = 1.0
+model.params.ψcrit.value = args.psicrit
 model.params.Gc.value = 1.0
 model.params.patm.value = 0.0
-
-# model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
-#                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
-
 
 #%%
 min_its = 4
@@ -98,7 +124,7 @@ for i in range(500):
     if i == 20:
         min_its = 3
 
-    model.fixed_point(min_its=min_its,tol=1e-6,solve_damage=solve_d,max_its=300)#tol=-1, max_its = 10)
+    model.fixed_point(min_its=min_its,tol=1e-5,solve_damage=solve_d,max_its=300)#tol=-1, max_its = 10)
 
     kr.utilities.write_xdmf(path + "/relax" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
