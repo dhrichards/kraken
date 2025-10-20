@@ -22,4 +22,4 @@ cd /users/dancha/kraken3
 mpirun --version
 
 
-mpirun -n $SLURM_NTASKS python3 scripts/iceberg.py --level 0.01 --l 3 --dt 3 --type relaxation --split dp
+mpirun -n $SLURM_NTASKS python3 scripts/iceberg.py --level 0.01 --l 3 --dt 5 --type iceberg --split lo --psicrit 0.0

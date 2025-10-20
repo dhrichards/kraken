@@ -58,8 +58,8 @@ class NonLinear(LowerOrder):
 
 
 class Bounded(LowerOrder):
-    def __init__(self, sim, free_energy_plus=es.free_energy_plus_lo):
-        super().__init__(sim, free_energy_plus)
+    def __init__(self, sim):
+        super().__init__(sim)
 
         self.d_prev_time = fem.Function(self.D, name="damage_prev_time")
 

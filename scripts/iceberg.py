@@ -26,7 +26,7 @@ args = parser.parse_args()
 level = args.level
 split = args.split
 
-filename = args.type + "_" + args.split + "_level" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc) +"dt" + str(args.dt) + "_"
+filename = args.type + "_" + args.split + "_level" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc) +"dt" + str(args.dt) + "psicrit" + str(args.psicrit) + "_"
 if MPI.COMM_WORLD.rank == 0:
     print("Level: ", level)
     print("Split: ", split)
@@ -91,7 +91,7 @@ u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
 
 model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangian,
-                           kr.damage.higherorder.HigherOrder, level=level, split=split)
+                           kr.damage.lowerorder.Bounded, level=level, split=split)
 
 
 # model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
@@ -113,7 +113,7 @@ model.setup()
 
 
 if args.type == "iceberg":
-    gs = [8,8.5,9,9.4]
+    gs = [5,5.5,6,7,7.5,8,8.5,9,9.4]
 
     for i,g in enumerate(gs):
 
