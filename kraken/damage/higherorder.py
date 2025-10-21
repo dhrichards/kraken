@@ -69,3 +69,26 @@ class HigherOrder(Damage):
 
 
 
+class HigherOrderAT1(HigherOrder):
+    def setup_weak_form(self):
+        C3 = self.sim.params.C3; l = self.sim.params.lstar
+        
+
+        H = es.history_function(self.sim.momentum.ε_e, self.Hprev,
+                            self.sim.params.ν, self.sim.params.ψcritstar,
+                            self.sim.free_energy_plus)
+
+        HH = ufl.max_value(C3*H - 0.25*l, 0)
+
+        mixed_test = ufl.TestFunction(self.W)
+        v, q = ufl.split(mixed_test)
+
+
+        self.F = (1/(4*l))*(2*self.d*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
+                -2*(1-self.d)*HH ) * ufl.dx \
+                - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx
+                
+        self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
+
+
+        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)

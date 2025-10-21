@@ -55,6 +55,29 @@ class NonLinear(LowerOrder):
         self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
 
 
+class NonLinearAT1(LowerOrder):
+    def setup_weak_form(self):
+        C3 = self.sim.params.C3; l = self.sim.params.lstar
+        ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
+
+        H = es.history_function(self.sim.momentum.ε_e, self.Hprev,
+                            self.sim.params.ν, self.sim.params.ψcritstar, 
+                            self.sim.free_energy_plus)
+    
+        HH = ufl.max_value(C3*8*H/3 - 0.5*l, 0)
+        v = ufl.TestFunction(self.D)
+
+        
+        self.F = (ufl.inner(self.d,v) + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
+                - l*2*(1-self.d)*HH*v) * ufl.dx
+        
+
+        self.J = ufl.derivative(self.F,self.d,ufl.TrialFunction(self.D))
+
+
+        self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
+
+
 
 
 class Bounded(LowerOrder):
