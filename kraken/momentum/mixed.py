@@ -181,6 +181,24 @@ class SemiLagrangian(MixedDisplacement):
         self.area = fem.assemble_vector(self.cell_area_form).array
         self.area_ratio.x.array[:] = self.area/self.area_0
 
+
+
+
+class SemiLagrangianEpsilon(SemiLagrangian):
+
+    def __init__(self, sim):
+        super().__init__(sim)
+
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(self.sim.msh.geometry.dim, self.sim.msh.geometry.dim))
+        self.E = fem.functionspace(self.sim.msh, self.ε_el)
+
+        self.ε_e_prev_time = fem.Function(self.E, name="epsilon previous time")
+        self.ε_e = mf.ε(self.du_e) + self.ε_e_prev_time
+        self.ε_e_prev_it = mf.ε(self.du_e_prev_it) + self.ε_e_prev_time
+
+    def timestep(self):
+        super().timestep()
+        self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E_space.element.interpolation_points()))
         
         
     

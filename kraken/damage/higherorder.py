@@ -84,8 +84,8 @@ class HigherOrderAT1(HigherOrder):
         v, q = ufl.split(mixed_test)
 
 
-        self.F = (1/(4*l))*(2*self.d*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
-                -2*(1-self.d)*HH ) * ufl.dx \
+        self.F = (1/(4*l))*(2*self.d*v - l**2*self.lap*v + (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)))*ufl.dx \
+                -2*(1-self.d)*HH*v * ufl.dx \
                 - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx
                 
         self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))

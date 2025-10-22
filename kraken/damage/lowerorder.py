@@ -68,7 +68,7 @@ class NonLinearAT1(LowerOrder):
         v = ufl.TestFunction(self.D)
 
         
-        self.F = (ufl.inner(self.d,v) + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
+        self.F = (ufl.inner(self.d,v) + 2*l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v)) \
                 - l*2*(1-self.d)*HH*v) * ufl.dx
         
 

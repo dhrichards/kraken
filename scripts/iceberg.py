@@ -3,7 +3,7 @@ from mpi4py import MPI
 import numpy as np
 import ufl
 import os
-from dolfinx import io
+from dolfinx import io, mesh
 import kraken.parameters as kp
 import kraken.boundaryconditions as bc
 import kraken.numerics.maths_functions as mf
@@ -21,12 +21,18 @@ parser.add_argument("--psicrit", type=float, default=1.0, help="Critical energy 
 parser.add_argument("--height", type=float, default=300, help="Height of iceberg in meters")
 parser.add_argument("--Gc", type=float, default=1.0, help="Gc")
 parser.add_argument("--type", type=str, default="relaxation", help="gravity loop initilisation or relaxation first")
+parser.add_argument("--damagemodel", type=str, default="AT1higher", help="damage model to use")
 
 args = parser.parse_args()
 level = args.level
 split = args.split
 
-filename = args.type + "_" + args.split + "_level" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc) +"dt" + str(args.dt) + "psicrit" + str(args.psicrit) + "_"
+filename = args.type + "_" + args.split + "_xlevel" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc)\
+                     +"dt" + str(args.dt) + "psicrit" + str(args.psicrit)\
+                        + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)+"_damagemodel" + args.damagemodel + "_"
+
+
+
 if MPI.COMM_WORLD.rank == 0:
     print("Level: ", level)
     print("Split: ", split)
@@ -34,6 +40,9 @@ if MPI.COMM_WORLD.rank == 0:
     print("Time step (days): ", args.dt)
     print("Mesh cell size factor: ", args.cellfactor)
     print("Critical energy threshold: ", args.psicrit)
+    print("Height (m): ", args.height)
+    print("Gc: ", args.Gc)
+    print("damage model: ", args.damagemodel)
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -78,7 +87,7 @@ flotation_height = ρi/ρsw
 refineH = (2.5,0.4)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
                                      aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=args.cellfactor)
+                                     cell_factor=args.cellfactor, cell_type=mesh.CellType.quadrilateral)
 
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
@@ -88,20 +97,30 @@ u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                         ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
+if args.damagemodel == "AT1lowerbounded":
+    damage_model = kr.damage.lowerorder.Bounded
+elif args.damagemodel == "AT1lower":
+    damage_model = kr.damage.lowerorder.NonLinearAT1
+elif args.damagemodel == "AT1higher":
+    damage_model = kr.damage.higherorder.HigherOrderAT1
+elif args.damagemodel == "AT2higher":
+    damage_model = kr.damage.higherorder.HigherOrder
+elif args.damagemodel == "AT2lower":
+    damage_model = kr.damage.lowerorder.NonLinear
 
 model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangian,
-                           kr.damage.lowerorder.Bounded, level=level, split=split)
+                           damage_model, level=level, split=split)
 
 
 # model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
 model.params.L.value = L
-model.params.l.value = l
+model.params.l.value = args.l
 model.params.dt.value = args.dt*24*60*60
 model.params.ρi.value = ρi
 model.params.ρw.value = ρsw
 model.params.ψcrit.value = args.psicrit
-model.params.Gc.value = 1.0
+model.params.Gc.value = args.Gc
 model.params.patm.value = 0.0
 
 
