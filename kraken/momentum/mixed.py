@@ -73,11 +73,12 @@ class MixedDisplacement(Momentum):
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
-        
+        Iprime = 2*self.sim.damage.d
         self.F = (
             ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
             #  - self.p_crack* ufl.inner(ufl.grad(g), v)\
             - self.p_crack*ufl.inner(ufl.Dx(g,0), v[0]) \
+            # + self.p_crack*Iprime*ufl.inner(ufl.Dx(self.sim.damage.d,0), v[0]) \
               ) * ufl.dx \
             + self.pw * ufl.inner(n, v) * ufl.ds \
         
@@ -198,7 +199,7 @@ class SemiLagrangianEpsilon(SemiLagrangian):
 
     def timestep(self):
         super().timestep()
-        self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E_space.element.interpolation_points()))
+        self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
         
         
     

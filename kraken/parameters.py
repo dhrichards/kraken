@@ -19,7 +19,7 @@ class Params_with_uc:
         self.Gc = fem.Constant(msh,default_scalar_type(1.0)) # Fracture toughness
         self.L = fem.Constant(msh,default_scalar_type(100)) # Characteristic length
         self.l = fem.Constant(msh,default_scalar_type(0.5)) # Regularisation length
-        # self.σcrit =  0.1e6 # tensile strength
+        self.σcrit = fem.Constant(msh,default_scalar_type(0.2e6)) # tensile strength
         self.ψcrit = fem.Constant(msh,default_scalar_type(1.0)) 
         self.dt = fem.Constant(msh,default_scalar_type(secperyr)) # Characteristic time in seconds
         self.patm = fem.Constant(msh,default_scalar_type(1e5)) # Atmospheric pressure
@@ -151,6 +151,13 @@ class Params_with_uc:
         """Non dimensional constant describing ratio between
         elastic and fracture stresses."""
         return self.μ * self.uc**2 / (self.Gc * self.L)
+
+
+    def set_Gc_AT1_lowerorder(self):
+        self.Gc.value = 8* self.σcrit.value**2 * self.l.value / (3*self.E.value)
+
+    def set_Gc_AT1_higherorder(self):
+        self.Gc.value = 2* self.σcrit.value**2 * self.l.value / self.E.value
 
 
 

@@ -21,13 +21,13 @@ parser.add_argument("--psicrit", type=float, default=1.0, help="Critical energy 
 parser.add_argument("--height", type=float, default=300, help="Height of iceberg in meters")
 parser.add_argument("--Gc", type=float, default=1.0, help="Gc")
 parser.add_argument("--type", type=str, default="relaxation", help="gravity loop initilisation or relaxation first")
-parser.add_argument("--damagemodel", type=str, default="AT1higher", help="damage model to use")
+parser.add_argument("--damagemodel", type=str, default="AT2higher", help="damage model to use")
 
 args = parser.parse_args()
 level = args.level
 split = args.split
 
-filename = args.type + "_" + args.split + "_xlevel" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc)\
+filename = args.type + "_" + args.split + "_level" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc)\
                      +"dt" + str(args.dt) + "psicrit" + str(args.psicrit)\
                         + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)+"_damagemodel" + args.damagemodel + "_"
 
@@ -74,6 +74,7 @@ l = args.l
 D = 32.5
 
 
+# path = '/data/hpcdata/users/dancha/outputs'
 path = './outputs'
 os.makedirs(path, exist_ok=True)
 
@@ -87,7 +88,7 @@ flotation_height = ρi/ρsw
 refineH = (2.5,0.4)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
                                      aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=args.cellfactor, cell_type=mesh.CellType.quadrilateral)
+                                     cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
@@ -109,7 +110,7 @@ elif args.damagemodel == "AT2lower":
     damage_model = kr.damage.lowerorder.NonLinear
 
 model = kr.base.Simulation(msh, [u_bc, d_bc],
-                           kr.momentum.mixed.SemiLagrangian,
+                           kr.momentum.mixed.SemiLagrangianEpsilon,
                            damage_model, level=level, split=split)
 
 
@@ -156,12 +157,16 @@ if args.type == "iceberg":
 
 model.params.g.value = 9.8
 
+if MPI.COMM_WORLD.rank == 0:
+    print(path + "/" + filename)
+
 from dolfinx import fem
 import ufl
 min_its = 5
 
 if args.type == "relaxation":
     solve_d = False
+    Gc_loop = args.Gc*np.array([3,2.5,2,1.5,1.25])
 else:
     solve_d = True
 
@@ -170,20 +175,32 @@ for i in range(600):
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
+
+    if i<10:
+        model.params.dt = 10*24*60*60
+    else:
+        model.params.dt = args.dt*24*60*60
+
     
-    if i == 20:
-        min_its = 3
-
-
-    if i == 10:
+    
+    if i == 10 and args.type == "relaxation":
+        # tol = 1e-6
         solve_d = True
 
-
-    if i == 10 and args.type == "relaxation":
-        tol = 1e-7
+        # for val in Gc_loop:
+        #     if MPI.COMM_WORLD.rank == 0:
+        #         print("Setting Gc to ", val)
+        #     model.params.Gc.value = val
+        #     model.fixed_point(min_its=10, tol=tol, max_its=300, solve_damage=solve_d)
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print("Setting Gc to ", args.Gc)
+        # model.params.Gc.value = args.Gc
     else:
         tol = 1e-5
-    model.fixed_point(min_its=min_its, tol=tol, max_its=300, solve_damage=solve_d)
+
+    if i == 20:
+        min_its = 3
+    model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
 
 
