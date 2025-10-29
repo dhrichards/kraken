@@ -98,12 +98,10 @@ u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                         ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
-if args.damagemodel == "AT1lowerbounded":
+if args.damagemodel == "AT1lower":
     damage_model = kr.damage.lowerorder.Bounded
-elif args.damagemodel == "AT1lower":
-    damage_model = kr.damage.lowerorder.NonLinearAT1
 elif args.damagemodel == "AT1higher":
-    damage_model = kr.damage.higherorder.HigherOrderAT1
+    damage_model = kr.damage.higherorder.Bounded
 elif args.damagemodel == "AT2higher":
     damage_model = kr.damage.higherorder.HigherOrder
 elif args.damagemodel == "AT2lower":
