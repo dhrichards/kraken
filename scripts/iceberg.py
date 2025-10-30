@@ -101,9 +101,11 @@ u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
 if args.damagemodel == "AT1lower":
     damage_model = kr.damage.lowerorder.Bounded
 elif args.damagemodel == "AT1higher":
-    damage_model = kr.damage.higherorder.Bounded
+    damage_model = kr.damage.higherorder.PenalizedAT1
 elif args.damagemodel == "AT2higher":
     damage_model = kr.damage.higherorder.HigherOrder
+elif args.damagemodel == "AT2higher_penalized":
+    damage_model = kr.damage.higherorder.PenalizedAT2
 elif args.damagemodel == "AT2lower":
     damage_model = kr.damage.lowerorder.NonLinear
 
@@ -136,6 +138,7 @@ if args.type == "iceberg":
     for i,g in enumerate(gs):
 
         model.params.g.value = g
+       
 
         model.fixed_point(min_its=min_its, tol=1e-5,max_its=200)
 
@@ -201,16 +204,13 @@ for i in range(600):
     model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
 
-
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
-                            msh, [model.momentum.u, model.damage.d,model.momentum.ρ,
-                                  model.momentum.u_e, model.momentum.u_v,
-                                #   ufl.div(model.momentum.vel),ufl.div(model.momentum.du_e),
-                                  ],
-                                  ["u", "d","ρ",
-                                "ue", "uv",
-                                # "div_uv","div_ue"
-                                ],
+                            msh, [model.momentum.u,model.damage.d,
+                                    #   model.momentum.u_e, model.momentum.u_v,
+                                    ],
+                                    ["u","d",
+                                    "ue","uv"
+                                    ],
                                   t=i)
 
     model.timestep()

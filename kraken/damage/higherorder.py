@@ -93,6 +93,86 @@ class HigherOrderAT1(HigherOrder):
         self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
 
 
+class PenalizedAT2(HigherOrder):
+    def __init__(self, sim):
+        super().__init__(sim)
+
+        self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
+        self.d_prev_time, self.lap_prev_time = ufl.split(self.w_prev_time)
+
+    def setup_weak_form(self):
+        C3 = self.sim.params.C3; l = self.sim.params.lstar
+        ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
+
+        l0 = l/2
+        c = 1-self.d
+
+        H = ufl.max_value(self.sim.free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
+        γ = 1e2
+
+        mixed_test = ufl.TestFunction(self.W)
+        v, q = ufl.split(mixed_test)
+
+
+        self.F = (C3*4*l0*c*v*H + c*v - 2*l0**2*self.lap*v - l0**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
+                -1.0*v ) * ufl.dx \
+                - (self.lap*q + ufl.inner(ufl.grad(c), ufl.grad(q))) * ufl.dx\
+                + (γ/2)*ufl.inner(mf.negative_part(self.d - self.d_prev_time,0)**2, v)*ufl.dx
+    
+                
+        self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
+
+
+        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
+
+
+    def timestep(self):
+        self.w_prev_time.x.array[:] = self.w.x.array[:]
+
+
+class PenalizedAT1(PenalizedAT2):
+
+    def setup_weak_form(self):
+        C3 = self.sim.params.C3; l = self.sim.params.lstar
+        ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
+
+        H = ufl.max_value(self.sim.free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
+        γ = 1e2
+
+
+        mixed_test = ufl.TestFunction(self.W)
+        v, q = ufl.split(mixed_test)
+        # l0 = l/2
+        # c = 1-self.d
+
+        Ψ = 2*(1-self.d)*H
+        c = 2
+        wprime = 2*self.d
+        χ2 = 1/2
+        χ4 = 1/8
+
+        self.F = C3*Ψ*v*ufl.dx \
+                + (1/c)*(wprime*v/l - 2*χ2*l*self.lap*v \
+                         -2*χ4*l**3*ufl.inner(ufl.grad(self.lap), ufl.grad(v))) * ufl.dx \
+                - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx\
+                + (γ/2)*ufl.inner(mf.negative_part(self.d - self.d_prev_time,0)**2, v)*ufl.dx
+
+
+
+
+        self.F = (1/4)*(2*v - l**2*self.lap*v + (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)))*ufl.dx \
+                -2*l*(1-self.d)*C3*H*v * ufl.dx \
+                - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx\
+                + (γ/2)*ufl.inner(mf.negative_part(self.d - self.d_prev_time,0)**2, v)*ufl.dx
+                
+        self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
+
+
+        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
+
+        
+
+
 
 class Bounded(HigherOrder):
     def __init__(self, sim):
@@ -100,7 +180,7 @@ class Bounded(HigherOrder):
 
         self.w_lb = fem.Function(self.W, name="mixed function previous time")
         self.w_lb.sub(0).interpolate(lambda x: np.zeros(x.shape[1], dtype=np.float64))
-        self.w_lb.sub(1).interpolate(lambda x: np.full(x.shape[1], -1e7, dtype=np.float64))
+        self.w_lb.sub(1).interpolate(lambda x: np.full(x.shape[1], -1e4, dtype=np.float64))
     
 
     def setup_weak_form(self):
@@ -127,28 +207,30 @@ class Bounded(HigherOrder):
         self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
 
     def setup_solver(self):
+        super().setup_solver()
         
-        w_ub = fem.Function(self.W)
+        self.w_ub = fem.Function(self.W)
         # d_ub, lap_ub = ufl.split(w_ub)
 
        
-        w_ub.sub(0).interpolate(lambda x: np.ones(x.shape[1], dtype=np.float64))
-        w_ub.sub(1).interpolate(lambda x: np.full(x.shape[1], 1e7, dtype=np.float64))
+        self.w_ub.sub(0).interpolate(lambda x: np.ones(x.shape[1], dtype=np.float64))
+        self.w_ub.sub(1).interpolate(lambda x: np.full(x.shape[1], 1e4, dtype=np.float64))
 
-        self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
-        self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F)))
-        self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J)), P=None)
+        # self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
+        # self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F)))
+        # self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J)), P=None)
 
-        self.solver.setType("vinewtonrsls")
-        self.solver.setVariableBounds(self.w_lb.x.petsc_vec, w_ub.x.petsc_vec)
+        self.solver.setType("vinewtonssls")
+        self.solver.setVariableBounds(self.w_lb.x.petsc_vec, self.w_ub.x.petsc_vec)
 
-        self.solver.setTolerances(rtol=1.0e-9, max_it=50)
-        self.solver.getKSP().setType("cg")
-        self.solver.getKSP().setTolerances(rtol=1.0e-9)
-        self.solver.getKSP().getPC().setType("jacobi")
-        self.solver.getKSP().getPC().setFactorSolverType("mumps")
+        # self.solver.setTolerances(rtol=1.0e-9, max_it=50)
+        # self.solver.getKSP().setType("cg")
+        # self.solver.getKSP().setTolerances(rtol=1.0e-9)
+        # self.solver.getKSP().getPC().setType("jacobi")
+        # self.solver.getKSP().getPC().setFactorSolverType("mumps")
 
     def timestep(self):
         # Update damage variable inside mixed function, leave lower bound for laplacian unchanged
-        self.w_lb.sub(0).interpolate(self.w.sub(0))
+        # self.w_lb.sub(0).interpolate(self.w.sub(0))
+        pass
         
