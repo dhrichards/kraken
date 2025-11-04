@@ -1,7 +1,7 @@
 import numpy as np
 from dolfinx import fem, io, plot, geometry, mesh
 from mpi4py import MPI
-
+import gmsh
 
 
 def move_mesh(msh,uh,k=1.0):
@@ -288,5 +288,98 @@ def create_refined_mesh(nondim_length, nondim_height,
 #     plotter.view_xy()
 #     if not pyvista.OFF_SCREEN:
 #        plotter.show()
+
+
+
+def create_iceberg_gmsh_mesh(small_size, refines = [2.5, 0.75], Lx=8e3/300, ρi_over_ρw=0.9):
+    gmsh.initialize()
+    model = gmsh.model()
+
+    model.add("refined_iceberg")
+
+    
+
+    Hw = ρi_over_ρw
+
+    refine_x = Lx - refines[0]
+
+    large_size = 1/3
+   
+
+    model.geo.addPoint(0, -Hw, 0, tag= 1)
+    model.geo.addPoint(Lx, -Hw, 0, tag= 2)
+
+
+    model.geo.addPoint(Lx, 1 - Hw, 0, tag =3)
+    model.geo.addPoint(refine_x, 1 - Hw, 0, tag=4)
+    model.geo.addPoint(0, 1 - Hw, 0, tag=5)
+
+
+    model.geo.addLine(1, 2, 1)
+    model.geo.addLine(2, 3, 2)
+    model.geo.addLine(3, 4, 3)
+    model.geo.addLine(4, 5, 4)
+    model.geo.addLine(5, 1, 5)
+
+    model.geo.addCurveLoop([1, 2, 3, 4, 5], 1)
+    model.geo.addPlaneSurface([1], 1)
+    model.geo.synchronize()
+
+    model.addPhysicalGroup(1, [1, 2, 3, 4, 5], 1)
+    model.addPhysicalGroup(2, [1], 1)
+
+    # refine 0.5 inward of line 2
+    field = model.mesh.field
+    d1 = field.add("Distance")
+    field.setNumbers(d1, "EdgesList", [2])
+    field.setNumber(d1, "Sampling", 100)
+    t1 = field.add("Threshold")
+    field.setNumber(t1, "InField", d1)
+    field.setNumber(t1, "SizeMin", small_size)
+    field.setNumber(t1, "SizeMax", large_size)
+    field.setNumber(t1, "DistMin", refines[1])
+    field.setNumber(t1, "DistMax", 1.0)
+
+    d2 = field.add("Distance")
+    field.setNumbers(d2, "EdgesList", [3])
+    field.setNumber(d2, "Sampling", 100)
+    t2 = field.add("Threshold")
+    field.setNumber(t2, "InField", d2)
+    field.setNumber(t2, "SizeMin", small_size)
+    field.setNumber(t2, "SizeMax", large_size)
+    field.setNumber(t2, "DistMin", 0.3)
+    field.setNumber(t2, "DistMax", 0.8)
+
+    minfield = field.add("Min")
+    field.setNumbers(minfield, "FieldsList", [t1, t2])
+    field.setAsBackgroundMesh(minfield)
+
+
+    # field.setNumbers(1, "EdgesList", [2,3])
+    # field.add("Threshold", 2)
+    # field.setNumber(2, "InField", 1)
+    # field.setNumber(2, "SizeMin", small_size)
+    # field.setNumber(2, "SizeMax", large_size)
+    # field.setNumber(2, "DistMin", 0.5)
+    # field.setNumber(2, "DistMax", 1.0)
+    # field.setAsBackgroundMesh(2)
+    
+    # gmsh.option.setNumber("Mesh.Algorithm", 6)  # Frontal-Delaunay for 2D
+    gmsh.option.setNumber("Mesh.RecombineAll", 1)
+    # gmsh.option.setNumber("Mesh.RecombinationAlgorithm", 3)  # Blossom
+
+    model.mesh.generate(2)
+
+    mesh, ct, ft = io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, rank=0, gdim=2)
+
+    # filename = "icebergrefined.xdmf"
+
+    # with io.XDMFFile(MPI.COMM_WORLD,filename,"w") as file:
+    #     file.write_mesh(mesh)
+    #     # file.write_meshtags(model.mesh)
+
+    gmsh.finalize()
+
+    return mesh
 
 

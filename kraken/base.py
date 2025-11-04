@@ -87,7 +87,7 @@ class Simulation:
                     print(f"iteration {i}, error {error_L2}")
 
                 if i>min_its-1:
-                    if (error_L2 < tol) and (error_prev < tol):
+                    if (error_L2 < tol) and (error_L2 < error_prev):
                         break
                 
                 error_prev = error_L2
