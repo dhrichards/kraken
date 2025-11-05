@@ -291,7 +291,7 @@ def create_refined_mesh(nondim_length, nondim_height,
 
 
 
-def create_iceberg_gmsh_mesh(small_size, refines = [2.5, 0.75], Lx=8e3/300, ρi_over_ρw=0.9):
+def create_iceberg_gmsh_mesh(small_size, refines = [2.5, 0.5, 0.2], Lx=8e3/300, ρi_over_ρw=0.9):
     gmsh.initialize()
     model = gmsh.model()
 
@@ -347,7 +347,7 @@ def create_iceberg_gmsh_mesh(small_size, refines = [2.5, 0.75], Lx=8e3/300, ρi_
     field.setNumber(t2, "InField", d2)
     field.setNumber(t2, "SizeMin", small_size)
     field.setNumber(t2, "SizeMax", large_size)
-    field.setNumber(t2, "DistMin", 0.3)
+    field.setNumber(t2, "DistMin", refines[2])
     field.setNumber(t2, "DistMax", 0.8)
 
     minfield = field.add("Min")
