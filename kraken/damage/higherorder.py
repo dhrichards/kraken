@@ -30,7 +30,7 @@ class HigherOrder(Damage):
         self.H_space = fem.functionspace(self.sim.msh, ("DG", 1))
         self.Hprev = fem.Function(self.H_space, name="history")
 
-        self.g = es.degradation_default(self.d)
+        self.g = es.degradation_default(self.d,1e-12)
 
         bc_func_mod = lambda V: self.sim.bc_funcs[1](V.sub(0))
         self.bc_d = bc_func_mod(self.W)
@@ -108,7 +108,8 @@ class PenalizedAT2(HigherOrder):
         c = 1-self.d
 
         H = ufl.max_value(self.sim.free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
-        γ = 1e2
+        
+        γ = 1e4
 
         mixed_test = ufl.TestFunction(self.W)
         v, q = ufl.split(mixed_test)
@@ -136,35 +137,46 @@ class PenalizedAT1(PenalizedAT2):
         C3 = self.sim.params.C3; l = self.sim.params.lstar
         ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
 
-        H = ufl.max_value(self.sim.free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
+        # H = ufl.max_value(self.sim.free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
+        H = self.sim.free_energy_plus(self.sim.momentum.ε_e, ν)
         γ = 1e2
 
 
         mixed_test = ufl.TestFunction(self.W)
         v, q = ufl.split(mixed_test)
-        # l0 = l/2
-        # c = 1-self.d
-
-        Ψ = 2*(1-self.d)*H
-        c = 2
-        wprime = 2*self.d
+     
+        Ψ = -2*(1-self.d)*H
+        cw = 3.020
+        wprime = 2 - 2*self.d
         χ2 = 1/2
-        χ4 = 1/8
+        χ4 = 1/16
 
-        self.F = C3*Ψ*v*ufl.dx \
-                + (1/c)*(wprime*v/l - 2*χ2*l*self.lap*v \
-                         -2*χ4*l**3*ufl.inner(ufl.grad(self.lap), ufl.grad(v))) * ufl.dx \
+        # self.F = C3*Ψ*v*ufl.dx \
+        #         + (1/cw)*(wprime*v/l - 2*χ2*l*self.lap*v \
+        #                  -2*χ4*l**3*ufl.inner(ufl.grad(self.lap), ufl.grad(v))) * ufl.dx \
+        #         - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx\
+        #         + (γ/2)*ufl.inner(mf.negative_part(self.d - self.d_prev_time,0)**2, v)*ufl.dx
+
+
+        ##working AT2
+        # self.F = -C3*2*l*(1-self.d)*v*H*ufl.dx \
+        #           +(1/2)*(2*self.d*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
+        #         ) * ufl.dx \
+        #         - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx\
+        #         + (γ/2)*ufl.inner(mf.negative_part(self.d - self.d_prev_time,0)**2, v)*ufl.dx
+    
+        
+
+
+        self.F = -C3*2*l*(1-self.d)*v*H*ufl.dx \
+                  +(1/4)*(2*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
+                ) * ufl.dx \
                 - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx\
-                + (γ/2)*ufl.inner(mf.negative_part(self.d - self.d_prev_time,0)**2, v)*ufl.dx
+                + (γ/2)*ufl.inner(mf.negative_part(self.d - self.d_prev_time,0)**2, v)*ufl.dx\
+                # + (γ/2)*ufl.inner(mf.positive_part(self.d - 1,0)**2, v)*ufl.dx
+    
+        
 
-
-
-
-        self.F = (1/4)*(2*v - l**2*self.lap*v + (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)))*ufl.dx \
-                -2*l*(1-self.d)*C3*H*v * ufl.dx \
-                - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx\
-                + (γ/2)*ufl.inner(mf.negative_part(self.d - self.d_prev_time,0)**2, v)*ufl.dx
-                
         self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
 
 

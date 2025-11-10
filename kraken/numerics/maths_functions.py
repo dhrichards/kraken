@@ -160,3 +160,12 @@ def temperature(msh,ρistar,Ts=-20.0,Tb=-2.0):
     #linear profile
     T = -(Tb - Ts)*z + Ts
     return T
+
+
+def tensor_2d_to_3d(A2):
+    A3 = ufl.zero((3,3))
+    A3[0,0] = A2[0,0]
+    A3[0,1] = A2[0,1]
+    A3[1,0] = A2[1,0]
+    A3[1,1] = A2[1,1]
+    return A3

@@ -41,11 +41,25 @@ def get_zero_vec(V,dtype=default_scalar_type):
             return dtype(0.0)
         else:
             return dtype(np.array([0]*V.value_size))
+        
+def get_vec(V,val,dtype=default_scalar_type):
+    try :
+        Vcollapse, _ = V.collapse()
+        f = fem.Function(Vcollapse)
+        f.x.array[:] = val
+        return f
+    except RuntimeError:
+        if V.value_size == 1:
+            return dtype(val)
+        else:
+            return dtype(val)
+        
+
 
 
 def get_bc(V,boundary,bc_val):
     boundary_dofs_x = get_boundary_dofs(V,boundary)
-    return fem.dirichletbc(bc_val, boundary_dofs_x, V)
+    return fem.dirichletbc(get_vec(V,bc_val), boundary_dofs_x, V)
 
 
 def internal_bc(V,func,val):
@@ -57,7 +71,8 @@ def internal_bc(V,func,val):
 
 
 def get_zero_bc(V,boundary):
-    return get_bc(V,boundary,get_zero_vec(V))
+    boundary_dofs_x = get_boundary_dofs(V,boundary)
+    return fem.dirichletbc(get_zero_vec(V), boundary_dofs_x, V)
 
 
 def get_bc_func(V,boundary,bc_expr):

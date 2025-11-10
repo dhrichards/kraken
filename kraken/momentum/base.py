@@ -42,8 +42,10 @@ class Momentum:
         g = self.sim.damage.g
         σ0 = es.cauchy_stress(ε, self.sim.params.ν)
         σplus = self.sim.stress_plus(ε, self.sim.params.ν)
+        # ψplus = self.sim.free_energy_plus(ε, self.sim.params.ν)
+        # σpluscorrected = es.stress_plus_consistent(σplus, ψplus, self.sim.params.ψcritstar)
         σminus = σ0 - σplus
-        return g*σplus + σminus
+        return g*σplus+ σminus
 
     
     def setup_solver(self):
