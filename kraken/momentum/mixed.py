@@ -55,7 +55,7 @@ class MixedDisplacement(Momentum):
 
         
         A = mf.rate_factor(self.sim.T)/self.sim.params.A
-        η = mf.viscosity(mf.ε(self.vel_prev_it), self.sim.params.n, 1.e-15, A=A)
+        η = mf.viscosity(mf.εD(self.vel_prev_it), self.sim.params.n, 1.e-15, A=A)
       
         
         σ = self.stress(self.ε_e)
@@ -71,12 +71,14 @@ class MixedDisplacement(Momentum):
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
-        Iprime = 2*self.sim.damage.d
+        # Iprime = 2*self.sim.damage.d
+        Iprime = 1.0
         self.F = (
             ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
             #  - self.p_crack* ufl.inner(ufl.grad(g), v)\
             - self.p_crack*ufl.inner(ufl.Dx(g,0), v[0]) \
             # + self.p_crack*Iprime*ufl.inner(ufl.Dx(self.sim.damage.d,0), v[0]) \
+            # + self.p_crack*Iprime*ufl.inner(ufl.grad(self.sim.damage.d), v)
               ) * ufl.dx \
             + self.pw * ufl.inner(n, v) * ufl.ds \
         
@@ -89,6 +91,7 @@ class MixedDisplacement(Momentum):
        
         self.F += (
                 - ufl.inner(ufl.div(self.vel), q) \
+                # - (self.p-self.p_prev_time)*q/self.sim.params.dtstar
                 ) * ufl.dx 
         
 
