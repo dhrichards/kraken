@@ -31,6 +31,11 @@ class Simulation:
         elif split == "none":
             self.free_energy_plus = es.free_energy
             self.stress_plus = es.cauchy_stress
+        elif split == "lo_3d":
+            self.free_energy_plus = es.free_energy_plus_lo_3d
+            self.stress_plus = es.stress_plus_lo_3d
+        else:
+            raise ValueError(f"Unknown energy split: {split}")
 
 
 
@@ -92,6 +97,8 @@ class Simulation:
                 
                 error_prev = error_L2
                 L2_old = L2
+            
+            return error_L2
 
 
 

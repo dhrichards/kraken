@@ -3,6 +3,11 @@ from math import sqrt
 from .invariants import eigenstate, matrix_function
 from .maths_functions import dev3, largest_eigenvalue, positive_part, negative_part
 
+
+def stress_plus_consistent(σplus, ψplus, ψcrit):
+    I = ufl.Identity(ufl.shape(σplus)[0])
+    return ufl.conditional(ufl.gt(ψplus, ψcrit), σplus, 0*I)
+
 def λoverμ(ν):
     return 2*ν/(1-2*ν)
 
@@ -65,6 +70,9 @@ def free_energy_plus_dp(ε, ν, B = -0.25):
                         ufl.conditional(2*ufl.sqrt(J2+1e-9) < 3*B*K*I1, 0.0, 
                                          ψ2))
     return ψ
+
+
+
 
 
 def stress_plus_dp(ε, ν, B = -0.25):
@@ -162,7 +170,21 @@ def free_energy_plus_lo(ε,ν):
     return ufl.conditional(ufl.gt(λ[0],0),psi1,
                            ufl.conditional(ufl.gt((1-ν)*λ[1] + ν*λ[0],0),
                                            psi2,0))
-                                                   
+
+
+def free_energy_plus_lo_3d(ε,ν):
+    Eoverμ = 2*(1+ν)
+    λ,M = eigenstate(ε)
+
+    psi1 = free_energy(ε,ν)
+    psi2 = free_energy(ε,ν) - Eoverμ*λ[0]**2/2
+    psi3 = (1+ν)*((1-ν)*λ[2]+ν*λ[1] +ν*λ[0])**2/((1-2*ν)*(1-ν**2))
+
+    return ufl.conditional(ufl.gt(λ[0],0),psi1,
+            ufl.conditional(ufl.gt(λ[1] + ν*λ[0],0),psi2,
+             ufl.conditional(ufl.gt((1-ν)*λ[2] + ν*(λ[0]+λ[1]),0),psi3,
+                             0)))
+
 
 def stress_plus_lo(ε,ν):
     κ = Koverμ(ν)
@@ -181,6 +203,27 @@ def stress_plus_lo(ε,ν):
     return ufl.conditional(ufl.gt(λ[0],0),stress1,
                            ufl.conditional(ufl.gt((1-ν)*λ[1] + ν*λ[0],0),
                                            stress2,0*ufl.Identity(2)))
+
+def stress_plus_lo_3d(ε,ν):
+    κ = Koverμ(ν)
+    E = 2*(1+ν)
+
+    λ,M = eigenstate(ε)
+
+
+    stress1 = cauchy_stress(ε,ν)
+    stress2 = cauchy_stress(ε,ν) - E*λ[0]*M[0]
+
+    stress3 = 2*(1+ν)/((1-2*ν)*(1-ν**2))*(
+        (1-ν)*((1-ν)*λ[1]+ν*λ[0])*M[1] \
+        + ν*((1-ν)*λ[1]+ν*λ[0])*M[0])
+
+    
+    return ufl.conditional(ufl.gt(λ[0],0),stress1,
+            ufl.conditional(ufl.gt(λ[1] + ν*λ[0],0),stress2,
+             ufl.conditional(ufl.gt((1-ν)*λ[2] + ν*(λ[0]+λ[1]),0),stress3,
+                             0)))
+
 
 
 

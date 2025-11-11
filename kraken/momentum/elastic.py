@@ -74,3 +74,35 @@ class Elasticity(Momentum):
         self.u_prev_time.x.array[:] = self.u.x.array[:]
 
 
+class ElasticEnergySplit(Elasticity):
+
+
+    def setup_momentum(self):
+        g = self.sim.damage.g
+
+        p_w = self.water_pressure(self.u)
+        p_crack = self.crack_pressure(self.u)
+
+        f = self.sim.params.ρistar*mf.body_force(self.sim.msh)
+
+        n = ufl.FacetNormal(self.sim.msh)
+
+        ψ0 = es.free_energy(self.ε_e, self.sim.params.ν)
+        ψplus = self.sim.free_energy_plus(self.ε_e, self.sim.params.ν)
+        ψminus = ψ0 - ψplus
+
+        energy = (
+                g*ψplus + ψminus - ufl.inner(f,self.u) \
+                - p_crack*ufl.inner(ufl.Dx(g, 0), self.u[0]) \
+                    )*ufl.dx \
+                + p_w * ufl.inner(n, self.u) * ufl.ds
+        
+        self.F = ufl.derivative(energy, self.u, ufl.TestFunction(self.U))
+        self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.U))
+
+        self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_u)
+
+
+
+        
+
