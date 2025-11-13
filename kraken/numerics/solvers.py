@@ -3,7 +3,7 @@
 from dolfinx.cpp.la.petsc import scatter_local_vectors
 from dolfinx.fem import (Function, functionspace,
                          bcs_by_block, extract_function_spaces)
-from dolfinx.fem.petsc import (apply_lifting, apply_lifting_nest,
+from dolfinx.fem.petsc import (apply_lifting,
                                assemble_matrix, assemble_matrix_block,
                                assemble_matrix_nest, assemble_vector,
                                assemble_vector_block, set_bc,
