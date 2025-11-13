@@ -1,5 +1,6 @@
 from kraken.numerics import energy_splits as es
 from dolfinx import fem
+import dolfinx.fem.petsc
 from petsc4py import PETSc
 from mpi4py import MPI
 import ufl
@@ -27,8 +28,8 @@ class Damage:
     def setup_solver(self):
 
         self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
-        self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F)))
-        self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J)),P=None)
+        self.solver.setFunction(self.problem.F, dolfinx.fem.petsc.create_vector(fem.form(self.F)))
+        self.solver.setJacobian(self.problem.J, dolfinx.fem.petsc.create_matrix(fem.form(self.J)),P=None)
         
         self.solver.setType("newtonls")
         
