@@ -1,5 +1,6 @@
 import numpy as np
 from dolfinx import fem
+import dolfinx.fem.petsc
 from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
@@ -65,8 +66,8 @@ class Momentum:
         # self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F,jit_options=dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))))
         # self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J,jit_options = dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))),P=None)
 
-        self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F)))
-        self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J)),P=None)
+        self.solver.setFunction(self.problem.F, dolfinx.fem.petsc.create_vector(fem.form(self.F)))
+        self.solver.setJacobian(self.problem.J, dolfinx.fem.petsc.create_matrix(fem.form(self.J)),P=None)
 
 
     
