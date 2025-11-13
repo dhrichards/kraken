@@ -66,13 +66,13 @@ class MixedDisplacement(Momentum):
        
      
 
-        g_v = es.degradation_default(self.sim.damage.d,0.01)
+        g_v = es.degradation_default(self.sim.damage.d,1e-6)
         
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
-        # Iprime = 2*self.sim.damage.d
-        Iprime = 1.0
+        Iprime = 2*self.sim.damage.d
+        # Iprime = 1.0
         self.F = (
             ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
             #  - self.p_crack* ufl.inner(ufl.grad(g), v)\

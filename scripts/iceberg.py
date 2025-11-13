@@ -22,6 +22,7 @@ parser.add_argument("--height", type=float, default=300, help="Height of iceberg
 parser.add_argument("--Gc", type=float, default=1.0, help="Gc")
 parser.add_argument("--type", type=str, default="relaxation", help="gravity loop initilisation or relaxation first")
 parser.add_argument("--damagemodel", type=str, default="AT2higher", help="damage model to use")
+parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
 
 args = parser.parse_args()
 level = args.level
@@ -29,7 +30,7 @@ split = args.split
 
 filename = args.type + "_" + args.split + "_level" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc)\
                      +"dt" + str(args.dt) + "psicrit" + str(args.psicrit)\
-                        + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)+"_damagemodel" + args.damagemodel + "_"
+                        + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)+"_damagemodel" + args.damagemodel + "_" + args.suffix + "_"
 
 
 
@@ -50,8 +51,8 @@ def left_boundary(x):
 def right_boundary(x):
     return np.isclose(x[0], nondim_length/2)
 
-# def bottom_boundary(x):
-#     return np.isclose(x[1], -Hw)
+def bottom_boundary(x):
+    return np.isclose(x[1], -flotation_height)
 
 # def crack(x):
 #     x_c = nondim_length/2 - nondim_height
@@ -85,17 +86,29 @@ nondim_height = true_height/L
 # flotation_height = mf.flotation_height(ρi/ρsw,ρf/ρsw,D/L)
 flotation_height = ρi/ρsw
 
-refineH = (2.5,0.4)
+refineH = (2.5,0.25)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
-                                     aspect_ratios=(300,1), refine=refineH,
+                                     aspect_ratios=(50,25), refine=refineH,
                                      cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
+
+
+# msh = kr.utilities.create_iceberg_gmsh_mesh(l/(args.cellfactor*L), [2.5, 0.4, 0.15], true_length/(2*L), ρi/ρsw)
 
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
-u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
-                        ]
+if args.type == "fixed":
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                       bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                       bc.get_zero_bc(V.sub(0).sub(0), right_boundary),
+                          bc.get_zero_bc(V.sub(1).sub(0), right_boundary),
+                          bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
+                          bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary)
+                    ]
+else:
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                            bc.get_zero_bc(V.sub(1), left_boundary)
+                            ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 if args.damagemodel == "AT1lower":
@@ -108,6 +121,8 @@ elif args.damagemodel == "AT2higher_penalized":
     damage_model = kr.damage.higherorder.PenalizedAT2
 elif args.damagemodel == "AT2lower":
     damage_model = kr.damage.lowerorder.NonLinear
+elif args.damagemodel == "AT2higher_bounded":
+    damage_model = kr.damage.higherorder.Bounded
 
 model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.mixed.SemiLagrangianEpsilon,
@@ -115,6 +130,7 @@ model = kr.base.Simulation(msh, [u_bc, d_bc],
 
 
 # model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
+model.T = -10.0
 model.params.L.value = L
 model.params.l.value = args.l
 model.params.dt.value = args.dt*24*60*60
@@ -164,10 +180,9 @@ if MPI.COMM_WORLD.rank == 0:
 from dolfinx import fem
 import ufl
 min_its = 5
-
-if args.type == "relaxation":
+tol = 1e-5
+if args.type == "relaxation" or args.type == "fixed":
     solve_d = False
-    Gc_loop = args.Gc*np.array([3,2.5,2,1.5,1.25])
 else:
     solve_d = True
 
@@ -182,36 +197,44 @@ for i in range(600):
     else:
         model.params.dt = args.dt*24*60*60
 
+    if i==5 and args.type == "fixed":
+        solve_d = True
+
+    if i==10 and args.type == "fixed":
+        u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
+                        ]
+        model.momentum.bc_u = u_bc(model.momentum.W)
+        model.momentum.setup()
+
+
     
     
     if i == 10 and args.type == "relaxation":
-        # tol = 1e-6
         solve_d = True
-
-        # for val in Gc_loop:
-        #     if MPI.COMM_WORLD.rank == 0:
-        #         print("Setting Gc to ", val)
-        #     model.params.Gc.value = val
-        #     model.fixed_point(min_its=10, tol=tol, max_its=300, solve_damage=solve_d)
-        # if MPI.COMM_WORLD.rank == 0:
-        #     print("Setting Gc to ", args.Gc)
-        # model.params.Gc.value = args.Gc
-    else:
-        tol = 1e-5
 
     if i == 20:
         min_its = 3
-    model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
+
+    error = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
+
+    
 
 
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
-                                    #   model.momentum.u_e, model.momentum.u_v,
+                                      model.momentum.u_e, model.momentum.u_v,
                                     ],
                                     ["u","d",
                                     "ue","uv"
                                     ],
                                   t=i)
 
-    model.timestep()
+
+    if solve_d:
+        model.damage.timestep()
+    model.momentum.timestep()
+    
+    
+
    

@@ -56,6 +56,7 @@ class Elasticity(Momentum):
         self.F = (ufl.inner(σ, mf.ε(v))\
               - ufl.inner(f, v) 
               -p_crack*ufl.inner(ufl.Dx(g, 0), v[0]) \
+            # - p_crack*ufl.inner(ufl.grad(g), v) \
             #  + p_crack* ufl.inner(Iprime*ufl.grad(d), v)\
               ) * ufl.dx \
             + p_w * ufl.inner(n, v) * ufl.ds 

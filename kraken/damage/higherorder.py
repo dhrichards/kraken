@@ -192,7 +192,7 @@ class Bounded(HigherOrder):
 
         self.w_lb = fem.Function(self.W, name="mixed function previous time")
         self.w_lb.sub(0).interpolate(lambda x: np.zeros(x.shape[1], dtype=np.float64))
-        self.w_lb.sub(1).interpolate(lambda x: np.full(x.shape[1], -1e4, dtype=np.float64))
+        self.w_lb.sub(1).interpolate(lambda x: np.full(x.shape[1], -1e7, dtype=np.float64))
     
 
     def setup_weak_form(self):
@@ -226,19 +226,19 @@ class Bounded(HigherOrder):
 
        
         self.w_ub.sub(0).interpolate(lambda x: np.ones(x.shape[1], dtype=np.float64))
-        self.w_ub.sub(1).interpolate(lambda x: np.full(x.shape[1], 1e4, dtype=np.float64))
+        self.w_ub.sub(1).interpolate(lambda x: np.full(x.shape[1], 1e7, dtype=np.float64))
 
         # self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
         # self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F)))
         # self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J)), P=None)
 
-        self.solver.setType("vinewtonssls")
+        self.solver.setType("vinewtonrsls")
         self.solver.setVariableBounds(self.w_lb.x.petsc_vec, self.w_ub.x.petsc_vec)
 
         # self.solver.setTolerances(rtol=1.0e-9, max_it=50)
-        # self.solver.getKSP().setType("cg")
+        self.solver.getKSP().setType("cg")
         # self.solver.getKSP().setTolerances(rtol=1.0e-9)
-        # self.solver.getKSP().getPC().setType("jacobi")
+        self.solver.getKSP().getPC().setType("jacobi")
         # self.solver.getKSP().getPC().setFactorSolverType("mumps")
 
     def timestep(self):
