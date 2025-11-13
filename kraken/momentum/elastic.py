@@ -75,6 +75,49 @@ class Elasticity(Momentum):
         self.u_prev_time.x.array[:] = self.u.x.array[:]
 
 
+class ElasticDegraded(Elasticity):
+    def setup_momentum(self):
+        
+
+        v = ufl.TestFunction(self.U)
+
+        g = self.sim.damage.g
+
+        p_w = self.water_pressure(self.u)
+        p_crack = self.crack_pressure(self.u)
+
+        
+        
+        σ = self.stress(self.ε_e)
+    
+        
+        f = self.sim.params.ρistar*mf.body_force(self.sim.msh)
+
+        n = ufl.FacetNormal(self.sim.msh)
+
+        d = self.sim.damage.d
+        # Iprime = 2 - 2*d # Iprime*grad(d) = -grad(g)
+        Iprime = 2*self.sim.damage.d
+        # Iprime = 1.0
+
+
+
+        self.F = (ufl.inner(σ, mf.ε(v))\
+              - g*ufl.inner(f, v) 
+            #   -p_crack*ufl.inner(ufl.Dx(g, 0), v[0]) \
+            - p_crack*ufl.inner(ufl.grad(g), v) \
+            #  + p_crack* ufl.inner(Iprime*ufl.grad(d), v)\
+              ) * ufl.dx \
+            + p_w * ufl.inner(n, v) * ufl.ds 
+        
+
+        self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.U))
+            
+        
+        self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_u)
+
+
+
 class ElasticEnergySplit(Elasticity):
 
 
