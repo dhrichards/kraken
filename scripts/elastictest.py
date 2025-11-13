@@ -9,6 +9,13 @@ import kraken.boundaryconditions as bc
 import kraken.numerics.maths_functions as mf
 import kraken.numerics.energy_splits as es
 import kraken as kr
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--l", type=float, default=2, help="Regularization length scale in meters")
+parser.add_argument("--type", type=str, default="normal", help="degraded or normal")
+
+args = parser.parse_args()
 
 
 def left_boundary(x):
@@ -38,22 +45,24 @@ true_length = 16e3
 true_height = 300
 
 
-path = './outputs'
-os.makedirs(path, exist_ok=True)
 
 
 L = true_height
-l = 5
+l = args.l
+
+
+aspect_ratio_x = int(25/l)
+
 
 
 nondim_length = true_length/L
 nondim_height = true_height/L
 
 
-refineH = (3,0.3)
+refineH = (2.5,0.2)
 msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L, 0.9,
-                                     aspect_ratios=(300,1), refine=refineH,
-                                     cell_factor=2)
+                                     aspect_ratios=(aspect_ratio_x,aspect_ratio_x), refine=refineH,
+                                     cell_factor=1)
 # msh.geometry.x[:,1] += 0.5
 
 no_bc = lambda V: []
@@ -64,10 +73,13 @@ bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0),
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 
-
+if args.type == "degraded":
+    elast = kr.momentum.elastic.ElasticDegraded
+else:
+    elast = kr.momentum.elastic.Elasticity
 
 model = kr.base.Simulation(msh, [u_bc, bc_d],
-                           kr.momentum.elastic.Elasticity,
+                           elast,
                            kr.damage.higherorder.HigherOrder)
 
 # model = kr.models.elasticity.elastic_damage(msh, [u_bc,no_bc])
@@ -76,8 +88,11 @@ model.params.L.value = L
 model.params.l.value = l
 model.params.dt.value = 60*60*2
 model.params.ψcrit.value = 1.0
-model.params.Gc.value = 1.0
+model.params.Gc.value = 0.5
 model.params.patm.value = 0.0
+model.params.ρi.value = 900.0
+model.params.ρw.value = 1000.0
+model.params.g.value = 9.8
 
 # model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
 #                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
@@ -88,18 +103,66 @@ model.params.patm.value = 0.0
 
 model.setup()
 
-gs = [7.5,8,9,9.8]
 
 
-for i in range(len(gs)):
-    model.params.g.value = gs[i]
+model.fixed_point(min_its=3,solve_damage=True,max_its=200,tol=1e-5)
+import adios4dolfinx
+
+filename = './scripts/{}elastic_l{}_Gc{}_psicrit{}.bp'.format(
+    args.type,
+    l,
+    model.params.Gc.value,
+    model.params.ψcrit.value
+)
+adios4dolfinx.write_mesh(filename, msh)
+adios4dolfinx.write_function(filename, model.momentum.u, name="u")
+adios4dolfinx.write_function(filename, model.damage.w, name="w")
+# kr.utilities.write_xdmf(path + "/elastictest.xdmf",
+#                             msh, [model.momentum.u, model.damage.d],
+#                             ["u", "d"])
+    # # model.d_prev_time.x.array[:] = model.d.x.array[:]
 
 
-    model.fixed_point(min_its=3,solve_damage=True,max_its=200,tol=1e-5)
-
-    kr.utilities.write_xdmf(path + "/elastictest" + str(i) + ".xdmf",
-                            msh, [model.momentum.u, model.damage.d],
-                            ["u", "d"],t=i)
-    # model.d_prev_time.x.array[:] = model.d.x.array[:]
     
+#%%
+# from matplotlib import tri
+# from dolfinx import fem
+
+
+# #gather data and save to npz
+
+# CG1 = fem.functionspace(msh, ("CG", 1))
+# ux = fem.Function(CG1)
+# uz = fem.Function(CG1)
+# d = fem.Function(CG1)
+
+# ux.interpolate(fem.Expression(model.momentum.u.sub(0), 
+#                              CG1.element.interpolation_points()))
+
+# uz.interpolate(fem.Expression(model.momentum.u.sub(1), 
+#                              CG1.element.interpolation_points()))
+
+# d.interpolate(fem.Expression(model.damage.d, 
+#                              CG1.element.interpolation_points()))
+
+
+# connty = msh.topology.connectivity(2, 0)
+# connty_array = np.array([connty.links(i) 
+#         for i in range(connty.num_nodes)])
+# tess = tri.Triangulation(
+#         msh.geometry.x[:,0], 
+#         msh.geometry.x[:,1], 
+#         triangles=connty_array)
+
+# x = msh.geometry.x[:,0]
+# z = msh.geometry.x[:,1]
+
+# filename = 'elastic_l{}_Gc{}_psicrit{}.npz'.format(
+#     l,
+#     model.params.Gc.value,
+#     model.params.ψcrit.value
+# )
+
+# np.savez(filename, x=x, z=z, contty=connty_array,
+#          ux=ux.x.array, uz=uz.x.array, d=d.x.array)
 
