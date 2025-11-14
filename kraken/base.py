@@ -4,6 +4,7 @@ from dolfinx import fem
 import ufl
 from mpi4py import MPI
 import numpy as np
+import adios4dolfinx
 
 class Simulation:
     def __init__(self, msh, bc_funcs, MomentumSolver, DamageSolver, level=0.0, split="lo"):
@@ -60,6 +61,34 @@ class Simulation:
         self.momentum.timestep()
         # self.mass.timestep()
 
+    def write_checkpoint(self, filename, t=0):
+
+        if t == 0:
+            mode = adios4dolfinx.adios2_helpers.adios2.Mode.Write
+        else:
+            mode = adios4dolfinx.adios2_helpers.adios2.Mode.Append
+
+        adios4dolfinx.write_mesh(filename, self.msh, store_partition_info=True, time=t,
+                                mode=mode)
+        
+        adios4dolfinx.write_function(filename, self.momentum.w, name="w_momentum", time=t, mode=mode)
+        adios4dolfinx.write_function(filename, self.damage.w, name="w_damage", time=t, mode=mode)
+        adios4dolfinx.write_function(filename, self.momentum.area_ratio, name="area_ratio", time=t, mode=mode)
+        adios4dolfinx.write_function(filename, self.momentum.w_prev_time, name="w_momentum_prev_time", time=t, mode=mode)
+        adios4dolfinx.write_function(filename, self.damage.Hprev, name="Hprev", time=t, mode=mode)
+
+    def read_checkpoint(self, filename, t=0):
+        self.msh = adios4dolfinx.read_mesh(filename, MPI.COMM_WORLD, time=t)
+
+        adios4dolfinx.read_function(filename, self.momentum.w, name="w_momentum", time=t)
+        adios4dolfinx.read_function(filename, self.damage.w, name="w_damage", time=t)
+        adios4dolfinx.read_function(filename, self.momentum.area_ratio, name="area_ratio", time=t)
+        adios4dolfinx.read_function(filename, self.momentum.w_prev_time, name="w_momentum_prev_time", time=t)
+        adios4dolfinx.read_function(filename, self.damage.Hprev, name="Hprev", time=t)
+
+
+
+
 
         
     def fixed_point(self, max_its=100, tol=1e-4, min_its=2, solve_damage=True, solve_mass=True):
@@ -92,7 +121,7 @@ class Simulation:
                     print(f"iteration {i}, error {error_L2}")
 
                 if i>min_its-1:
-                    if (error_L2 < tol) and (error_L2 <= error_prev):
+                    if (error_L2 < tol) and (error_L2 <= error_prev) and (error_prev < tol):
                         break
                 
                 error_prev = error_L2
