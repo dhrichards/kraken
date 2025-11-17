@@ -86,9 +86,9 @@ nondim_height = true_height/L
 # flotation_height = mf.flotation_height(ρi/ρsw,ρf/ρsw,D/L)
 flotation_height = ρi/ρsw
 
-refineH = (2.5,0.25)
+refineH = (2.0,0.2)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
-                                     aspect_ratios=(50,25), refine=refineH,
+                                     aspect_ratios=(100,50), refine=refineH,
                                      cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
 
@@ -97,18 +97,10 @@ msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotat
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
 
-if args.type == "fixed":
-    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                       bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
-                       bc.get_zero_bc(V.sub(0).sub(0), right_boundary),
-                          bc.get_zero_bc(V.sub(1).sub(0), right_boundary),
-                          bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
-                          bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary)
-                    ]
-else:
-    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                            bc.get_zero_bc(V.sub(1), left_boundary)
-                            ]
+
+u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1), left_boundary)
+                        ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 if args.damagemodel == "AT1lower":
@@ -148,27 +140,28 @@ min_its = 10
 model.setup()
 
 
-if args.type == "iceberg":
-    gs = [5,5.5,6,7,7.5,8,8.5,9,9.4]
 
-    for i,g in enumerate(gs):
+# if args.type == "iceberg":
+#     gs = [5,5.5,6,7,7.5,8,8.5,9,9.4]
 
-        model.params.g.value = g
+#     for i,g in enumerate(gs):
+
+#         model.params.g.value = g
        
 
-        model.fixed_point(min_its=min_its, tol=1e-5,max_its=200)
+#         model.fixed_point(min_its=min_its, tol=1e-5,max_its=200)
 
-        kr.utilities.write_xdmf(path + "/" + filename + "gravity" + str(i) + ".xdmf",
-                                msh, [model.momentum.u,model.damage.d,
-                                    #   model.momentum.u_e, model.momentum.u_v,
-                                    ],
-                                    ["u","d",
-                                    "ue","uv"
-                                    ],
-                                    t=i)
-        model.damage.timestep()
+#         kr.utilities.write_xdmf(path + "/" + filename + "gravity" + str(i) + ".xdmf",
+#                                 msh, [model.momentum.u,model.damage.d,
+#                                     #   model.momentum.u_e, model.momentum.u_v,
+#                                     ],
+#                                     ["u","d",
+#                                     "ue","uv"
+#                                     ],
+#                                     t=i)
+#         model.damage.timestep()
  
-        model.momentum.timestep()
+#         model.momentum.timestep()
 
 
 
@@ -179,48 +172,40 @@ if MPI.COMM_WORLD.rank == 0:
 
 from dolfinx import fem
 import ufl
-min_its = 5
+min_its = 3
 tol = 1e-5
-if args.type == "relaxation" or args.type == "fixed":
+if args.type == "relaxation":
     solve_d = False
 else:
     solve_d = True
 
-for i in range(600):
+istart = 0
+# if args.type == "checkpoint":
+# model.read_checkpoint(path + "/" + filename + "checkpoint", t=istart)
+
+for i in range(istart,500):
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
 
-    if i<10:
-        model.params.dt = 10*24*60*60
+    if i<10 and args.type == "relaxation":
+        model.params.dt.value = 10*24*60*60
     else:
-        model.params.dt = args.dt*24*60*60
+        model.params.dt.value = args.dt*24*60*60
 
-    if i==5 and args.type == "fixed":
-        solve_d = True
-
-    if i==10 and args.type == "fixed":
-        u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                           bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
-                        ]
-        model.momentum.bc_u = u_bc(model.momentum.W)
-        model.momentum.setup()
-
-
-    
-    
     if i == 10 and args.type == "relaxation":
         solve_d = True
 
-    if i == 20:
-        min_its = 3
+
+
+    # model.write_checkpoint(path + "/" + filename + "checkpoint", t=i)
 
     error = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
     
 
-
+    
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                       model.momentum.u_e, model.momentum.u_v,

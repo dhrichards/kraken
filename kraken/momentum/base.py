@@ -70,6 +70,13 @@ class Momentum:
         self.solver.setJacobian(self.problem.J, dolfinx.fem.petsc.create_matrix(fem.form(self.J)),P=None)
 
 
+    def update_bcs(self,new_bcs):
+        self.bc_u = new_bcs(self.W)
+        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_u)
+        self.setup_solver()
+
+
+
     
 
     def solve(self):

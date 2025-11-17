@@ -19,6 +19,7 @@ class LowerOrder(Damage):
 
         self.D = fem.functionspace(self.sim.msh, self.d_el)
         self.d = fem.Function(self.D, name="damage")
+        self.w = self.d # for compatibility
 
         self.g = es.degradation_default(self.d)
 
