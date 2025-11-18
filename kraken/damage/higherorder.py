@@ -67,7 +67,7 @@ class HigherOrder(Damage):
 
         d_dot = (self.d - self.d_prev_time)/self.sim.params.dtstar
 
-        self.F += C_new*l*d_dot*v*ufl.dx
+        # self.F += C_new*l*d_dot*v*ufl.dx
         self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
 
 

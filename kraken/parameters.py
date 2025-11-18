@@ -152,6 +152,10 @@ class Params_with_uc:
         elastic and fracture stresses."""
         return self.μ * self.uc**2 / (self.Gc * self.L)
 
+    @property
+    def C_inertia(self):
+        return self.ρc * self.L**2 / (self.μ * self.τ**2)
+
 
     def set_Gc_AT1_lowerorder(self):
         self.Gc.value = 8* self.σcrit.value**2 * self.l.value / (3*self.E.value)

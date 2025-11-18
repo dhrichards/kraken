@@ -34,6 +34,11 @@ class MixedDisplacement(Momentum):
         self.u_prev_time, self.u_v_prev_time, self.p_prev_time = ufl.split(self.w_prev_time)
         self.u_e_prev_time = self.u_prev_time - self.u_v_prev_time
 
+        self.w_prev_2 = fem.Function(self.W, name="mixed function 2 timesteps previous")
+        self.u_prev_2, self.u_v_prev_2, self.p_prev_2 = ufl.split(self.w_prev_2)
+
+        self.accel = (self.u - 2*self.u_prev_time + self.u_prev_2)/(self.sim.params.dtstar**2)
+
         self.bc_u = self.sim.bc_funcs[0](self.W)
 
         self.DG0 = fem.functionspace(self.sim.msh, ("DG", 0))
@@ -74,7 +79,8 @@ class MixedDisplacement(Momentum):
         Iprime = 2*self.sim.damage.d
         # Iprime = 1.0
         self.F = (
-            ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
+            0.5*self.sim.params.C_inertia*ufl.inner(self.accel, v)  \
+            + ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
             #  - self.p_crack* ufl.inner(ufl.grad(g), v)\
             - self.p_crack*ufl.inner(ufl.Dx(g,0), v[0]) \
             # + self.p_crack*Iprime*ufl.inner(ufl.Dx(self.sim.damage.d,0), v[0]) \
