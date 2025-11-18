@@ -37,8 +37,7 @@ class MixedDisplacement(Momentum):
         self.w_prev_2 = fem.Function(self.W, name="mixed function 2 timesteps previous")
         self.u_prev_2, self.u_v_prev_2, self.p_prev_2 = ufl.split(self.w_prev_2)
 
-        self.accel = (self.u - 2*self.u_prev_time + self.u_prev_2)/(self.sim.params.dtstar**2)
-
+        
         self.bc_u = self.sim.bc_funcs[0](self.W)
 
         self.DG0 = fem.functionspace(self.sim.msh, ("DG", 0))
@@ -174,6 +173,9 @@ class SemiLagrangian(MixedDisplacement):
 
         self.pw = self.water_pressure(self.du)
         self.p_crack = self.crack_pressure(self.du)
+
+        self.accel = (self.u - 2*self.u_prev_time + self.u_prev_2)/(self.sim.params.dtstar**2)
+
 
         
 
