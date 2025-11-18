@@ -186,6 +186,7 @@ class SemiLagrangian(MixedDisplacement):
         du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
         self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
         
+        self.w_prev_2.x.array[:] = self.w_prev_time.x.array[:]
         self.w_prev_time.x.array[:] += self.w.x.array[:]
 
         self.area = fem.assemble_vector(self.cell_area_form).array
