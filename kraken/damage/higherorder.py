@@ -22,6 +22,8 @@ class HigherOrder(Damage):
         self.W = fem.functionspace(self.sim.msh, self.d_el_mixed)
         self.w = fem.Function(self.W, name="mixed function")
         self.d, self.lap = ufl.split(self.w)
+        self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
+        self.d_prev_time, self.lap_prev_time = ufl.split(self.w_prev_time)
 
         
 
@@ -51,14 +53,29 @@ class HigherOrder(Damage):
         v, q = ufl.split(mixed_test)
 
 
-        self.F = (C3*4*l0*c*v*H + c*v - 2*l0**2*self.lap*v - l0**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
-                -1.0*v ) * ufl.dx \
-                - (self.lap*q + ufl.inner(ufl.grad(c), ufl.grad(q))) * ufl.dx
+        # self.F = (C3*4*l0*c*v*H + c*v - 2*l0**2*self.lap*v - l0**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
+        #         -1.0*v ) * ufl.dx \
+        #         - (self.lap*q + ufl.inner(ufl.grad(c), ufl.grad(q))) * ufl.dx
                 
+        self.F = -C3*2*l*(1-self.d)*v*H*ufl.dx \
+                  +(1/2)*(2*self.d*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
+                ) * ufl.dx \
+                - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx
+                
+
+        C_new = 1e-2/(self.sim.params.Gc*self.sim.params.τ)
+
+        d_dot = (self.d - self.d_prev_time)/self.sim.params.dtstar
+
+        self.F += C_new*l*d_dot*v*ufl.dx
         self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
 
 
         self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
+
+    def timestep(self):
+        super().timestep()
+        self.w_prev_time.x.array[:] = self.w.x.array[:]
 
 
 

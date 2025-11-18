@@ -60,6 +60,8 @@ class Damage:
                                 self.sim.free_energy_plus)
         self.Hprev.interpolate(fem.Expression(self.H_func, self.H_space.element.interpolation_points()))
 
+
+
         # H = self.history_problem.solve()
         # self.Hprev.x.array[:] = H.x.array[:]
         
