@@ -81,6 +81,7 @@ class HigherOrder(Damage):
 
     def solve(self):
         self.solver.solve(None, self.w.x.petsc_vec)
+        self.w.x.scatter_forward()
         assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
 
 

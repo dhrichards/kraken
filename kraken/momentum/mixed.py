@@ -108,6 +108,7 @@ class MixedDisplacement(Momentum):
 
     def solve(self):
         self.solver.solve(None, self.w.x.petsc_vec)
+        self.w.x.scatter_forward()
         # assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
 
         # if self.solver.getConvergedReason() < 0:
@@ -120,7 +121,7 @@ class MixedDisplacement(Momentum):
         # # 
         # else:
         self.w_prev_it.x.array[:] = self.w.x.array[:]
-        self.w.x.scatter_forward()
+        
 
 
 
