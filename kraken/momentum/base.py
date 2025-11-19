@@ -21,6 +21,8 @@ class Momentum:
 
         self.V = fem.functionspace(self.sim.msh, ("Lagrange", 1, (self.sim.msh.geometry.dim, )))
 
+        self.gv_tol = 1e-5
+
         
 
 
