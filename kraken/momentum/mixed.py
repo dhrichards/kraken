@@ -110,17 +110,17 @@ class MixedDisplacement(Momentum):
         self.solver.solve(None, self.w.x.petsc_vec)
         # assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
 
-        if self.solver.getConvergedReason() < 0:
-            print("Did not converge, setting gv_tol to ", self.gv_tol*10)
-            self.gv_tol = self.gv_tol*10
-            self.setup_solver()
-            self.w_prev_it.x.array[:] = self.w_prev_time.x.array[:]
-            self.w.x.array[:] = self.w_prev_time.x.array[:]
-            self.sim.damage.w.x.array[:] = self.sim.damage.w_prev_time.x.array[:]
-        # 
-        else:
-            self.w_prev_it.x.array[:] = self.w.x.array[:]
-            self.w.x.scatter_forward()
+        # if self.solver.getConvergedReason() < 0:
+        #     print("Did not converge, setting gv_tol to ", self.gv_tol*10)
+        #     self.gv_tol = self.gv_tol*10
+        #     self.setup_solver()
+        #     self.w_prev_it.x.array[:] = self.w_prev_time.x.array[:]
+        #     self.w.x.array[:] = self.w_prev_time.x.array[:]
+        #     self.sim.damage.w.x.array[:] = self.sim.damage.w_prev_time.x.array[:]
+        # # 
+        # else:
+        self.w_prev_it.x.array[:] = self.w.x.array[:]
+        self.w.x.scatter_forward()
 
 
 
