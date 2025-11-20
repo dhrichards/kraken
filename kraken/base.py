@@ -61,33 +61,10 @@ class Simulation:
         self.momentum.timestep()
         # self.mass.timestep()
 
-    def write_checkpoint(self, filename, t=0):
-
-        if t == 0:
-            mode = adios4dolfinx.adios2_helpers.adios2.Mode.Write
-        else:
-            mode = adios4dolfinx.adios2_helpers.adios2.Mode.Append
-
-        adios4dolfinx.write_mesh(filename, self.msh, store_partition_info=True, time=t,
-                                mode=mode)
-        
-        adios4dolfinx.write_function(filename, self.momentum.w, name="w_momentum", time=t, mode=mode)
-        adios4dolfinx.write_function(filename, self.damage.w, name="w_damage", time=t, mode=mode)
-        adios4dolfinx.write_function(filename, self.momentum.area_ratio, name="area_ratio", time=t, mode=mode)
-        adios4dolfinx.write_function(filename, self.momentum.w_prev_time, name="w_momentum_prev_time", time=t, mode=mode)
-        adios4dolfinx.write_function(filename, self.damage.Hprev, name="Hprev", time=t, mode=mode)
-
-    def read_checkpoint(self, filename, t=0):
-        self.msh = adios4dolfinx.read_mesh(filename, MPI.COMM_WORLD, time=t)
-
-        adios4dolfinx.read_function(filename, self.momentum.w, name="w_momentum", time=t)
-        adios4dolfinx.read_function(filename, self.damage.w, name="w_damage", time=t)
-        adios4dolfinx.read_function(filename, self.momentum.area_ratio, name="area_ratio", time=t)
-        adios4dolfinx.read_function(filename, self.momentum.w_prev_time, name="w_momentum_prev_time", time=t)
-        adios4dolfinx.read_function(filename, self.damage.Hprev, name="Hprev", time=t)
-
-
-
+    def revert(self):
+        self.damage.revert()
+        self.momentum.revert()
+     
 
 
         
@@ -101,6 +78,8 @@ class Simulation:
             area = np.sqrt(MPI.COMM_WORLD.allreduce(area, op=MPI.SUM))
 
             error_prev = 100
+
+            errors = []
             
             for i in range(max_its):
                 
@@ -120,6 +99,8 @@ class Simulation:
                 if MPI.COMM_WORLD.rank == 0:
                     print(f"iteration {i}, error {error_L2}")
 
+                errors.append(error_L2)
+
                 if i>min_its-1:
                     if (error_L2 < tol) and (error_L2 <= error_prev) and (error_prev < tol):
                         break
@@ -127,7 +108,7 @@ class Simulation:
                 error_prev = error_L2
                 L2_old = L2
             
-            return error_L2
+            return errors
 
 
 

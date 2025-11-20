@@ -12,16 +12,17 @@ from kraken.numerics import energy_splits as es
 from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
 from petsc4py import PETSc
+import adios4dolfinx
 
 
 class Momentum:
     def __init__(self, sim):
         self.sim = sim
-        
+        self.gv_tol = 1e-5
 
         self.V = fem.functionspace(self.sim.msh, ("Lagrange", 1, (self.sim.msh.geometry.dim, )))
 
-        self.gv_tol = 1e-5
+
 
         
 
@@ -86,3 +87,12 @@ class Momentum:
 
     def timestep(self):
         pass
+
+
+    def revert(self):
+        self.w.x.array[:] = self.w_prev_time.x.array[:]
+        self.w_prev_it.x.array[:] = self.w_prev_time.x.array[:]
+        
+
+        
+

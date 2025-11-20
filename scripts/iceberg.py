@@ -179,11 +179,8 @@ if args.type == "relaxation":
 else:
     solve_d = True
 
-istart = 0
-# if args.type == "checkpoint":
-# model.read_checkpoint(path + "/" + filename + "checkpoint", t=istart)
 
-for i in range(istart,500):
+for i in range(500):
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
@@ -199,9 +196,18 @@ for i in range(istart,500):
 
 
 
-    # model.write_checkpoint(path + "/" + filename + "checkpoint", t=i)
+    
+    
+    errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
-    error = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
+    # if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
+    if i==13:
+        if MPI.COMM_WORLD.rank == 0:
+            print("Guessing something has blown up, setting gv_tol to 1e-2")
+        model.momentum.gv_tol = 1e-2
+        model.damage.revert()
+        model.momentum.setup()
+        errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
     
 

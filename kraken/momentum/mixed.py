@@ -38,6 +38,7 @@ class MixedDisplacement(Momentum):
         self.u_prev_2, self.u_v_prev_2, self.p_prev_2 = ufl.split(self.w_prev_2)
 
         
+        
         self.bc_u = self.sim.bc_funcs[0](self.W)
 
         self.DG0 = fem.functionspace(self.sim.msh, ("DG", 0))
@@ -78,7 +79,7 @@ class MixedDisplacement(Momentum):
         Iprime = 2*self.sim.damage.d
         # Iprime = 1.0
         self.F = (
-            0.5*self.sim.params.C_inertia*ufl.inner(self.accel, v)  \
+            # 0.5*self.sim.params.C_inertia*ufl.inner(self.accel, v)  \
             + ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
             #  - self.p_crack* ufl.inner(ufl.grad(g), v)\
             - self.p_crack*ufl.inner(ufl.Dx(g,0), v[0]) \
@@ -121,7 +122,9 @@ class MixedDisplacement(Momentum):
         # # 
         # else:
         self.w_prev_it.x.array[:] = self.w.x.array[:]
-        
+
+
+  
 
 
 

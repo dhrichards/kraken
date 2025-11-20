@@ -87,12 +87,17 @@ model = kr.base.Simulation(msh, [u_bc, bc_d],
 model.params.L.value = L
 model.params.l.value = l
 model.params.dt.value = 60*60*2
-model.params.ψcrit.value = 1.0
-model.params.Gc.value = 0.5
 model.params.patm.value = 0.0
 model.params.ρi.value = 900.0
 model.params.ρw.value = 1000.0
 model.params.g.value = 9.8
+
+if args.type == "nopsicrit":
+    model.params.ψcrit.value = 0.0
+    model.params.Gc.value = l
+else:
+    model.params.ψcrit.value = 1.625
+    model.params.Gc.value = 1.2
 
 # model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
 #                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
@@ -108,7 +113,7 @@ model.setup()
 model.fixed_point(min_its=3,solve_damage=True,max_its=200,tol=1e-5)
 import adios4dolfinx
 
-filename = './scripts/{}elastic_l{}_Gc{}_psicrit{}.bp'.format(
+filename = './scripts/{}elastic_l{}.bp'.format(
     args.type,
     l,
     model.params.Gc.value,
@@ -117,10 +122,10 @@ filename = './scripts/{}elastic_l{}_Gc{}_psicrit{}.bp'.format(
 adios4dolfinx.write_mesh(filename, msh)
 adios4dolfinx.write_function(filename, model.momentum.u, name="u")
 adios4dolfinx.write_function(filename, model.damage.w, name="w")
-# kr.utilities.write_xdmf(path + "/elastictest.xdmf",
-#                             msh, [model.momentum.u, model.damage.d],
-#                             ["u", "d"])
-    # # model.d_prev_time.x.array[:] = model.d.x.array[:]
+kr.utilities.write_xdmf("./outputs/elastictest.xdmf",
+                            msh, [model.momentum.u, model.damage.d],
+                            ["u", "d"])
+    # model.d_prev_time.x.array[:] = model.d.x.array[:]
 
 
     

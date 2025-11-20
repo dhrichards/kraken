@@ -1,3 +1,4 @@
+import adios4dolfinx
 from .base import Damage
 import basix.ufl as bufl
 import ufl
@@ -84,8 +85,9 @@ class HigherOrder(Damage):
         self.w.x.scatter_forward()
         assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
 
-
-
+    def revert(self):
+        self.w.x.array[:] = self.w_prev_time.x.array[:]
+        
 class HigherOrderAT1(HigherOrder):
     def setup_weak_form(self):
         C3 = self.sim.params.C3; l = self.sim.params.lstar
