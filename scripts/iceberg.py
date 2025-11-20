@@ -88,7 +88,7 @@ flotation_height = ρi/ρsw
 
 refineH = (2.0,0.2)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
-                                     aspect_ratios=(100,50), refine=refineH,
+                                     aspect_ratios=(100,1), refine=refineH,
                                      cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
 
@@ -200,8 +200,7 @@ for i in range(500):
     
     errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
-    # if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
-    if i==13:
+    if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
         if MPI.COMM_WORLD.rank == 0:
             print("Guessing something has blown up, setting gv_tol to 1e-2")
         model.momentum.gv_tol = 1e-2
