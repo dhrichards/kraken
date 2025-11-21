@@ -87,7 +87,11 @@ class HigherOrder(Damage):
 
     def revert(self):
         self.w.x.array[:] = self.w_prev_time.x.array[:]
-        
+
+    def write_checkpoint(self, filename, t=0):
+        adios4dolfinx.write_function(filename, self.w, name = "w_damage",time = t)
+        adios4dolfinx.write_function(filename, self.Hprev, name = "Hprev_damage", time = t)
+
 class HigherOrderAT1(HigherOrder):
     def setup_weak_form(self):
         C3 = self.sim.params.C3; l = self.sim.params.lstar
