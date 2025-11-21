@@ -185,6 +185,7 @@ else:
     solve_d = True
 
 gvs = [1e-2, 1e-3, 1e-4]
+
 for i in range(50):
 
     if MPI.COMM_WORLD.rank == 0:
@@ -199,6 +200,11 @@ for i in range(50):
     if i == 10 and args.type == "relaxation":
         solve_d = True
 
+    if i == 40:
+        save=True
+    else:
+        save=False
+
 
     # model.write_checkpoint(path + "/" + filename +".bp", t=i)
 
@@ -211,7 +217,7 @@ for i in range(50):
     #         if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
     #             break
     # else:
-    errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
+    errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d, save=save)
 
     # if model.params.gv_tol.value < 1e-2 and errors[-1] < 1e-16\
     #       and errors[-2] < 1e-16 and errors[-3] > 1e-3:
