@@ -94,5 +94,10 @@ class Momentum:
         # self.w_prev_it.x.array[:] = self.w_prev_time.x.array[:]
 
 
+    def write_checkpoint(self, filename, t=0):
+        adios4dolfinx.write_function(filename, self.w, name = "w_momentum",time = t)
+        adios4dolfinx.write_function(filename, self.area_ratio, name = "area_ratio", time = t)
+
+
         
 

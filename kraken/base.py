@@ -1,4 +1,4 @@
-from kraken import parameters
+from kraken import parameters, utilities
 from kraken.numerics import energy_splits as es
 from dolfinx import fem
 import ufl
@@ -7,7 +7,9 @@ import numpy as np
 import adios4dolfinx
 
 class Simulation:
-    def __init__(self, msh, bc_funcs, MomentumSolver, DamageSolver, level=0.0, split="lo"):
+    def __init__(self, msh, MomentumSolver, DamageSolver, 
+                 bc_funcs=[lambda V: [], lambda V: []],
+                   level=0.0, split="lo"):
         self.msh = msh
         self.params = parameters.Params_with_uc(self.msh)
         self.bc_funcs = bc_funcs
@@ -65,10 +67,20 @@ class Simulation:
         self.damage.revert()
         self.momentum.revert()
      
+    
+    def write_checkpoint(self, filename, t=0):
+        if t == 0:
+            adios4dolfinx.write_mesh(filename, self.msh,time = t)
 
+        else:
+            adios4dolfinx.write_mesh(filename, self.msh, time = t,
+                                     mode = adios4dolfinx.adios2_helpers.adios2.Mode.Append)
+            
+        self.momentum.write_checkpoint(filename, t) 
+        self.damage.write_checkpoint(filename, t)
 
         
-    def fixed_point(self, max_its=100, tol=1e-4, min_its=2, solve_damage=True, solve_mass=True):
+    def fixed_point(self, max_its=100, tol=1e-4, min_its=2, solve_damage=True, save=False):
             L2_old = 0.0
 
             one = fem.Function(self.damage.D)
@@ -88,6 +100,16 @@ class Simulation:
                 self.momentum.solve()
                 # if solve_mass:
                 #     self.mass.solve()
+
+                if save:
+                    utilities.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
+                                self.msh, [self.momentum.u,self.damage.d,
+                                        self.momentum.u_e, self.momentum.u_v,
+                                        ],
+                                        ["u","d",
+                                        "ue","uv"
+                                        ],
+                                    t=i)
     
                 
 

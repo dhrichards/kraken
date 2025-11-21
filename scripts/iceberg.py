@@ -91,7 +91,7 @@ flotation_height = ρi/ρsw
 
 refineH = (2.0,0.2)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
-                                     aspect_ratios=(100,1), refine=refineH,
+                                     aspect_ratios=(100,50), refine=refineH,
                                      cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
 
@@ -119,9 +119,10 @@ elif args.damagemodel == "AT2lower":
 elif args.damagemodel == "AT2higher_bounded":
     damage_model = kr.damage.higherorder.Bounded
 
-model = kr.base.Simulation(msh, [u_bc, d_bc],
+model = kr.base.Simulation(msh,
                            kr.momentum.mixed.SemiLagrangianEpsilon,
-                           damage_model, level=level, split=split)
+                           damage_model, [u_bc, d_bc], 
+                           level=level, split=split)
 
 
 # model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
@@ -199,13 +200,14 @@ for i in range(50):
         solve_d = True
 
 
+    model.write_checkpoint(path + "/" + filename +".bp", t=i)
 
     
     
     errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
     if model.params.gv_tol.value < 1e-2 and errors[-1] < 1e-16\
-        #   and errors[-2] < 1e-16 and errors[-3] > 1e-3:
+          and errors[-2] < 1e-16 and errors[-3] > 1e-3:
         if MPI.COMM_WORLD.rank == 0:
             print("Guessing something has blown up, setting gv_tol to 1e-2")
         model.params.gv_tol.value = 1e-2
