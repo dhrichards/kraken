@@ -23,6 +23,7 @@ parser.add_argument("--Gc", type=float, default=1.0, help="Gc")
 parser.add_argument("--type", type=str, default="relaxation", help="gravity loop initilisation or relaxation first")
 parser.add_argument("--damagemodel", type=str, default="AT2higher", help="damage model to use")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
+parser.add_argument("--gv_tol", type=float, default=1e-5, help="tolerance for viscous degradation")
 
 args = parser.parse_args()
 level = args.level
@@ -30,7 +31,9 @@ split = args.split
 
 filename = args.type + "_" + args.split + "_level" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc)\
                      +"dt" + str(args.dt) + "psicrit" + str(args.psicrit)\
-                        + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)+"_damagemodel" + args.damagemodel + "_" + args.suffix + "_"
+                        + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)\
+                            + "gv_tol" + str(-np.log10(args.gv_tol)) + \
+                            "_damagemodel" + args.damagemodel + "_" + args.suffix + "_"
 
 
 
@@ -131,6 +134,7 @@ model.params.ρw.value = ρsw
 model.params.ψcrit.value = args.psicrit
 model.params.Gc.value = args.Gc
 model.params.patm.value = 0.0
+model.params.gv_tol.value = args.gv_tol
 
 
 #%%
@@ -200,13 +204,12 @@ for i in range(50):
     
     errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
-    if model.momentum.gv_tol.value < 1e-2 and errors[-1] < 1e-16\
-          and errors[-2] < 1e-16 and errors[-3] > 1e-3:
+    if model.params.gv_tol.value < 1e-2 and errors[-1] < 1e-16\
+        #   and errors[-2] < 1e-16 and errors[-3] > 1e-3:
         if MPI.COMM_WORLD.rank == 0:
             print("Guessing something has blown up, setting gv_tol to 1e-2")
-        model.momentum.gv_tol.value = 1e-2
-        model.damage.revert()
-        # model.momentum.setup()
+        model.params.gv_tol.value = 1e-2
+        model.revert()
         errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
     

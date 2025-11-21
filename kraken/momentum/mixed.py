@@ -71,7 +71,7 @@ class MixedDisplacement(Momentum):
        
      
 
-        g_v = es.degradation_default(self.sim.damage.d,self.gv_tol)
+        g_v = es.degradation_default(self.sim.damage.d,self.sim.params.gv_tol)
         
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)

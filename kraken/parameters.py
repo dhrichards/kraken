@@ -23,6 +23,7 @@ class Params_with_uc:
         self.ψcrit = fem.Constant(msh,default_scalar_type(1.0)) 
         self.dt = fem.Constant(msh,default_scalar_type(secperyr)) # Characteristic time in seconds
         self.patm = fem.Constant(msh,default_scalar_type(1e5)) # Atmospheric pressure
+        self.gv_tol = fem.Constant(msh,default_scalar_type(1e-5)) # Viscous degradation tolerance
         
 
 
