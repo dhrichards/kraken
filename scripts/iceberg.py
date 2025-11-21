@@ -91,7 +91,7 @@ flotation_height = ρi/ρsw
 
 refineH = (2.0,0.2)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
-                                     aspect_ratios=(100,50), refine=refineH,
+                                     aspect_ratios=(100,1), refine=refineH,
                                      cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
 
@@ -200,16 +200,18 @@ for i in range(50):
         solve_d = True
 
 
-    model.write_checkpoint(path + "/" + filename +".bp", t=i)
+    # model.write_checkpoint(path + "/" + filename +".bp", t=i)
 
-    
-    for gv in gvs:
-        model.params.gv_tol.value = gv
-        if MPI.COMM_WORLD.rank == 0:
-            print("Setting gv_tol to ", gv)
-            errors = model.fixed_point(min_its=min_its, tol=tol, max_its=100, solve_damage=solve_d)
-            if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
-                break
+    # if solve_d:
+    #     for gv in gvs:
+    #         model.params.gv_tol.value = gv
+    #         if MPI.COMM_WORLD.rank == 0:
+    #             print("Setting gv_tol to ", gv)
+    #         errors = model.fixed_point(min_its=min_its, tol=tol, max_its=100, solve_damage=solve_d)
+    #         if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
+    #             break
+    # else:
+    errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
     # if model.params.gv_tol.value < 1e-2 and errors[-1] < 1e-16\
     #       and errors[-2] < 1e-16 and errors[-3] > 1e-3:

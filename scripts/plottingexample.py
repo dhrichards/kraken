@@ -3,6 +3,7 @@ import adios4dolfinx
 import kraken as kr
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib import tri
 from mpi4py import MPI
 
 filename = '../outputs/relaxation_lo_level0.0height300Gc0.5dt1.0psicrit1.0l4.0cellfactor1.0gv_tol2.0_damagemodelAT2higher__.bp'
@@ -21,10 +22,19 @@ adios4dolfinx.read_function(filename, model.damage.w, name ="w_damage", time=i)
 
 d = kr.plotting.dolfinx_to_array(msh,model.damage.d)
 
-tess = kr.plotting.get_connectivity(msh)
+ψplus = model.free_energy_plus(model.momentum.ε_e, model.params.ν)
+
+ψp = kr.plotting.dolfinx_to_array(msh, ψplus)
+
+cty = kr.plotting.get_connectivity(msh)
+
+tess = tri.Triangulation(
+        msh.geometry.x[:,0], 
+        msh.geometry.x[:,1], 
+        triangles=cty)
 
 fig,ax = plt.subplots(1,1,figsize=(6,5))
-c = ax.tripcolor(tess, d, shading='gouraud', cmap='viridis')
+c = ax.tripcolor(tess, ψp, shading='gouraud', cmap='viridis')
 # fig.colorbar(c, ax=ax, label='Damage d')
 
 ax.set_aspect('equal')
