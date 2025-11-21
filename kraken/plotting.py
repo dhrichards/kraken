@@ -2,8 +2,6 @@ from dolfinx import fem
 import adios4dolfinx
 from mpi4py import MPI
 import numpy as np
-from matplotlib import tri
-import matplotlib.pyplot as plt
 import basix.ufl as bufl
 
 
@@ -36,16 +34,11 @@ def dolfinx_to_array(msh, f):
         raise NotImplementedError("Only scalar and vector functions are supported.")
             
 
-def build_tessalation(msh):
-    x, y = msh.geometry.x[:,0], msh.geometry.x[:,1]
+def get_connectivity(msh):
     connty = msh.topology.connectivity(2, 0)
     connty_array = np.array([connty.links(i)
             for i in range(connty.num_nodes)])
     
-    tess = tri.Triangulation(
-            x, 
-            y, 
-            triangles=connty_array)
-    return tess
+    return connty_array
 
 

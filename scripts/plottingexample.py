@@ -8,7 +8,7 @@ from mpi4py import MPI
 filename = '../outputs/relaxation_lo_level0.0height300Gc0.5dt1.0psicrit1.0l4.0cellfactor1.0gv_tol2.0_damagemodelAT2higher__.bp'
 
 
-i = 49
+i = 11
 msh = adios4dolfinx.read_mesh(filename, MPI.COMM_WORLD, time=i)
 
 
@@ -21,11 +21,11 @@ adios4dolfinx.read_function(filename, model.damage.w, name ="w_damage", time=i)
 
 d = kr.plotting.dolfinx_to_array(msh,model.damage.d)
 
-tess = kr.plotting.build_tessalation(msh)
+tess = kr.plotting.get_connectivity(msh)
 
 fig,ax = plt.subplots(1,1,figsize=(6,5))
 c = ax.tripcolor(tess, d, shading='gouraud', cmap='viridis')
-fig.colorbar(c, ax=ax, label='Damage d')
+# fig.colorbar(c, ax=ax, label='Damage d')
 
 ax.set_aspect('equal')
 ax.set_xlim([24.5, 26.7])

@@ -184,7 +184,7 @@ if args.type == "relaxation":
 else:
     solve_d = True
 
-
+gvs = [1e-2, 1e-3, 1e-4]
 for i in range(50):
 
     if MPI.COMM_WORLD.rank == 0:
@@ -203,16 +203,21 @@ for i in range(50):
     model.write_checkpoint(path + "/" + filename +".bp", t=i)
 
     
-    
-    errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
-
-    if model.params.gv_tol.value < 1e-2 and errors[-1] < 1e-16\
-          and errors[-2] < 1e-16 and errors[-3] > 1e-3:
+    for gv in gvs:
+        model.params.gv_tol.value = gv
         if MPI.COMM_WORLD.rank == 0:
-            print("Guessing something has blown up, setting gv_tol to 1e-2")
-        model.params.gv_tol.value = 1e-2
-        model.revert()
-        errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
+            print("Setting gv_tol to ", gv)
+            errors = model.fixed_point(min_its=min_its, tol=tol, max_its=100, solve_damage=solve_d)
+            if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
+                break
+
+    # if model.params.gv_tol.value < 1e-2 and errors[-1] < 1e-16\
+    #       and errors[-2] < 1e-16 and errors[-3] > 1e-3:
+    #     if MPI.COMM_WORLD.rank == 0:
+    #         print("Guessing something has blown up, setting gv_tol to 1e-2")
+    #     model.params.gv_tol.value = 1e-2
+    #     model.revert()
+    #     errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
     
 
