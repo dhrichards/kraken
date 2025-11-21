@@ -119,7 +119,7 @@ class Simulation:
 
                 error_L2 = np.abs(L2 - L2_old)/area
                 if MPI.COMM_WORLD.rank == 0:
-                    print(f"iteration {i}, error {error_L2}")
+                    print(f"iteration {i}, error {error_L2}, momentum iters {self.momentum.solver.getIterationNumber()}, momentum converged reason {self.momentum.solver.getConvergedReason()}")
 
                 errors.append(error_L2)
 
