@@ -1,5 +1,6 @@
 from kraken import parameters, utilities
 from kraken.numerics import energy_splits as es
+from kraken.numerics import maths_functions as mf
 from dolfinx import fem
 import ufl
 from mpi4py import MPI
@@ -102,12 +103,13 @@ class Simulation:
                 #     self.mass.solve()
 
                 if save:
+                    η = mf.viscosity(mf.εD(self.momentum.vel_prev_it), self.params.n, 1.e-15, 1.0)
                     utilities.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, [self.momentum.u,self.damage.d,
-                                        self.momentum.u_e, self.momentum.u_v,
+                                        self.momentum.u_e, self.momentum.u_v, η
                                         ],
                                         ["u","d",
-                                        "ue","uv"
+                                        "ue","uv","viscosity"
                                         ],
                                     t=i)
     
@@ -119,7 +121,7 @@ class Simulation:
 
                 error_L2 = np.abs(L2 - L2_old)/area
                 if MPI.COMM_WORLD.rank == 0:
-                    print(f"iteration {i}, error {error_L2}, momentum iters {self.momentum.solver.getIterationNumber()}, momentum converged reason {self.momentum.solver.getConvergedReason()}")
+                    print(f"iteration {i}, error {error_L2}, mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")
 
                 errors.append(error_L2)
 

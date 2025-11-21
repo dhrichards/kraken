@@ -200,7 +200,7 @@ for i in range(50):
     if i == 10 and args.type == "relaxation":
         solve_d = True
 
-    if i == 40:
+    if i == 14:
         save=True
     else:
         save=False
