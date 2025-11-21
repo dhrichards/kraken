@@ -200,13 +200,13 @@ for i in range(50):
     
     errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
-    if model.momentum.gv_tol < 1e-2 and errors[-1] < 1e-16\
+    if model.momentum.gv_tol.value < 1e-2 and errors[-1] < 1e-16\
           and errors[-2] < 1e-16 and errors[-3] > 1e-3:
         if MPI.COMM_WORLD.rank == 0:
             print("Guessing something has blown up, setting gv_tol to 1e-2")
-        model.momentum.gv_tol = 1e-2
+        model.momentum.gv_tol.value = 1e-2
         model.damage.revert()
-        model.momentum.setup()
+        # model.momentum.setup()
         errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
     

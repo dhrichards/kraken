@@ -18,7 +18,7 @@ import adios4dolfinx
 class Momentum:
     def __init__(self, sim):
         self.sim = sim
-        self.gv_tol = 1e-5
+        self.gv_tol = fem.Constant(self.sim.msh, 1e-2)
 
         self.V = fem.functionspace(self.sim.msh, ("Lagrange", 1, (self.sim.msh.geometry.dim, )))
 
@@ -92,7 +92,7 @@ class Momentum:
     def revert(self):
         self.w.x.array[:] = self.w_prev_time.x.array[:]
         self.w_prev_it.x.array[:] = self.w_prev_time.x.array[:]
-        
+
 
         
 
