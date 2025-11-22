@@ -75,7 +75,7 @@ class MixedDisplacement(Momentum):
       
     
         g_pure = (1 - self.sim.damage.d)**2
-        η = g_pure*η0 + (1-g_pure)*1e-3
+        η = g_pure*η0 + (1-g_pure)*self.sim.params.gv_tol
 
 
         
