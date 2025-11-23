@@ -34,10 +34,13 @@ class MixedDisplacement(Momentum):
         self.u_prev_time, self.u_v_prev_time, self.p_prev_time = ufl.split(self.w_prev_time)
         self.u_e_prev_time = self.u_prev_time - self.u_v_prev_time
 
+
+
+
         self.w_prev_2 = fem.Function(self.W, name="mixed function 2 timesteps previous")
         self.u_prev_2, self.u_v_prev_2, self.p_prev_2 = ufl.split(self.w_prev_2)
 
-        
+        self.vel_prev_time = (self.u_v_prev_time - self.u_v_prev_2)/self.sim.params.dtstar
         
         self.bc_u = self.sim.bc_funcs[0](self.W)
 
@@ -71,7 +74,7 @@ class MixedDisplacement(Momentum):
 
         g_v = es.degradation_default(self.sim.damage.d,self.sim.params.gv_tol)
         A = mf.rate_factor(self.sim.T)/self.sim.params.A
-        η0 = mf.viscosity(ufl.dev(mf.ε(self.vel_prev_it)), self.sim.params.n, 1.e-15, A=A)
+        η0 = mf.viscosity(mf.εD(self.vel_prev_time), self.sim.params.n, 1.e-15, A=A)
       
     
 
