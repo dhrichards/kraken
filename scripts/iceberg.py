@@ -173,7 +173,7 @@ for i in range(args.nt):
 
     
 
-    errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d, save=save)
+    errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
     
     model.write_checkpoint(path + "/" + filename +".bp", t=i)
 
