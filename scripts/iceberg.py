@@ -24,6 +24,7 @@ parser.add_argument("--type", type=str, default="relaxation", help="gravity loop
 parser.add_argument("--damagemodel", type=str, default="AT2higher", help="damage model to use")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
 parser.add_argument("--gv_tol", type=float, default=1e-5, help="tolerance for viscous degradation")
+parser.add_argument("--nt", type=int, default=50, help="number of timesteps")
 
 args = parser.parse_args()
 level = args.level
@@ -139,38 +140,8 @@ model.params.gv_tol.value = args.gv_tol
 
 
 #%%
-min_its = 10
-
-# model.setup_all()
 model.setup()
 
-
-
-# if args.type == "iceberg":
-#     gs = [5,5.5,6,7,7.5,8,8.5,9,9.4]
-
-#     for i,g in enumerate(gs):
-
-#         model.params.g.value = g
-       
-
-#         model.fixed_point(min_its=min_its, tol=1e-5,max_its=200)
-
-#         kr.utilities.write_xdmf(path + "/" + filename + "gravity" + str(i) + ".xdmf",
-#                                 msh, [model.momentum.u,model.damage.d,
-#                                     #   model.momentum.u_e, model.momentum.u_v,
-#                                     ],
-#                                     ["u","d",
-#                                     "ue","uv"
-#                                     ],
-#                                     t=i)
-#         model.damage.timestep()
- 
-#         model.momentum.timestep()
-
-
-
-model.params.g.value = 9.8
 
 if MPI.COMM_WORLD.rank == 0:
     print(path + "/" + filename)
@@ -184,9 +155,9 @@ if args.type == "relaxation":
 else:
     solve_d = True
 
-gvs = [1e-2, 1e-3, 1e-4]
 
-for i in range(50):
+
+for i in range(args.nt):
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
@@ -200,36 +171,12 @@ for i in range(50):
     if i == 10 and args.type == "relaxation":
         solve_d = True
 
-    if i == 14:
-        save=True
-    else:
-        save=False
+    
 
-
-    # model.write_checkpoint(path + "/" + filename +".bp", t=i)
-
-    # if solve_d:
-    #     for gv in gvs:
-    #         model.params.gv_tol.value = gv
-    #         if MPI.COMM_WORLD.rank == 0:
-    #             print("Setting gv_tol to ", gv)
-    #         errors = model.fixed_point(min_its=min_its, tol=tol, max_its=100, solve_damage=solve_d)
-    #         if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
-    #             break
-    # else:
     errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d, save=save)
-
-    # if model.params.gv_tol.value < 1e-2 and errors[-1] < 1e-16\
-    #       and errors[-2] < 1e-16 and errors[-3] > 1e-3:
-    #     if MPI.COMM_WORLD.rank == 0:
-    #         print("Guessing something has blown up, setting gv_tol to 1e-2")
-    #     model.params.gv_tol.value = 1e-2
-    #     model.revert()
-    #     errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
-
     
+    model.write_checkpoint(path + "/" + filename +".bp", t=i)
 
-    
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                       model.momentum.u_e, model.momentum.u_v,
