@@ -77,22 +77,22 @@ class MixedDisplacement(Momentum):
         
         η0 = mf.viscosity(mf.εD(self.vel_prev_it), self.sim.params.n, 1.e-15, A=A)
       
-        σ_prev = self.stress(self.ε_e_prev_it)
-        σD_prev = mf.dev3(σ_prev)
+        # σ_prev = self.stress(self.ε_e_prev_it)
+        # σD_prev = mf.dev3(σ_prev)
 
-        σ0_prev = es.cauchy_stress(self.ε_e_prev_it, self.sim.params.ν)
-        σD0_prev = mf.dev3(σ0_prev)
+        # σ0_prev = es.cauchy_stress(self.ε_e_prev_it, self.sim.params.ν)
+        # σD0_prev = mf.dev3(σ0_prev)
 
-        self.gg = ufl.sqrt(ufl.inner(σD_prev, σD_prev)+1e-14)/ufl.sqrt(ufl.inner(σD0_prev, σD0_prev)+1e-14)
+        # self.gg = ufl.sqrt(ufl.inner(σD_prev, σD_prev)+1e-14)/ufl.sqrt(ufl.inner(σD0_prev, σD0_prev)+1e-14)
 
-        # η = g*η0 + (1-g)*self.sim.params.gv_tol
-        η = self.gg*η0
+        η = g*η0 + (1-g)*self.sim.params.gv_tol
+        # η = self.gg*η0
 
-        P = pt.projection_tensor(mf.εD(self.vel_prev_it))
-        i,j,k,l = ufl.indices(4)
-        εDplus = ufl.as_tensor(P[i,j,k,l]*mf.εD(self.vel)[k,l],(i,j))
-        εDminus = mf.εD(self.vel) - εDplus
-        εD = g*εDplus + εDminus
+        # P = pt.projection_tensor(mf.εD(self.vel_prev_it))
+        # i,j,k,l = ufl.indices(4)
+        # εDplus = ufl.as_tensor(P[i,j,k,l]*mf.εD(self.vel)[k,l],(i,j))
+        # εDminus = mf.εD(self.vel) - εDplus
+        # εD = g*εDplus + εDminus
 
         
 
