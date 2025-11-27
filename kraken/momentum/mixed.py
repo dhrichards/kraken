@@ -35,8 +35,6 @@ class MixedDisplacement(Momentum):
         self.u_e_prev_time = self.u_prev_time - self.u_v_prev_time
 
 
-
-
         self.w_prev_2 = fem.Function(self.W, name="mixed function 2 timesteps previous")
         self.u_prev_2, self.u_v_prev_2, self.p_prev_2 = ufl.split(self.w_prev_2)
 
@@ -150,6 +148,8 @@ class MixedDisplacement(Momentum):
         self.w_prev_it.x.array[:] = self.w.x.array[:]
 
 
+    
+
   
 
 
@@ -180,6 +180,11 @@ class SmallDisplacement(MixedDisplacement):
     
     def timestep(self):
         self.w_prev_time.x.array[:] = self.w.x.array[:]
+
+
+    def revert(self):
+        self.w.x.array[:] = self.w_prev_time.x.array[:]
+        self.w_prev_it.x.array[:] = 0.0
 
 
         
@@ -231,6 +236,10 @@ class SemiLagrangian(MixedDisplacement):
 
         self.area = fem.assemble_vector(self.cell_area_form).array
         self.area_ratio.x.array[:] = self.area/self.area_0
+
+    def revert(self):
+        self.w.x.array[:] = 1.0 # Remember for this w is the increment
+        self.w_prev_it.x.array[:] = 0.0
 
 
 

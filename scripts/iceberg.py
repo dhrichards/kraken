@@ -25,6 +25,7 @@ parser.add_argument("--damagemodel", type=str, default="AT2higher", help="damage
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
 parser.add_argument("--gv_tol", type=float, default=1e-5, help="tolerance for viscous degradation")
 parser.add_argument("--nt", type=int, default=50, help="number of timesteps")
+parser.add_argument("--crack_x", type=float, default=0.5, help="x position of crack center from end (non dimensional)")
 
 args = parser.parse_args()
 level = args.level
@@ -58,10 +59,10 @@ def right_boundary(x):
 def bottom_boundary(x):
     return np.isclose(x[1], -flotation_height)
 
-# def crack(x):
-#     x_c = nondim_length/2 - nondim_height
-#     l = params.lstar
-#     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
+def crack(x):
+    x_c = nondim_length/2 - args.crack_x*nondim_height
+    width = args.l/args.cellfactor / (L)
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<-0.85)
 
 def fixed(x):
     return (x[0]<(nondim_length/2 - refineH[0]*0.98*nondim_height))# + (x[0]>(nondim_length/2 - nondim_height/2))
@@ -92,14 +93,16 @@ flotation_height = ρi/ρsw
 
 refineH = (2.0,0.2)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
-                                     aspect_ratios=(100,1), refine=refineH,
+                                     aspect_ratios=(100,50), refine=refineH,
                                      cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
 
 # msh = kr.utilities.create_iceberg_gmsh_mesh(l/(args.cellfactor*L), [2.5, 0.4, 0.15], true_length/(2*L), ρi/ρsw)
 
 
-d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
+d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
+                #   bc.internal_bc(V, crack, 1.0)
+                  ]
 
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
@@ -141,6 +144,8 @@ model.params.gv_tol.value = args.gv_tol
 
 #%%
 model.setup()
+# model.damage.solve()
+
 
 
 if MPI.COMM_WORLD.rank == 0:
@@ -152,44 +157,62 @@ min_its = 3
 tol = 1e-5
 if args.type == "relaxation":
     solve_d = False
+    model.params.dt.value = 10*24*60*60
 else:
     solve_d = True
 
 
 
-for i in range(args.nt):
+t = 0.0
+model.write_checkpoint(path + "/" + filename +".bp", t)
+
+
+
+i=1
+while i <= args.nt:
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
 
-    if i<10 and args.type == "relaxation":
-        model.params.dt.value = 10*24*60*60
-    else:
-        model.params.dt.value = args.dt*24*60*60
-
     if i == 10 and args.type == "relaxation":
         solve_d = True
+        model.params.dt.value = args.dt*24*60*60
 
     
 
     errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
+
+    if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
+    # if i == 11: 
+        model.params.dt.value /= 2
+        model.revert()
+        if MPI.COMM_WORLD.rank == 0:
+            print("Reverting and reducing timestep to ", model.params.dt.value/(24*60*60))
     
-    model.write_checkpoint(path + "/" + filename +".bp", t=i)
-
-    kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
-                            msh, [model.momentum.u,model.damage.d,
-                                      model.momentum.u_e, model.momentum.u_v,
-                                    ],
-                                    ["u","d",
-                                    "ue","uv"
-                                    ],
-                                  t=i)
+    else:
+        
 
 
-    if solve_d:
-        model.damage.timestep()
-    model.momentum.timestep()
+        t += model.params.dt.value
+        model.write_checkpoint(path + "/" + filename +".bp", t)
+
+        kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
+                                msh, [model.momentum.u,model.damage.d,
+                                        model.momentum.u_e, model.momentum.u_v,
+                                        ],
+                                        ["u","d",
+                                        "ue","uv",
+                                        ],
+                                    t=i)
+
+        if solve_d:
+            model.damage.timestep()
+        model.momentum.timestep()
+
+        i += 1
+
+        model.params.dt.value *= 1.1
     
     
 

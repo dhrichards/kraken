@@ -125,6 +125,8 @@ class Simulation:
 
                 errors.append(error_L2)
 
+                
+
                 if i>min_its-1:
                     if (error_L2 < tol) and (error_L2 <= error_prev) and (error_prev < tol):
                         break
