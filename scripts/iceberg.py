@@ -176,44 +176,44 @@ while i <= args.nt:
 
 
     if i == 10 and args.type == "relaxation":
-        solve_d = True
+        # solve_d = True
         model.params.dt.value = args.dt*24*60*60
 
     
 
     errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
 
-    if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
-    # if i == 11: 
-        model.params.dt.value /= 2
-        model.revert()
-        if MPI.COMM_WORLD.rank == 0:
-            print("Reverting and reducing timestep to ", model.params.dt.value/(24*60*60))
+    # if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
+    # # if i == 11: 
+    #     model.params.dt.value /= 2
+    #     model.revert()
+    #     if MPI.COMM_WORLD.rank == 0:
+    #         print("Reverting and reducing timestep to ", model.params.dt.value/(24*60*60))
     
-    else:
+    # else:
         
 
 
-        t += model.params.dt.value
-        model.write_checkpoint(path + "/" + filename +".bp", t)
+    t += model.params.dt.value
+    model.write_checkpoint(path + "/" + filename +".bp", t)
 
-        kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
-                                msh, [model.momentum.u,model.damage.d,
-                                        model.momentum.u_e, model.momentum.u_v,
-                                        ],
-                                        ["u","d",
-                                        "ue","uv",
-                                        ],
-                                    t=i)
+    kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
+                            msh, [model.momentum.u,model.damage.d,
+                                    model.momentum.u_e, model.momentum.u_v,
+                                    ],
+                                    ["u","d",
+                                    "ue","uv",
+                                    ],
+                                t=i)
 
-        if solve_d:
-            model.damage.timestep()
-        model.momentum.timestep()
+    if solve_d:
+        model.damage.timestep()
+    model.momentum.timestep()
 
-        i += 1
+    i += 1
 
-        model.params.dt.value *= 1.1
-    
+    model.params.dt.value *= 1.1
+
     
 
    

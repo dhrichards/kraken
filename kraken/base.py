@@ -93,8 +93,9 @@ class Simulation:
             error_prev = 100
 
             errors = []
-            
-            for i in range(max_its):
+             
+            i = 0
+            while i < max_its:
                 
                 if solve_damage:
                     self.damage.solve()
@@ -124,6 +125,17 @@ class Simulation:
                     print(f"iteration {i}, error {error_L2}, mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")
 
                 errors.append(error_L2)
+
+                if self.momentum.solver.getConvergedReason() == -3:
+                    self.params.dt.value /= 2
+                    self.revert()
+                    i = 0 
+                    if MPI.COMM_WORLD.rank == 0:
+                        print("Reverting and reducing timestep to ", self.params.dt.value/(24*60*60))
+                    continue
+                else:
+                    i += 1
+    
 
                 
 
