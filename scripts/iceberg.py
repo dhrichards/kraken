@@ -168,8 +168,7 @@ model.write_checkpoint(path + "/" + filename +".bp", t)
 
 
 
-i=1
-while i <= args.nt:
+for i in range(1,args.nt):
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
@@ -182,16 +181,6 @@ while i <= args.nt:
     
 
     errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
-
-    # if errors[-1] < 1e-16 and errors[-2] < 1e-16 and errors[-3] > 1e-3:
-    # # if i == 11: 
-    #     model.params.dt.value /= 2
-    #     model.revert()
-    #     if MPI.COMM_WORLD.rank == 0:
-    #         print("Reverting and reducing timestep to ", model.params.dt.value/(24*60*60))
-    
-    # else:
-        
 
 
     t += model.params.dt.value
@@ -209,9 +198,6 @@ while i <= args.nt:
     if solve_d:
         model.damage.timestep()
     model.momentum.timestep()
-
-    i += 1
-
     # model.params.dt.value *= 1.05
 
     
