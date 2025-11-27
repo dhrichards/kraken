@@ -126,22 +126,21 @@ class Simulation:
 
                 errors.append(error_L2)
 
-                if self.momentum.solver.getConvergedReason() == -3:
-                    self.params.dt.value /= 2
-                    self.revert()
-                    i = 0 
-                    if MPI.COMM_WORLD.rank == 0:
-                        print("Reverting and reducing timestep to ", self.params.dt.value/(24*60*60))
-                    continue
-                else:
-                    i += 1
+                # if self.momentum.solver.getConvergedReason() == -3:
+                #     self.params.dt.value /= 2
+                #     self.revert()
+                #     i = 0 
+                #     if MPI.COMM_WORLD.rank == 0:
+                #         print("Reverting and reducing timestep to ", self.params.dt.value/(24*60*60))
+                #     continue
+                # else:
+                i += 1
     
 
                 
 
-                if i>min_its-1:
-                    if (error_L2 < tol) and (error_L2 <= error_prev) and (error_prev < tol):
-                        break
+                if i >=min_its and (error_L2 < tol) and (error_L2 <= error_prev) and (error_prev < tol):
+                    break
                 
                 error_prev = error_L2
                 L2_old = L2

@@ -93,7 +93,7 @@ flotation_height = ρi/ρsw
 
 refineH = (2.0,0.2)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
-                                     aspect_ratios=(100,50), refine=refineH,
+                                     aspect_ratios=(100,1), refine=refineH,
                                      cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
 
@@ -176,7 +176,7 @@ while i <= args.nt:
 
 
     if i == 10 and args.type == "relaxation":
-        # solve_d = True
+        solve_d = True
         model.params.dt.value = args.dt*24*60*60
 
     
@@ -212,7 +212,7 @@ while i <= args.nt:
 
     i += 1
 
-    model.params.dt.value *= 1.1
+    # model.params.dt.value *= 1.05
 
     
 
