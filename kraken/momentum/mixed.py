@@ -85,7 +85,8 @@ class MixedDisplacement(Momentum):
 
         # self.gg = ufl.sqrt(ufl.inner(σD_prev, σD_prev)+1e-14)/ufl.sqrt(ufl.inner(σD0_prev, σD0_prev)+1e-14)
 
-        η = g*η0 + (1-g)*self.sim.params.gv_tol
+        # η = g*η0 + (1-g)*self.sim.params.gv_tol
+        η = ufl.max_value(g*η0, self.sim.params.gv_tol)
         # η = self.gg*η0
 
         # P = pt.projection_tensor(mf.εD(self.vel_prev_it))
