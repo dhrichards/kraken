@@ -42,7 +42,6 @@ class HigherOrder(Damage):
     def setup_weak_form(self):
         C3 = self.sim.params.C3; l = self.sim.params.lstar
         
-
         l0 = l/2
         c = 1-self.d
 

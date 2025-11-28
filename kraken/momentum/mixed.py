@@ -96,8 +96,6 @@ class MixedDisplacement(Momentum):
         # εD = g*εDplus + εDminus
 
         
-
-
         
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
