@@ -19,7 +19,7 @@ class TotalDisplacement(Momentum):
         super().__init__(sim)
 
         self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), 2, shape=(self.sim.msh.geometry.dim,))
-        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 2, shape=(2,2))
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(2,2))
         self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
 
         self.mixed_el = bufl.mixed_element([self.u_el, self.ε_el, self.p_el])
@@ -52,12 +52,10 @@ class TotalDisplacement(Momentum):
 
         
         
-        η = mf.viscosity(self.dε_v_prev_it/self.sim.params.dtstar, self.sim.params.n, 1.e-8)
+        η0 = mf.viscosity(mf.dev3(self.dε_v_prev_it)/self.sim.params.dtstar, self.sim.params.n, 1.e-14)
+        η = g*η0 + (1-g)*self.sim.params.gv_tol
 
-        σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
-        σplus = es.stress_plus_lo(self.ε_e, self.sim.params.ν)
-        σminus = σ0 - σplus
-        σ = g * σplus + σminus
+        σ = self.stress(self.ε_e)
 
         # self.ρ = mf.ice_density(self.sim.msh,self.sim.params.ρi/self.sim.params.ρw,350/self.sim.params.ρw,32.5/300)/self.area_ratio
         self.ρ = self.sim.params.ρistar/self.area_ratio
@@ -72,9 +70,9 @@ class TotalDisplacement(Momentum):
             + self.pw * ufl.inner(n, v) * ufl.ds \
         
         self.F += (
-                η*ufl.inner(self.dε_v/self.sim.params.dtstar, τ)\
+                η*ufl.inner(mf.dev3(self.dε_v)/self.sim.params.dtstar, τ)\
                 + ufl.inner(-self.p, ufl.tr(τ))  \
-            -    ufl.inner(σ0, τ)
+            -    ufl.inner(σ, τ)
              ) * ufl.dx
         
         self.F += (
@@ -91,7 +89,7 @@ class TotalDisplacement(Momentum):
     def solve(self):
         self.solver.solve(None, self.w.x.petsc_vec)
         # assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
-        # self.w.x.scatter_forward()
+        self.w.x.scatter_forward()
         self.w_prev_it.x.array[:] = self.w.x.array[:]
 
         
@@ -126,7 +124,6 @@ class SemiLagrangian(TotalDisplacement):
 
         self.du, self.dε_v, self.dp = ufl.split(self.w)
 
-        
         self.du_prev_it, self.dε_v_prev_it, self.dp_prev_it = ufl.split(self.w_prev_it)
         
         self.u = self.u_prev_time + self.du
@@ -160,3 +157,21 @@ class SemiLagrangian(TotalDisplacement):
 
 
 
+
+class SemiLagrangianEpsilon(SemiLagrangian):
+
+    def __init__(self, sim):
+        super().__init__(sim)
+
+        self.E = fem.functionspace(self.sim.msh, self.ε_el)
+
+        self.ε_e_prev_time = fem.Function(self.E, name="epsilon previous time")
+        self.ε_e = self.ε_e_prev_time + mf.ε(self.du) - self.dε_v
+        self.ε_e_prev_it = self.ε_e_prev_time + mf.ε(self.du_prev_it) - self.dε_v_prev_it
+
+    def timestep(self):
+        super().timestep()
+        self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
+        
+        
+    
