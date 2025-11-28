@@ -128,8 +128,8 @@ class Simulation:
 
                 errors.append(error_L2)
 
-                if self.momentum.solver.getConvergedReason() == -3:
-                    self.params.gv_tol.value *= 2
+                if self.momentum.solver.getConvergedReason() == -3 and self.params.gv_tol.value < 0.999e-3:
+                    self.params.gv_tol.value *= 10
                     self.revert()
                     i = 0 
                     if MPI.COMM_WORLD.rank == 0:
