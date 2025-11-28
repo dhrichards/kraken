@@ -35,6 +35,7 @@ class MixedDisplacement(Momentum):
         self.u_e_prev_time = self.u_prev_time - self.u_v_prev_time
 
         self.w_start = fem.Function(self.W, name="mixed function at start of iteration")
+        self.w_prev_it_start = fem.Function(self.W, name="mixed function previous iteration at start of iteration")
 
         self.w_prev_2 = fem.Function(self.W, name="mixed function 2 timesteps previous")
         self.u_prev_2, self.u_v_prev_2, self.p_prev_2 = ufl.split(self.w_prev_2)
@@ -238,13 +239,12 @@ class SemiLagrangian(MixedDisplacement):
         self.area = fem.assemble_vector(self.cell_area_form).array
         self.area_ratio.x.array[:] = self.area/self.area_0
 
-        # self.w_start.x.array[:] = self.w.x.array[:]
-        # self.w_prev_it_start.x.array[:] = self.w_prev_it.x.array[:]
+        self.w_start.x.array[:] = self.w.x.array[:]
+        self.w_prev_it_start.x.array[:] = self.w_prev_it.x.array[:]
 
     def revert(self):
-        self.w.x.array[:] = self.w_prev_time.x.array[:] - self.w_prev_2.x.array[:]
-        self.w.x.scatter_forward()
-        self.w_prev_it.x.array[:] = self.w.x.array[:]
+        self.w.x.array[:] = self.w_start.x.array[:]
+        self.w_prev_it.x.array[:] = self.w_prev_it_start.x.array[:]
 
         
         
