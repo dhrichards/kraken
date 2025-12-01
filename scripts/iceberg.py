@@ -93,7 +93,7 @@ flotation_height = ρi/ρsw
 
 refineH = (2.0,0.2)
 msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
-                                     aspect_ratios=(100,1), refine=refineH,
+                                     aspect_ratios=(100,10), refine=refineH,
                                      cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
 
@@ -166,7 +166,7 @@ else:
 t = 0.0
 model.write_checkpoint(path + "/" + filename +".bp", t)
 
-
+Gc_factors = [10.0, 5.0, 3.0, 2.0, 1.5, 1.0]
 
 for i in range(1,args.nt):
 
@@ -177,6 +177,11 @@ for i in range(1,args.nt):
     if i == 10 and args.type == "relaxation":
         solve_d = True
         model.params.dt.value = args.dt*24*60*60
+        for factor in Gc_factors:
+            model.params.Gc.value = args.Gc * factor
+            if MPI.COMM_WORLD.rank == 0:
+                print("Setting Gc to ", model.params.Gc.value)
+            model.fixed_point(min_its=min_its, tol=tol, max_its=100, solve_damage=solve_d)
 
     
 

@@ -32,10 +32,10 @@ def top_boundary(x):
 
 def all_boundaries(x):
     return left_boundary(x) + right_boundary(x) + bottom_boundary(x) + top_boundary(x)
-# def crack(x):
-#     x_c = nondim_length/2 - nondim_height
-#     l = params.lstar
-#     return (x[0]>(x_c-l/3))*(x[0]<(x_c+l/3))*(x[1]>0)
+def crack(x):
+    x_c = nondim_length/2 - 0.5*nondim_height
+    width = args.l / (L)
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<-0.5)
 
 def fixed(x):
     return (x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height))# + (x[1]<(0.1-0.9*refineH[1]))
@@ -58,15 +58,22 @@ aspect_ratio_x = int(25/l)
 nondim_length = true_length/L
 nondim_height = true_height/L
 
+ρi = 900
+ρw = 1000
 
 refineH = (2.5,0.2)
-msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L, 0.9,
-                                     aspect_ratios=(aspect_ratio_x,aspect_ratio_x), refine=refineH,
+msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L, ρi/ρw,
+                                     aspect_ratios=(aspect_ratio_x,1), refine=refineH,
                                      cell_factor=1)
+
+# add slope to mesh
+slope = 0
+msh.geometry.x[:,1] = msh.geometry.x[:,1]*(1- slope*msh.geometry.x[:,0])
 # msh.geometry.x[:,1] += 0.5
 
 no_bc = lambda V: []
 bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0),
+                  bc.internal_bc(V, crack, 1.0)
                 #   bc.get_zero_bc(V.sub(1), all_boundaries)
                   ]
 
@@ -78,9 +85,10 @@ if args.type == "degraded":
 else:
     elast = kr.momentum.elastic.Elasticity
 
-model = kr.base.Simulation(msh, [u_bc, bc_d],
+model = kr.base.Simulation(msh, 
                            elast,
-                           kr.damage.higherorder.HigherOrder)
+                           kr.damage.higherorder.HigherOrder,
+                            [u_bc, bc_d], level=0.00)
 
 # model = kr.models.elasticity.elastic_damage(msh, [u_bc,no_bc])
 
@@ -88,16 +96,13 @@ model.params.L.value = L
 model.params.l.value = l
 model.params.dt.value = 60*60*2
 model.params.patm.value = 0.0
-model.params.ρi.value = 900.0
-model.params.ρw.value = 1000.0
+model.params.ρi.value = ρi
+model.params.ρw.value = ρw
 model.params.g.value = 9.8
 
-if args.type == "nopsicrit":
-    model.params.ψcrit.value = 0.0
-    model.params.Gc.value = l
-else:
-    model.params.ψcrit.value = 1.625
-    model.params.Gc.value = 1.2
+
+model.params.ψcrit.value = 1.0
+model.params.Gc.value = 0.5
 
 # model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
 #                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
@@ -123,8 +128,9 @@ adios4dolfinx.write_mesh(filename, msh)
 adios4dolfinx.write_function(filename, model.momentum.u, name="u")
 adios4dolfinx.write_function(filename, model.damage.w, name="w")
 kr.utilities.write_xdmf("./outputs/elastictest.xdmf",
-                            msh, [model.momentum.u, model.damage.d],
-                            ["u", "d"])
+                            msh, [model.momentum.u, model.damage.d, 
+                                  model.free_energy_plus(model.momentum.ε_e, model.params.ν)],
+                            ["u", "d", "psi_plus"])
     # model.d_prev_time.x.array[:] = model.d.x.array[:]
 
 

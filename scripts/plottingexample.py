@@ -26,12 +26,8 @@ d = kr.plotting.dolfinx_to_array(msh,model.damage.d)
 
 ψp = kr.plotting.dolfinx_to_array(msh, ψplus)
 
-cty = kr.plotting.get_connectivity(msh)
+tess = kr.plotting.get_triangulation(msh)
 
-tess = tri.Triangulation(
-        msh.geometry.x[:,0], 
-        msh.geometry.x[:,1], 
-        triangles=cty)
 
 fig,ax = plt.subplots(1,1,figsize=(6,5))
 c = ax.tripcolor(tess, ψp, shading='gouraud', cmap='viridis')

@@ -3,6 +3,8 @@ import adios4dolfinx
 from mpi4py import MPI
 import numpy as np
 import basix.ufl as bufl
+from matplotlib import tri
+
 
 
 
@@ -34,11 +36,39 @@ def dolfinx_to_array(msh, f):
         raise NotImplementedError("Only scalar and vector functions are supported.")
             
 
-def get_connectivity(msh):
+def get_triangulation(msh):
     connty = msh.topology.connectivity(2, 0)
     connty_array = np.array([connty.links(i)
             for i in range(connty.num_nodes)])
     
-    return connty_array
+    return tri.Triangulation(
+            msh.geometry.x[:,0], 
+            msh.geometry.x[:,1], 
+            triangles=connty_array)
+    
+
+def get_outline(msh):
+    x,y = msh.geometry.x[:,0], msh.geometry.x[:,1]
+    
+    tess = get_triangulation(msh)
+    
+    edges = np.sort(np.vstack([
+        tess.triangles[:, [0, 1]],
+        tess.triangles[:, [1, 2]],
+        tess.triangles[:, [2, 0]],
+    ]), axis=1)
+
+    # Count occurrences of edges
+    unique_edges, counts = np.unique(edges, axis=0, return_counts=True)
+    boundary_edges = unique_edges[counts == 1]
+
+    # Build an array of NaN-separated segments
+    X = np.full((3 * len(boundary_edges),), np.nan)
+    Y = np.full((3 * len(boundary_edges),), np.nan)
+
+    for ii, e in enumerate(boundary_edges):
+        X[3*ii:3*ii+2] = x[e]
+        Y[3*ii:3*ii+2] = y[e]
+    return X, Y
 
 
