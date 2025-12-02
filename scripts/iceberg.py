@@ -180,7 +180,7 @@ else:
 t = 0.0
 model.write_checkpoint(path + "/" + filename +".bp", t)
 
-factors = [12,8,4,2,1]
+factors = [10,5,2.5,1.0]
 
 for i in range(1,args.nt):
 
@@ -193,9 +193,9 @@ for i in range(1,args.nt):
         model.params.dt.value = args.dt*24*60*60
         
         for factor in factors:
-            model.params.ψcrit.value = args.psicrit * factor
+            model.params.Gc.value = args.Gc * factor
             if MPI.COMM_WORLD.rank == 0:
-                print("Setting psicrit to ", model.params.ψcrit.value)
+                print("Setting Gc to ", model.params.Gc.value)
             model.fixed_point(min_its=3, tol=args.tol, max_its=50, solve_damage=solve_d)
         
     # if i == 11:
