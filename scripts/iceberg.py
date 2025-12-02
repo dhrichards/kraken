@@ -69,17 +69,17 @@ def right_boundary(x):
 def bottom_boundary(x):
     return np.isclose(x[1], -flotation_height)
 
-def crack(x):
-    x_c = nondim_length/2 - args.crack_x*nondim_height
+# def crack(x):
+#     x_c = nondim_length/2 - args.crack_x*nondim_height
+#     width = args.l/args.cellfactor / args.height
+#     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<-0.85)
+
+def crack(x,x_c):
     width = args.l/args.cellfactor / args.height
-    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<-0.85)
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>0.07)
 
 def fixed(x):
     return (x[0]<(nondim_length/2 - args.refine_x*0.98*nondim_height))# + (x[0]>(nondim_length/2 - nondim_height/2))
-
-
-
-
 
 
 
@@ -103,9 +103,12 @@ msh = kr.utilities.create_refined_mesh(args.length/args.height, 1.0, args.l/args
 # msh = kr.utilities.create_iceberg_gmsh_mesh(l/(args.cellfactor*L), [2.5, 0.4, 0.15], true_length/(2*L), ρi/ρsw)
 
 
+
+
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
-                #   bc.internal_bc(V, crack, 1.0)
+                #   bc.internal_bc(V, cracks, 1.0)
                   ]
+
 
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
@@ -147,7 +150,18 @@ model.params.gv_tol.value = args.gv_tol
 
 #%%
 model.setup()
-# model.damage.solve()
+
+# crack_spacing = 0.1
+# crack_start = 0.2
+# crack_end = 1.8
+# crack_x_cs = nondim_length/2 - np.arange(crack_start, crack_end, crack_spacing)
+# def cracks(x):
+#     val = np.zeros(x.shape[1],dtype=bool)
+#     for x_c in crack_x_cs:
+#         val += crack(x,x_c)
+#     return val
+# model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
+
 
 
 
@@ -166,7 +180,7 @@ else:
 t = 0.0
 model.write_checkpoint(path + "/" + filename +".bp", t)
 
-Gc_factors = [8,2,1]
+factors = [12,8,4,2,1]
 
 for i in range(1,args.nt):
 
@@ -177,12 +191,12 @@ for i in range(1,args.nt):
     if i == 11 and args.type == "relaxation":
         solve_d = True
         model.params.dt.value = args.dt*24*60*60
-
-        for factor in Gc_factors:
-            model.params.Gc.value = args.Gc * factor
+        
+        for factor in factors:
+            model.params.ψcrit.value = args.psicrit * factor
             if MPI.COMM_WORLD.rank == 0:
-                print("Setting Gc to ", model.params.Gc.value)
-            model.fixed_point(min_its=2, tol=args.tol, max_its=10, solve_damage=solve_d)
+                print("Setting psicrit to ", model.params.ψcrit.value)
+            model.fixed_point(min_its=3, tol=args.tol, max_its=50, solve_damage=solve_d)
         
     # if i == 11:
     #     for factor in Gc_factors2:
@@ -190,8 +204,9 @@ for i in range(1,args.nt):
     #         if MPI.COMM_WORLD.rank == 0:
     #             print("Setting Gc to ", model.params.Gc.value)
     
-
+    
     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
+    
     # while flag == -1:
     #     model.params.Gc.value *= 2
     #     if MPI.COMM_WORLD.rank == 0:
