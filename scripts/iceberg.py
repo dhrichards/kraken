@@ -16,22 +16,32 @@ parser.add_argument("--level", type=float, default=0.00, help="Water level in cr
 parser.add_argument("--split", type=str, default="lo", help="Energy split to use")
 parser.add_argument("--l", type=float, default=2, help="Regularization length scale in meters")
 parser.add_argument("--dt", type=float, default=3, help="Time step in days")
-parser.add_argument("--cellfactor", type=float, default=2, help="Mesh cell size factor")
+parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
 parser.add_argument("--psicrit", type=float, default=1.0, help="Critical energy threshold")
 parser.add_argument("--height", type=float, default=300, help="Height of iceberg in meters")
-parser.add_argument("--Gc", type=float, default=1.0, help="Gc")
+parser.add_argument("--Gc", type=float, default=0.5, help="Gc")
 parser.add_argument("--type", type=str, default="relaxation", help="gravity loop initilisation or relaxation first")
 parser.add_argument("--damagemodel", type=str, default="AT2higher", help="damage model to use")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
-parser.add_argument("--gv_tol", type=float, default=1e-5, help="tolerance for viscous degradation")
-parser.add_argument("--nt", type=int, default=50, help="number of timesteps")
+parser.add_argument("--gv_tol", type=float, default=1e-3, help="tolerance for viscous degradation")
+parser.add_argument("--nt", type=int, default=200, help="number of timesteps")
 parser.add_argument("--crack_x", type=float, default=0.5, help="x position of crack center from end (non dimensional)")
+parser.add_argument("--rhoi", type=float, default=900, help="ice density")
+parser.add_argument("--rhow", type=float, default=1000, help="water density")
+parser.add_argument("--arz", type=float, default=1, help="aspect ratio in z direction")
+parser.add_argument("--T", type=float, default=-10, help="Temperature in Celsius")
+parser.add_argument("--refine_x", type=float, default=2.0, help="refinement in x direction near crack")
+parser.add_argument("--refine_z", type=float, default=0.2, help="refinement in z direction near crack")
+parser.add_argument("--length", type=float, default=16000, help="Length of iceberg in meters")
+parser.add_argument("--tol", type=float, default=1e-6, help="Solver tolerance")
+parser.add_argument("--min_its", type=int, default=3, help="Minimum number of solver iterations")
+parser.add_argument("--max_its", type=int, default=500, help="Maximum number of solver iterations")
+
 
 args = parser.parse_args()
-level = args.level
-split = args.split
 
-filename = args.type + "_" + args.split + "_level" + str(level) + "height" + str(args.height) +"Gc" + str(args.Gc)\
+
+filename = args.type + "_" + args.split + "_level" + str(args.level) + "height" + str(args.height) +"Gc" + str(args.Gc)\
                      +"dt" + str(args.dt) + "psicrit" + str(args.psicrit)\
                         + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)\
                             + "gv_tol" + str(-np.log10(args.gv_tol)) + \
@@ -40,8 +50,8 @@ filename = args.type + "_" + args.split + "_level" + str(level) + "height" + str
 
 
 if MPI.COMM_WORLD.rank == 0:
-    print("Level: ", level)
-    print("Split: ", split)
+    print("Level: ", args.level)
+    print("Split: ", args.split)
     print("Regularization length scale (m): ", args.l)
     print("Time step (days): ", args.dt)
     print("Mesh cell size factor: ", args.cellfactor)
@@ -61,39 +71,32 @@ def bottom_boundary(x):
 
 def crack(x):
     x_c = nondim_length/2 - args.crack_x*nondim_height
-    width = args.l/args.cellfactor / (L)
+    width = args.l/args.cellfactor / args.height
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<-0.85)
 
 def fixed(x):
-    return (x[0]<(nondim_length/2 - refineH[0]*0.98*nondim_height))# + (x[0]>(nondim_length/2 - nondim_height/2))
+    return (x[0]<(nondim_length/2 - args.refine_x*0.98*nondim_height))# + (x[0]>(nondim_length/2 - nondim_height/2))
 
 
 
-true_length = 16e3
-true_height = args.height
-
-L = true_height
-l = args.l
-ρi = 900
-ρf = 350
-ρsw = 1000
-D = 32.5
 
 
-# path = '/data/hpcdata/users/dancha/outputs'
+
+
 path = './outputs'
 os.makedirs(path, exist_ok=True)
 
 
-nondim_length = true_length/L
-nondim_height = true_height/L
+nondim_length = args.length/args.height
+nondim_height = 1.0
 
-# flotation_height = mf.flotation_height(ρi/ρsw,ρf/ρsw,D/L)
-flotation_height = ρi/ρsw
+flotation_height = args.rhoi/args.rhow
 
-refineH = (2.0,0.2)
-msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, flotation_height,
-                                     aspect_ratios=(100,10), refine=refineH,
+
+aspect_ratio_x = int(300/args.l)
+
+msh = kr.utilities.create_refined_mesh(args.length/args.height, 1.0, args.l/args.height, flotation_height,
+                                     aspect_ratios=(aspect_ratio_x,args.arz), refine=(args.refine_x,args.refine_z),
                                      cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
 
@@ -106,7 +109,7 @@ d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
 
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                        bc.get_zero_bc(V.sub(1), left_boundary)
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
                         ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
@@ -126,16 +129,16 @@ elif args.damagemodel == "AT2higher_bounded":
 model = kr.base.Simulation(msh,
                            kr.momentum.mixed.SemiLagrangianEpsilon,
                            damage_model, [u_bc, d_bc], 
-                           level=level, split=split)
+                           level=args.level, split=args.split)
 
 
 # model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
-model.T = -10.0
-model.params.L.value = L
+model.T = args.T
+model.params.L.value = args.height
 model.params.l.value = args.l
 model.params.dt.value = args.dt*24*60*60
-model.params.ρi.value = ρi
-model.params.ρw.value = ρsw
+model.params.ρi.value = args.rhoi
+model.params.ρw.value = args.rhow
 model.params.ψcrit.value = args.psicrit
 model.params.Gc.value = args.Gc
 model.params.patm.value = 0.0
@@ -151,10 +154,7 @@ model.setup()
 if MPI.COMM_WORLD.rank == 0:
     print(path + "/" + filename)
 
-from dolfinx import fem
-import ufl
-min_its = 3
-tol = 1e-5
+
 if args.type == "relaxation":
     solve_d = False
     model.params.dt.value = 10*24*60*60
@@ -166,7 +166,7 @@ else:
 t = 0.0
 model.write_checkpoint(path + "/" + filename +".bp", t)
 
-Gc_factors = [10.0, 5.0, 3.0, 2.0, 1.5, 1.0]
+Gc_factors = [8,2,1]
 
 for i in range(1,args.nt):
 
@@ -174,18 +174,37 @@ for i in range(1,args.nt):
         print("Iteration: ", i)
 
 
-    if i == 10 and args.type == "relaxation":
+    if i == 11 and args.type == "relaxation":
         solve_d = True
         model.params.dt.value = args.dt*24*60*60
+
         for factor in Gc_factors:
             model.params.Gc.value = args.Gc * factor
             if MPI.COMM_WORLD.rank == 0:
                 print("Setting Gc to ", model.params.Gc.value)
-            model.fixed_point(min_its=min_its, tol=tol, max_its=100, solve_damage=solve_d)
-
+            model.fixed_point(min_its=2, tol=args.tol, max_its=10, solve_damage=solve_d)
+        
+    # if i == 11:
+    #     for factor in Gc_factors2:
+    #         model.params.Gc.value = args.Gc * factor
+    #         if MPI.COMM_WORLD.rank == 0:
+    #             print("Setting Gc to ", model.params.Gc.value)
     
 
-    errors = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
+    flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
+    # while flag == -1:
+    #     model.params.Gc.value *= 2
+    #     if MPI.COMM_WORLD.rank == 0:
+    #         print("Reverting and setting Gc to ", model.params.Gc.value)
+    #     model.revert()
+    #     flag = model.fixed_point(min_its=min_its, tol=tol, max_its=200, solve_damage=solve_d)
+    
+    # while model.params.Gc.value > args.Gc:
+    #     model.params.Gc.value /= 2
+    #     if MPI.COMM_WORLD.rank == 0:
+    #         print("Reducing Gc to ", model.params.Gc.value)
+    #     flag = model.fixed_point(min_its=min_its, tol=tol, max_its=500, solve_damage=solve_d)
+        
 
 
     t += model.params.dt.value
@@ -194,9 +213,11 @@ for i in range(1,args.nt):
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                     model.momentum.u_e, model.momentum.u_v,
+                                    model.free_energy_plus(model.momentum.ε_e, model.params.ν),
                                     ],
                                     ["u","d",
                                     "ue","uv",
+                                    "psi_plus",
                                     ],
                                 t=i)
 
