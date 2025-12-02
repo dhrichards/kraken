@@ -180,7 +180,7 @@ else:
 t = 0.0
 model.write_checkpoint(path + "/" + filename +".bp", t)
 
-factors = [10,5,2.5,1.0]
+factors = [40,20,10,5,2.5,1.0]
 
 for i in range(1,args.nt):
 
