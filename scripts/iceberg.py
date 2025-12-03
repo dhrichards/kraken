@@ -162,7 +162,7 @@ model.params.gv_tol.value = args.gv_tol
 model.setup()
 
 crack_spacing = 0.1
-crack_start = 0.1
+crack_start = 0.15
 crack_end = args.refine_x - 0.2
 crack_x_cs = nondim_length/2 - np.arange(crack_start, crack_end, crack_spacing)
 def cracks(x):
@@ -170,7 +170,6 @@ def cracks(x):
     for x_c in crack_x_cs:
         val += crack(x,x_c)
     return val
-model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
 
 
 
@@ -190,7 +189,8 @@ else:
 t = 0.0
 model.write_checkpoint(path + "/" + filename +".bp", t)
 
-factors = [40,20,10,5,2.5,1.0]
+# factors = [40,20,10,5,2.5,1.0]
+heights =[300,400,500,600]
 
 for i in range(1,args.nt):
 
@@ -199,14 +199,24 @@ for i in range(1,args.nt):
 
 
     if i == 11 and args.type == "relaxation":
+        model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
+        model.fixed_point(min_its=3, tol=1e-6, max_its=100, solve_damage=False)
         solve_d = True
         model.params.dt.value = args.dt*24*60*60
+        
+
         
         # for factor in factors:
         #     model.params.Gc.value = args.Gc * factor
         #     if MPI.COMM_WORLD.rank == 0:
         #         print("Setting Gc to ", model.params.Gc.value)
         #     model.fixed_point(min_its=3, tol=args.tol, max_its=50, solve_damage=solve_d)
+        # for height in heights:
+        #     model.params.L.value = height
+        #     model.params.l.value = args.l * (height/args.height)
+        #     if MPI.COMM_WORLD.rank == 0:
+        #         print("Setting height to ", model.params.L.value)
+        #     model.fixed_point(min_its=3, tol=1e-5, max_its=50, solve_damage=solve_d)
 
     
     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
