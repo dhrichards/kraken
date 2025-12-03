@@ -151,16 +151,16 @@ model.params.gv_tol.value = args.gv_tol
 #%%
 model.setup()
 
-# crack_spacing = 0.1
-# crack_start = 0.2
-# crack_end = 1.8
-# crack_x_cs = nondim_length/2 - np.arange(crack_start, crack_end, crack_spacing)
-# def cracks(x):
-#     val = np.zeros(x.shape[1],dtype=bool)
-#     for x_c in crack_x_cs:
-#         val += crack(x,x_c)
-#     return val
-# model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
+crack_spacing = 0.1
+crack_start = 0.2
+crack_end = 1.8
+crack_x_cs = nondim_length/2 - np.arange(crack_start, crack_end, crack_spacing)
+def cracks(x):
+    val = np.zeros(x.shape[1],dtype=bool)
+    for x_c in crack_x_cs:
+        val += crack(x,x_c)
+    return val
+model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
 
 
 
@@ -192,18 +192,12 @@ for i in range(1,args.nt):
         solve_d = True
         model.params.dt.value = args.dt*24*60*60
         
-        for factor in factors:
-            model.params.Gc.value = args.Gc * factor
-            if MPI.COMM_WORLD.rank == 0:
-                print("Setting Gc to ", model.params.Gc.value)
-            model.fixed_point(min_its=3, tol=args.tol, max_its=50, solve_damage=solve_d)
-        
-    # if i == 11:
-    #     for factor in Gc_factors2:
-    #         model.params.Gc.value = args.Gc * factor
-    #         if MPI.COMM_WORLD.rank == 0:
-    #             print("Setting Gc to ", model.params.Gc.value)
-    
+        # for factor in factors:
+        #     model.params.Gc.value = args.Gc * factor
+        #     if MPI.COMM_WORLD.rank == 0:
+        #         print("Setting Gc to ", model.params.Gc.value)
+        #     model.fixed_point(min_its=3, tol=args.tol, max_its=50, solve_damage=solve_d)
+
     
     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
     
