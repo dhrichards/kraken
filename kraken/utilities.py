@@ -190,57 +190,57 @@ def extract_line(points,msh,functions):
 
 
 
-# def create_refined_mesh(nondim_length, nondim_height, 
-#                         lstar,Hw,
-#                         aspect_ratios=(100,100), refine = (2.2,0.3),
-#                         cell_factor=2.1, refine_right=True, cell_type = mesh.CellType.triangle):
+def create_refined_mesh(nondim_length, nondim_height, 
+                        lstar,Hw,
+                        aspect_ratios=(100,100), refine = (2.2,0.3),
+                        cell_factor=2.1, refine_right=True, cell_type = mesh.CellType.triangle):
     
    
 
-#     cell_size = lstar/cell_factor
+    cell_size = lstar/cell_factor
 
-#     aspect_ratio_x = aspect_ratios[0]
-#     aspect_ratio_z = aspect_ratios[1]
+    aspect_ratio_x = aspect_ratios[0]
+    aspect_ratio_z = aspect_ratios[1]
 
 
 
-#     x_change = nondim_length/2 - refine[0]
-#     z_change = nondim_height - refine[1]
+    x_change = nondim_length/2 - refine[0]
+    z_change = nondim_height - refine[1]
 
-#     if refine_right:
-#         new_length = x_change/aspect_ratio_x + (nondim_length/2 - x_change)
-#     else:
-#         new_length = x_change + (nondim_length/2 - x_change)/aspect_ratio_x
+    if refine_right:
+        new_length = x_change/aspect_ratio_x + (nondim_length/2 - x_change)
+    else:
+        new_length = x_change + (nondim_length/2 - x_change)/aspect_ratio_x
 
-#     new_height = z_change/aspect_ratio_z + (nondim_height - z_change)
+    new_height = z_change/aspect_ratio_z + (nondim_height - z_change)
 
-#     nx = int(new_length/cell_size)
-#     nz = int(new_height/cell_size)
+    nx = int(new_length/cell_size)
+    nz = int(new_height/cell_size)
 
-#     msh = mesh.create_rectangle(MPI.COMM_WORLD,
-#                                 [np.array([0, 0]), np.array([new_length, new_height])],
-#                                 [nx,nz], cell_type)
+    msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                                [np.array([0, 0]), np.array([new_length, new_height])],
+                                [nx,nz], cell_type)
     
     
-#     x = msh.geometry.x[:,0]
+    x = msh.geometry.x[:,0]
 
-#     if refine_right:
-#         x[x>x_change/aspect_ratio_x] = x_change + x[x>x_change/aspect_ratio_x] - x_change/aspect_ratio_x
-#         x[x<=x_change/aspect_ratio_x] = x[x<=x_change/aspect_ratio_x]*aspect_ratio_x
-#     else:
-#         x[x>x_change] = x_change + (x[x>x_change] - x_change)*aspect_ratio_x
+    if refine_right:
+        x[x>x_change/aspect_ratio_x] = x_change + x[x>x_change/aspect_ratio_x] - x_change/aspect_ratio_x
+        x[x<=x_change/aspect_ratio_x] = x[x<=x_change/aspect_ratio_x]*aspect_ratio_x
+    else:
+        x[x>x_change] = x_change + (x[x>x_change] - x_change)*aspect_ratio_x
 
 
 
-#     msh.geometry.x[:,0] = x
+    msh.geometry.x[:,0] = x
 
-#     z = msh.geometry.x[:,1]
-#     z[z>z_change/aspect_ratio_z] = z_change + z[z>z_change/aspect_ratio_z] - z_change/aspect_ratio_z
-#     z[z<=z_change/aspect_ratio_z] = z[z<=z_change/aspect_ratio_z]*aspect_ratio_z
+    z = msh.geometry.x[:,1]
+    z[z>z_change/aspect_ratio_z] = z_change + z[z>z_change/aspect_ratio_z] - z_change/aspect_ratio_z
+    z[z<=z_change/aspect_ratio_z] = z[z<=z_change/aspect_ratio_z]*aspect_ratio_z
 
-#     msh.geometry.x[:,1] = z - Hw
+    msh.geometry.x[:,1] = z - Hw
 
-#     return msh
+    return msh
 
 
 
