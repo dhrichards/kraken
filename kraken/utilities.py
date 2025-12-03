@@ -1,7 +1,7 @@
 import numpy as np
 from dolfinx import fem, io, plot, geometry, mesh
 from mpi4py import MPI
-# import gmsh
+import gmsh
 
 
 def move_mesh(msh,uh,k=1.0):
