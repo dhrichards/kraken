@@ -36,7 +36,7 @@ parser.add_argument("--length", type=float, default=16000, help="Length of icebe
 parser.add_argument("--tol", type=float, default=1e-6, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=3, help="Minimum number of solver iterations")
 parser.add_argument("--max_its", type=int, default=500, help="Maximum number of solver iterations")
-
+parser.add_argument("--meshtype", type=str, default="refined", help="Type of mesh to use: gmsh or refined")
 
 args = parser.parse_args()
 
@@ -95,12 +95,22 @@ flotation_height = args.rhoi/args.rhow
 
 aspect_ratio_x = int(300/args.l)
 
-msh = kr.utilities.create_refined_mesh(args.length/args.height, 1.0, args.l/args.height, flotation_height,
-                                     aspect_ratios=(aspect_ratio_x,args.arz), refine=(args.refine_x,args.refine_z),
-                                     cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
+if args.meshtype == "refined":
+    msh = kr.utilities.create_refined_mesh(
+        args.length/args.height, 1.0, 
+        args.l/args.height, flotation_height,
+        aspect_ratios=(aspect_ratio_x,args.arz), 
+        refine=(args.refine_x,args.refine_z),
+        cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
 
-# msh = kr.utilities.create_iceberg_gmsh_mesh(l/(args.cellfactor*L), [2.5, 0.4, 0.15], true_length/(2*L), ρi/ρsw)
+elif args.meshtype == "gmsh":
+    msh = kr.utilities.create_iceberg_gmsh_mesh(
+    args.l/(args.cellfactor*args.height), 
+    [args.refine_x, 0.25, args.refine_z], 
+    args.length/(2*args.height), 
+    args.rhoi/args.rhow
+    )
 
 
 
@@ -152,8 +162,8 @@ model.params.gv_tol.value = args.gv_tol
 model.setup()
 
 crack_spacing = 0.1
-crack_start = 0.2
-crack_end = 1.8
+crack_start = 0.1
+crack_end = args.refine_x - 0.2
 crack_x_cs = nondim_length/2 - np.arange(crack_start, crack_end, crack_spacing)
 def cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
