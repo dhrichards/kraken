@@ -5,6 +5,7 @@ from petsc4py import PETSc
 from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
+import adios4dolfinx
 
 class Damage:
     def __init__(self, sim):
@@ -59,6 +60,11 @@ class Damage:
                                 self.sim.params.ν, self.sim.params.ψcritstar,
                                 self.sim.free_energy_plus)
         self.Hprev.interpolate(fem.Expression(self.H_func, self.H_space.element.interpolation_points()))
+
+    def write_checkpoint(self, filename, t=0):
+        adios4dolfinx.write_function(filename, self.w, name = "w_damage",time = t)
+        adios4dolfinx.write_function(filename, self.Hprev, name = "Hprev_damage", time = t)
+
 
 
 

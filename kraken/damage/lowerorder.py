@@ -1,3 +1,4 @@
+import adios4dolfinx
 from .base import Damage
 import basix.ufl as bufl
 import ufl
@@ -32,6 +33,8 @@ class LowerOrder(Damage):
 
     def solve(self):
         self.solver.solve(None, self.d.x.petsc_vec)
+
+   
 
 
 
@@ -130,6 +133,11 @@ class Bounded(LowerOrder):
     def timestep(self):
         # Update the history variable
         self.d_prev_time.x.array[:] = self.d.x.array[:]
+
+
+    def write_checkpoint(self, filename, t=0):
+        adios4dolfinx.write_function(filename, self.w, name = "w_damage",time = t)
+        
 
 
 class PressurisedCrack(Bounded):
