@@ -157,6 +157,14 @@ model.params.Gc.value = args.Gc
 model.params.patm.value = 0.0
 model.params.gv_tol.value = args.gv_tol
 
+x = ufl.SpatialCoordinate(msh)
+z = x[msh.geometry.dim-1]
+δ = 1 - args.rhoi/args.rhow
+z = z - δ
+ψcrit_top = args.psicrit
+ψcrit_bottom = 0.1
+model.params.ψcrit = -(ψcrit_bottom - ψcrit_top)*z + ψcrit_top
+
 
 #%%
 model.setup()
@@ -199,8 +207,8 @@ for i in range(1,args.nt):
 
 
     if i == 11 and args.type == "relaxation":
-        model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
-        model.fixed_point(min_its=3, tol=1e-6, max_its=100, solve_damage=False)
+        # model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
+        # model.fixed_point(min_its=3, tol=1e-6, max_its=100, solve_damage=False)
         solve_d = True
         model.params.dt.value = args.dt*24*60*60
         
