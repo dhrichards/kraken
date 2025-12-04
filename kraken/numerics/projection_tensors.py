@@ -17,17 +17,15 @@ def degraded_scalar(f, f_prev, g):
     return g*fplus + fminus
 
 
-def degraded_stress(ε,ε_prev,g,ν):
+def stress_plus(ε,ε_prev,ν):
     λoverμ = 2*ν/(1-2*ν)
     D = ufl.shape(ε)[0]
     I = ufl.Identity(D)
     i,j,k,l = ufl.indices(4)
-    σ = λoverμ*ufl.tr(ε)*I + 2*ε
     P = projection_tensor(ε_prev)
     σplus = λoverμ*heaviside(ufl.tr(ε_prev))*ufl.tr(ε)*I + \
         2*ufl.as_tensor(P[i,j,k,l]*ε[k,l],(i,j))
-    σminus = σ - σplus
-    return g*σplus + σminus
+    return σplus   
 
 
 def degraded_stress_jakub(u, u_prev, g, ν):

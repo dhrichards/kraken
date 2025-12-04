@@ -1,3 +1,4 @@
+import adios4dolfinx
 from .base import Momentum
 import numpy as np
 from dolfinx import fem
@@ -65,6 +66,8 @@ class MixedDisplacement(Momentum):
         
         
         σ = self.stress(self.ε_e)
+
+        
         
         # σD0 = 2*mf.dev3(self.ε_e_prev_it)
         # η = mf.viscosity_stress(σD0, self.sim.params.n, 1.e-14, A=A)
@@ -121,7 +124,7 @@ class MixedDisplacement(Momentum):
        
        
         self.F += (
-                - ufl.inner(ufl.div(self.vel), q) \
+                - ufl.inner(ufl.div(self.du), q) \
                 # - (self.p-self.p_prev_time)*q/self.sim.params.dtstar
                 ) * ufl.dx 
         
@@ -235,8 +238,8 @@ class SemiLagrangian(MixedDisplacement):
         self.w_prev_2.x.array[:] = self.w_prev_time.x.array[:]
         self.w_prev_time.x.array[:] += self.w.x.array[:]
 
-        self.area = fem.assemble_vector(self.cell_area_form).array
-        self.area_ratio.x.array[:] = self.area/self.area_0
+        # self.area = fem.assemble_vector(self.cell_area_form).array
+        # self.area_ratio.x.array[:] = self.area/self.area_0
 
         self.w_start.x.array[:] = self.w.x.array[:]
         self.w_prev_it_start.x.array[:] = self.w_prev_it.x.array[:]
@@ -259,13 +262,18 @@ class SemiLagrangianEpsilon(SemiLagrangian):
         self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(self.sim.msh.geometry.dim, self.sim.msh.geometry.dim))
         self.E = fem.functionspace(self.sim.msh, self.ε_el)
 
-        self.ε_e_prev_time = fem.Function(self.E, name="epsilon previous time")
+        self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
         self.ε_e = mf.ε(self.du_e) + self.ε_e_prev_time
         self.ε_e_prev_it = mf.ε(self.du_e_prev_it) + self.ε_e_prev_time
 
     def timestep(self):
-        super().timestep()
         self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
+
+        super().timestep()
+        
+    def write_checkpoint(self, filename, t=0):
+        super().write_checkpoint(filename, t)
+        adios4dolfinx.write_function(filename, self.ε_e_prev_time, name="epsiloneprevtime", time=t)
         
         
     

@@ -7,9 +7,10 @@ def viscosity(ε, n, eps=1.e-11, A=1.0):
     εe2 = ufl.inner(ε, ε) / 2 + eps
     return  A**(-1/n) * εe2**((1 - n) / (2 * n))
 
-def viscosity_stress(σD, n, eps=1.e-11, A=1.0):
-    τe2 = ufl.inner(σD, σD) / 2 + eps
-    return A**(-1)* τe2**((1 - n) / 2)
+def viscosity_stress(σ, n, eps=1.e-14, A=1.0):
+    σD = dev3(σ)
+    σDe2 = ufl.inner(σD, σD) / 2 + eps
+    return A**(-1)* σDe2**((1 - n) / 2)
 
 
 def viscous_energy(ε, n):

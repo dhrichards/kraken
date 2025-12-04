@@ -204,6 +204,7 @@ def stress_plus_lo(ε,ν):
                            ufl.conditional(ufl.gt((1-ν)*λ[1] + ν*λ[0],0),
                                            stress2,0*ufl.Identity(2)))
 
+
 def stress_plus_lo_3d(ε,ν):
     κ = Koverμ(ν)
     E = 2*(1+ν)

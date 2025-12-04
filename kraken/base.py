@@ -1,6 +1,7 @@
 from kraken import parameters, utilities
 from kraken.numerics import energy_splits as es
 from kraken.numerics import maths_functions as mf
+from kraken.numerics import projection_tensors as pt
 from dolfinx import fem
 import ufl
 from mpi4py import MPI
@@ -128,15 +129,18 @@ class Simulation:
 
                 errors.append(error_L2)
 
-                if self.momentum.solver.getConvergedReason() == -3 and self.params.gv_tol.value < 0.999e-3:
-                    self.params.gv_tol.value *= 10
-                    self.revert()
-                    i = 0 
-                    if MPI.COMM_WORLD.rank == 0:
-                        print("Reverting and setting gv_tol to ", self.params.gv_tol.value)
-                    continue
-                else:
-                    i += 1
+                if self.momentum.solver.getConvergedReason() == -3: #and self.params.gv_tol.value < 0.999e-3:
+                    # return with a flag to tell the caller to do something
+                    return -1
+
+                    # self.params.gv_tol.value *= 10
+                    # self.revert()
+                    # i = 0 
+                    # if MPI.COMM_WORLD.rank == 0:
+                    #     print("Reverting and setting gv_tol to ", self.params.gv_tol.value)
+                    # continue
+                # else:
+                i += 1
     
 
                 
@@ -147,7 +151,7 @@ class Simulation:
                 error_prev = error_L2
                 L2_old = L2
             
-            return errors
+            return 1
 
 
 
