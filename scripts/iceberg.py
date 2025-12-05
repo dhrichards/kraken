@@ -235,7 +235,7 @@ for i in range(1,args.nt):
     
     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
     
-    while flag == -1 and model.params.gv_tol.value < 1.1:
+    while flag == -1 and model.params.gv_tol.value < args.gv_tol*1.1e3:
         model.params.gv_tol.value *= 10
         if MPI.COMM_WORLD.rank == 0:
             print("Reverting and setting gv_tol to ", model.params.gv_tol.value)
@@ -260,7 +260,7 @@ for i in range(1,args.nt):
                                     ],
                                 t=i)
     
-
+    # if still not converged after gv_tol increases, end
     if flag == -1:
         break
 
