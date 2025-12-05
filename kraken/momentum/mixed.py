@@ -87,8 +87,9 @@ class MixedDisplacement(Momentum):
         # σD0_prev = mf.dev3(σ0_prev)
 
         # self.gg = ufl.sqrt(ufl.inner(σD_prev, σD_prev)+1e-14)/ufl.sqrt(ufl.inner(σD0_prev, σD0_prev)+1e-14)
+        g_v = ufl.conditional(self.sim.damage.d > 0.98, 0.00, 1.0)
 
-        η = g*η0 + (1-g)*self.sim.params.gv_tol
+        η = g_v*η0 + (1-g_v)*self.sim.params.gv_tol
        
         # η = self.gg*η0
 
@@ -124,7 +125,7 @@ class MixedDisplacement(Momentum):
        
        
         self.F += (
-                - ufl.inner(ufl.div(self.du), q) \
+                - ufl.inner(ufl.div(self.vel), q) \
                 # - (self.p-self.p_prev_time)*q/self.sim.params.dtstar
                 ) * ufl.dx 
         
@@ -238,8 +239,8 @@ class SemiLagrangian(MixedDisplacement):
         self.w_prev_2.x.array[:] = self.w_prev_time.x.array[:]
         self.w_prev_time.x.array[:] += self.w.x.array[:]
 
-        # self.area = fem.assemble_vector(self.cell_area_form).array
-        # self.area_ratio.x.array[:] = self.area/self.area_0
+        self.area = fem.assemble_vector(self.cell_area_form).array
+        self.area_ratio.x.array[:] = self.area/self.area_0
 
         self.w_start.x.array[:] = self.w.x.array[:]
         self.w_prev_it_start.x.array[:] = self.w_prev_it.x.array[:]

@@ -145,7 +145,7 @@ model = kr.base.Simulation(msh,
                            level=args.level, split=args.split)
 
 
-# model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
+# model.T = mf.temperature(msh,args.rhoi/args.rhow,-30,-2)
 model.T = args.T
 model.params.L.value = args.height
 model.params.l.value = args.l
@@ -161,9 +161,9 @@ x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
 δ = 1 - args.rhoi/args.rhow
 z = z - δ
-ψcrit_top = args.psicrit
-ψcrit_bottom = 0.1
-model.params.ψcrit = -(ψcrit_bottom - ψcrit_top)*z + ψcrit_top
+# ψcrit_top = args.psicrit
+# ψcrit_bottom = 0.1
+# model.params.ψcrit = -(ψcrit_bottom - ψcrit_top)*z + ψcrit_top
 
 
 #%%
@@ -185,12 +185,14 @@ def cracks(x):
 if MPI.COMM_WORLD.rank == 0:
     print(path + "/" + filename)
 
-
+solve_d = False
 if args.type == "relaxation":
-    solve_d = False
-    model.params.dt.value = 10*24*60*60
+    i_start = 51
+    model.params.dt.value = 50*24*60*60
+    
 else:
-    solve_d = True
+    i_start = 1
+    
 
 
 
@@ -206,7 +208,7 @@ for i in range(1,args.nt):
         print("Iteration: ", i)
 
 
-    if i == 11 and args.type == "relaxation":
+    if i == i_start:
         # model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
         # model.fixed_point(min_its=3, tol=1e-6, max_its=100, solve_damage=False)
         solve_d = True
@@ -229,18 +231,18 @@ for i in range(1,args.nt):
     
     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
     
-    while flag == -1:
-        model.params.Gc.value *= 2
-        if MPI.COMM_WORLD.rank == 0:
-            print("Reverting and setting Gc to ", model.params.Gc.value)
-        model.revert()
-        flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
+    # while flag == -1:
+    #     model.params.Gc.value *= 2
+    #     if MPI.COMM_WORLD.rank == 0:
+    #         print("Reverting and setting Gc to ", model.params.Gc.value)
+    #     model.revert()
+    #     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
     
-    while model.params.Gc.value > args.Gc:
-        model.params.Gc.value /= 2
-        if MPI.COMM_WORLD.rank == 0:
-            print("Reducing Gc to ", model.params.Gc.value)
-        flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
+    # while model.params.Gc.value > args.Gc:
+    #     model.params.Gc.value /= 2
+    #     if MPI.COMM_WORLD.rank == 0:
+    #         print("Reducing Gc to ", model.params.Gc.value)
+    #     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
         
 
 
@@ -251,10 +253,12 @@ for i in range(1,args.nt):
                             msh, [model.momentum.u,model.damage.d,
                                     model.momentum.u_e, model.momentum.u_v,
                                     model.free_energy_plus(model.momentum.ε_e, model.params.ν),
+                                    model.damage.Hprev
                                     ],
                                     ["u","d",
                                     "ue","uv",
                                     "psi_plus",
+                                    "H"
                                     ],
                                 t=i)
 

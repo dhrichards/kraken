@@ -26,7 +26,8 @@ class HigherOrder(Damage):
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
         self.d_prev_time, self.lap_prev_time = ufl.split(self.w_prev_time)
 
-        
+        self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
+        self.d_prev_it, self.lap_prev_it = ufl.split(self.w_prev_it)
 
         self.D, _ = self.W.sub(0).collapse()
 
@@ -61,7 +62,9 @@ class HigherOrder(Damage):
                   +(1/2)*(2*self.d*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
                 ) * ufl.dx \
                 - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx
-                
+        
+
+    
 
         C_new = 1e-2/(self.sim.params.Gc*self.sim.params.τ)
 
@@ -82,6 +85,7 @@ class HigherOrder(Damage):
     def solve(self):
         self.solver.solve(None, self.w.x.petsc_vec)
         self.w.x.scatter_forward()
+        self.w_prev_it.x.array[:] = self.w.x.array[:]
         assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
 
     def revert(self):

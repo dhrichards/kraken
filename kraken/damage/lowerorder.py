@@ -145,18 +145,48 @@ class PressurisedCrack(Bounded):
         super().setup_weak_form()
 
  
-        pw = mf.water_pressure(self.sim.msh, self.sim.momentum.u, self.sim.params.ucstar) + self.sim.params.patmstar
-        # pw = mf.water_pressure_static(self.sim.msh)
+        # pw = mf.water_pressure(self.sim.msh, self.sim.momentum.u, self.sim.params.ucstar) + self.sim.params.patmstar
+        pw = mf.water_pressure_static(self.sim.msh)
         # Iprime = 2 - 2*model.d
         Iprime = 2*self.d
 
-        pressure_work = +pw*ufl.inner(Iprime*ufl.Dx(self.d,0), self.sim.momentum.u[0]) * ufl.dx
+        pressure_work = pw*ufl.inner(Iprime*ufl.Dx(self.d,0), self.sim.momentum.u[0]) * ufl.dx
 
         self.F += ufl.derivative(pressure_work, self.d, ufl.TestFunction(self.D))
 
         self.J = ufl.derivative(self.F, self.d, ufl.TrialFunction(self.D))
 
         self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
+
+
+class Anisotropic(Bounded):
+    def setup_weak_form(self):
+        C3 = self.sim.params.C3; l = self.sim.params.lstar
+        ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
+
+        w = lambda d: d
+        s = np.linspace(0,1,500)
+        c0 = 4*np.trapezoid(np.sqrt(w(s)),s)
+        
+
+        H = ufl.max_value(self.sim.free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
+
+        n = ufl.Constant(self.sim.msh, (0.0, 1.0))
+        N = ufl.outer(n,n)
+        A = ufl.Identity(2) + 5*N
+
+        γ = (w(self.d)/l + l * ufl.inner(ufl.grad(self.d), ufl.grad(self.d)))/c0
+
+        dissipated_energy = (1/C3) * es.crack_density_function(self.d, l, w, c0) * ufl.dx
+        elastic_energy = self.g * H * ufl.dx
+
+        total_energy = dissipated_energy + elastic_energy
+
+        self.F = ufl.derivative(total_energy, self.d, ufl.TestFunction(self.D))
+        self.J = ufl.derivative(self.F, self.d, ufl.TrialFunction(self.D))
+
+        self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
+
 
 
 
