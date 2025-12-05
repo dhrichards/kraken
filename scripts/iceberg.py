@@ -167,6 +167,10 @@ z = z - δ
 
 
 #%%
+
+
+
+
 model.setup()
 
 crack_spacing = 0.1
@@ -231,19 +235,13 @@ for i in range(1,args.nt):
     
     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
     
-    # while flag == -1:
-    #     model.params.Gc.value *= 2
-    #     if MPI.COMM_WORLD.rank == 0:
-    #         print("Reverting and setting Gc to ", model.params.Gc.value)
-    #     model.revert()
-    #     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
+    while flag == -1 and model.params.gv_tol.value < 1.1:
+        model.params.gv_tol.value *= 10
+        if MPI.COMM_WORLD.rank == 0:
+            print("Reverting and setting gv_tol to ", model.params.gv_tol.value)
+        model.revert()
+        flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
     
-    # while model.params.Gc.value > args.Gc:
-    #     model.params.Gc.value /= 2
-    #     if MPI.COMM_WORLD.rank == 0:
-    #         print("Reducing Gc to ", model.params.Gc.value)
-    #     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
-        
 
 
     t += model.params.dt.value
@@ -261,6 +259,10 @@ for i in range(1,args.nt):
                                     "H"
                                     ],
                                 t=i)
+    
+
+    if flag == -1:
+        break
 
     if solve_d:
         model.damage.timestep()
