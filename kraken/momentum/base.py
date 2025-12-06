@@ -5,7 +5,6 @@ from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
 import numpy as np
-from kraken.models import damage
 from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
@@ -20,7 +19,7 @@ class Momentum:
         self.sim = sim
         
 
-        self.V = fem.functionspace(self.sim.msh, ("Lagrange", 1, (self.sim.msh.geometry.dim, )))
+        self.V = fem.functionspace(self.sim.msh, self.sim.msh.ufl_domain().ufl_coordinate_element())
 
 
 

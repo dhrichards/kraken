@@ -6,7 +6,6 @@ from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
 import numpy as np
-from kraken.models import damage
 from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
@@ -66,7 +65,7 @@ class MixedDisplacement(Momentum):
         
         
         σ = self.stress(self.ε_e)
-
+        σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         
         
         # σD0 = 2*mf.dev3(self.ε_e_prev_it)
@@ -87,17 +86,18 @@ class MixedDisplacement(Momentum):
         # σD0_prev = mf.dev3(σ0_prev)
 
         # self.gg = ufl.sqrt(ufl.inner(σD_prev, σD_prev)+1e-14)/ufl.sqrt(ufl.inner(σD0_prev, σD0_prev)+1e-14)
-        g_v = ufl.conditional(self.sim.damage.d > 0.98, 0.00, 1.0)
+        
+        η_lin = A**(-1/3.0) * self.sim.params.γdot**((1 - 3.0) / (2 * 3.0))
+        g_v = ufl.conditional(self.sim.damage.d > 0.5, 0.0, 1.0)
 
         η = g_v*η0 + (1-g_v)*self.sim.params.gv_tol
-       
         # η = self.gg*η0
 
         # P = pt.projection_tensor(mf.εD(self.vel_prev_it))
         # i,j,k,l = ufl.indices(4)
         # εDplus = ufl.as_tensor(P[i,j,k,l]*mf.εD(self.vel)[k,l],(i,j))
         # εDminus = mf.εD(self.vel) - εDplus
-        # εD = g*εDplus + εDminus
+        # εD = g*εDplus + εDminusp
 
         
         
@@ -118,14 +118,14 @@ class MixedDisplacement(Momentum):
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
-                η*ufl.inner(mf.εD(self.vel), mf.ε(v_v))\
+                g*η0*ufl.inner(mf.εD(self.vel), mf.ε(v_v))\
                 + ufl.inner(-self.p, ufl.div(v_v))  \
-            -    ufl.inner(σ, mf.ε(v_v))
+            -    g*ufl.inner(σ0, mf.ε(v_v))
              ) * ufl.dx
        
        
         self.F += (
-                - ufl.inner(ufl.div(self.vel), q) \
+                - g*ufl.inner(ufl.div(self.vel), q) \
                 # - (self.p-self.p_prev_time)*q/self.sim.params.dtstar
                 ) * ufl.dx 
         
@@ -241,6 +241,7 @@ class SemiLagrangian(MixedDisplacement):
 
         self.area = fem.assemble_vector(self.cell_area_form).array
         self.area_ratio.x.array[:] = self.area/self.area_0
+        
 
         self.w_start.x.array[:] = self.w.x.array[:]
         self.w_prev_it_start.x.array[:] = self.w_prev_it.x.array[:]

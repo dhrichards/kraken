@@ -191,7 +191,7 @@ if MPI.COMM_WORLD.rank == 0:
 
 solve_d = False
 if args.type == "relaxation":
-    i_start = 51
+    i_start = 11
     model.params.dt.value = 50*24*60*60
     
 else:
@@ -235,12 +235,12 @@ for i in range(1,args.nt):
     
     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
     
-    while flag == -1 and model.params.gv_tol.value < args.gv_tol*1.1e3:
-        model.params.gv_tol.value *= 10
-        if MPI.COMM_WORLD.rank == 0:
-            print("Reverting and setting gv_tol to ", model.params.gv_tol.value)
-        model.revert()
-        flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
+    # while flag == -1 and model.params.gv_tol.value < 1.1:
+    #     model.params.gv_tol.value *= 10
+    #     if MPI.COMM_WORLD.rank == 0:
+    #         print("Reverting and setting gv_tol to ", model.params.gv_tol.value)
+    #     model.revert()
+    #     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
     
 
 

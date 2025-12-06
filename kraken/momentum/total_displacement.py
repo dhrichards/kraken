@@ -5,7 +5,6 @@ from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
 import numpy as np
-from kraken.models import damage
 from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
