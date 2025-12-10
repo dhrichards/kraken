@@ -18,7 +18,7 @@ class TotalDisplacement(Momentum):
         super().__init__(sim)
 
         self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), 2, shape=(self.sim.msh.geometry.dim,))
-        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(2,2))
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 2, shape=(2,2))
         self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
 
         self.mixed_el = bufl.mixed_element([self.u_el, self.ε_el, self.p_el])
@@ -47,20 +47,29 @@ class TotalDisplacement(Momentum):
         v, τ, q = ufl.split(w_test)
         n = ufl.FacetNormal(self.sim.msh)
 
-        g = self.sim.damage.g
+        g = es.degradation_default(self.sim.damage.d,1e-12)
 
         
         
-        η0 = mf.viscosity(mf.dev3(self.dε_v_prev_it)/self.sim.params.dtstar, self.sim.params.n, 1.e-14)
-        η = g*η0 + (1-g)*self.sim.params.gv_tol
+        # η0 = mf.viscosity(mf.dev3(self.dε_v_prev_it)/self.sim.params.dtstar, self.sim.params.n, 1.e-14)
+        # η = g*η0 + (1-g)*self.sim.params.gv_tol
 
         σ = self.stress(self.ε_e)
+        # σ = es.cauchy_stress_pressure(self.ε_e, self.p)
 
         # self.ρ = mf.ice_density(self.sim.msh,self.sim.params.ρi/self.sim.params.ρw,350/self.sim.params.ρw,32.5/300)/self.area_ratio
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
-        
+        A = mf.rate_factor(self.sim.T)/self.sim.params.A0
+
+        σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
+        σD2 = 2*mf.dev3(self.ε_e)
+        σD3 = 2*ufl.dev(mf.tensor_2d_to_3d(self.ε_e_prev_it))
+        σe2 = 0.5*ufl.inner(σD3, σD3)
+
+        η = 1/(A*σe2)
+
         self.F = (
             ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
             #  - self.p_crack* ufl.inner(ufl.grad(g), v_v)\
@@ -68,14 +77,15 @@ class TotalDisplacement(Momentum):
               ) * ufl.dx \
             + self.pw * ufl.inner(n, v) * ufl.ds \
         
+
         self.F += (
-                η*ufl.inner(mf.dev3(self.dε_v)/self.sim.params.dtstar, τ)\
+                η*ufl.inner(self.dε_v/self.sim.params.dtstar, τ)\
                 + ufl.inner(-self.p, ufl.tr(τ))  \
-            -    ufl.inner(σ, τ)
+            -    ufl.inner(σD2, τ)
              ) * ufl.dx
         
         self.F += (
-                - ufl.inner(ufl.tr(self.dε_v), q) \
+                - ufl.div(self.du)*q \
                 ) * ufl.dx 
         
 
@@ -127,8 +137,10 @@ class SemiLagrangian(TotalDisplacement):
         
         self.u = self.u_prev_time + self.du
         self.ε_v = self.ε_v_prev_time + self.dε_v
-        self.p = self.p_prev_time + self.dp
         self.ε_e = mf.ε(self.u) - self.ε_v
+
+        self.p = self.p_prev_time + self.dp
+        self.p_prev_it = self.p_prev_time + self.dp_prev_it
 
         
 
@@ -169,8 +181,9 @@ class SemiLagrangianEpsilon(SemiLagrangian):
         self.ε_e_prev_it = self.ε_e_prev_time + mf.ε(self.du_prev_it) - self.dε_v_prev_it
 
     def timestep(self):
-        super().timestep()
         self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
+        
+        super().timestep()
         
         
     

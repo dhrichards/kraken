@@ -76,12 +76,51 @@ class Simulation:
         if t == 0:
             adios4dolfinx.write_mesh(filename, self.msh,time = t)
 
+            dictofparams = { 'rhoi' : self.params.ρi.value,
+                             'rhow' : self.params.ρw.value,
+                             'g' : self.params.g.value,
+                             'E' : self.params.E.value,
+                             'nu' : self.params.ν.value,
+                             'A' : self.params.A0.value,
+                             'n' : self.params.n.value,
+                             'Gc' : self.params.Gc.value,
+                             'L' : self.params.L.value,
+                             'l' : self.params.l.value,
+                             'sigmacrit' : self.params.σcrit.value,
+                             'psicrit' : self.params.ψcrit.value,
+                                'dt' : self.params.dt.value,
+                                'patm': self.params.patm.value,
+                                'gv_tol': self.params.gv_tol.value,
+                             }
+            adios4dolfinx.write_attributes(filename, MPI.COMM_WORLD, 'params', dictofparams)
+
         else:
             adios4dolfinx.write_mesh(filename, self.msh, time = t,
                                      mode = adios4dolfinx.adios2_helpers.adios2.Mode.Append)
             
         self.momentum.write_checkpoint(filename, t) 
         self.damage.write_checkpoint(filename, t)
+
+    def read_checkpoint(self, filename, t=0):
+        dictofparams = adios4dolfinx.read_attributes(filename, MPI.COMM_WORLD, 'params')
+        self.params.ρi.value = dictofparams['rhoi']
+        self.params.ρw.value = dictofparams['rhow']
+        self.params.g.value = dictofparams['g']
+        self.params.E.value = dictofparams['E']
+        self.params.ν.value = dictofparams['nu']
+        self.params.A0.value = dictofparams['A']
+        self.params.n.value = dictofparams['n']
+        self.params.Gc.value = dictofparams['Gc']
+        self.params.L.value = dictofparams['L']
+        self.params.l.value = dictofparams['l']
+        self.params.σcrit.value = dictofparams['sigmacrit']
+        self.params.ψcrit.value = dictofparams['psicrit']
+        self.params.dt.value = dictofparams['dt']
+        self.params.patm.value = dictofparams['patm']
+        self.params.gv_tol.value = dictofparams['gv_tol']
+
+        self.momentum.read_checkpoint(filename, t)
+        self.damage.read_checkpoint(filename, t)
 
         
     def fixed_point(self, max_its=100, tol=1e-4, min_its=2, solve_damage=True, save=False):

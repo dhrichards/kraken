@@ -9,12 +9,14 @@ class Params_with_uc:
     def __init__(self,msh):
 
         # Default material properties
+        self.T = fem.Constant(msh,default_scalar_type(-20.0)) # Temperature in Celsius
+
         self.ρi = fem.Constant(msh,default_scalar_type(900)) # Density of ice
         self.ρw = fem.Constant(msh,default_scalar_type(1000)) # Density of water
         self.g = fem.Constant(msh,default_scalar_type(9.81)) # Gravitational acceleration
         self.E = fem.Constant(msh,default_scalar_type(9.33e9)) # Young's modulus
         self.ν = fem.Constant(msh,default_scalar_type(0.325)) # Poisson's ratio
-        self.A = fem.Constant(msh,default_scalar_type(1.2e-25)) # Flow law parameter
+        self.A0 = fem.Constant(msh,default_scalar_type(1.2e-25)) # Flow law parameter
         self.n = fem.Constant(msh,default_scalar_type(3.0)) # Flow law exponent
         self.Gc = fem.Constant(msh,default_scalar_type(1.0)) # Fracture toughness
         self.L = fem.Constant(msh,default_scalar_type(100)) # Characteristic length
@@ -53,7 +55,7 @@ class Params_with_uc:
     @property
     def τ(self):
         """Relaxation time."""
-        return self.A**(-1) * self.ucstar**(1-self.n) * self.μ**(-self.n)
+        return self.A0**(-1) * self.ucstar**(1-self.n) * self.μ**(-self.n)
     
 
     @property
@@ -64,7 +66,7 @@ class Params_with_uc:
     @property
     def ηc(self):
         """Calculate the characteristic viscosity."""
-        return self.A**(-1/self.n) * self.γdot**((1-self.n)/self.n)
+        return self.A0**(-1/self.n) * self.γdot**((1-self.n)/self.n)
     
 
     @property
@@ -144,7 +146,7 @@ class Params_with_uc:
     def C2(self):
         """Non dimensional constant describing ratio between
         elastic and viscousc stresses."""
-        return self.A**(1/self.n) * (self.uc/self.L)**(1-1/self.n) * \
+        return self.A0**(1/self.n) * (self.uc/self.L)**(1-1/self.n) * \
                 self.μ * self.τ**(1/self.n)
 
     @property

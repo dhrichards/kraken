@@ -28,7 +28,7 @@ parser.add_argument("--nt", type=int, default=200, help="number of timesteps")
 parser.add_argument("--crack_x", type=float, default=0.5, help="x position of crack center from end (non dimensional)")
 parser.add_argument("--rhoi", type=float, default=900, help="ice density")
 parser.add_argument("--rhow", type=float, default=1000, help="water density")
-parser.add_argument("--arz", type=float, default=1, help="aspect ratio in z direction")
+parser.add_argument("--aspect_ratio_z", type=float, default=1, help="aspect ratio in z direction")
 parser.add_argument("--T", type=float, default=-10, help="Temperature in Celsius")
 parser.add_argument("--refine_x", type=float, default=2.0, help="refinement in x direction near crack")
 parser.add_argument("--refine_z", type=float, default=0.2, help="refinement in z direction near crack")
@@ -99,7 +99,7 @@ if args.meshtype == "refined":
     msh = kr.utilities.create_refined_mesh(
         args.length/args.height, 1.0, 
         args.l/args.height, flotation_height,
-        aspect_ratios=(aspect_ratio_x,args.arz), 
+        aspect_ratios=(aspect_ratio_x,args.aspect_ratio_z), 
         refine=(args.refine_x,args.refine_z),
         cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
 
@@ -145,8 +145,9 @@ model = kr.base.Simulation(msh,
                            level=args.level, split=args.split)
 
 
-# model.T = mf.temperature(msh,args.rhoi/args.rhow,-30,-2)
-model.T = args.T
+# model.T = mf.temperature(msh,args.rhoi/args.rhow,-30,-1)
+model.params.T.value = args.T
+model.params.A0.value = mf.rate_factor_np(args.T)
 model.params.L.value = args.height
 model.params.l.value = args.l
 model.params.dt.value = args.dt*24*60*60
@@ -156,14 +157,20 @@ model.params.ψcrit.value = args.psicrit
 model.params.Gc.value = args.Gc
 model.params.patm.value = 0.0
 model.params.gv_tol.value = args.gv_tol
+# model.params.E.value = 1e8
 
 x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
 δ = 1 - args.rhoi/args.rhow
 z = z - δ
 # ψcrit_top = args.psicrit
-# ψcrit_bottom = 0.1
+# ψcrit_bottom = 0.01
 # model.params.ψcrit = -(ψcrit_bottom - ψcrit_top)*z + ψcrit_top
+
+
+# μ = model.params.E.value / (2 * (1 + model.params.ν.value))
+# # τ = (args.rhow*9.8*args.height)**(1-3.0)/(mf.rate_factor_np(args.T)*μ)
+# # model.params.dt.value = 30*τ
 
 
 #%%
@@ -174,8 +181,8 @@ z = z - δ
 model.setup()
 
 crack_spacing = 0.1
-crack_start = 0.15
-crack_end = args.refine_x - 0.2
+crack_start = 0.1
+crack_end = args.refine_x - 0.05
 crack_x_cs = nondim_length/2 - np.arange(crack_start, crack_end, crack_spacing)
 def cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
@@ -191,8 +198,8 @@ if MPI.COMM_WORLD.rank == 0:
 
 solve_d = False
 if args.type == "relaxation":
-    i_start = 11
-    model.params.dt.value = 50*24*60*60
+    i_start = 50
+    model.params.dt.value = 10*24*60*60
     
 else:
     i_start = 1
@@ -203,8 +210,6 @@ else:
 t = 0.0
 model.write_checkpoint(path + "/" + filename +".bp", t)
 
-# factors = [40,20,10,5,2.5,1.0]
-heights =[300,400,500,600]
 
 for i in range(1,args.nt):
 
@@ -235,28 +240,44 @@ for i in range(1,args.nt):
     
     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
     
-    # while flag == -1 and model.params.gv_tol.value < 1.1:
+    # while flag == -1:
     #     model.params.gv_tol.value *= 10
     #     if MPI.COMM_WORLD.rank == 0:
     #         print("Reverting and setting gv_tol to ", model.params.gv_tol.value)
     #     model.revert()
     #     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
-    
+    #     if model.params.gv_tol.value >= 0.1:
+    #         break
 
+    
+    
+    # η = mf.viscosity(mf.εD(model.momentum.vel), model.params.n, 1.e-14, A=mf.rate_factor(model.T)/model.params.A)
+    # σv = η*mf.εD(model.momentum.vel)
+    # σe = model.momentum.stress(model.momentum.ε_e)
 
     t += model.params.dt.value
     model.write_checkpoint(path + "/" + filename +".bp", t)
 
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
-                                    model.momentum.u_e, model.momentum.u_v,
+                                    model.momentum.u_v, model.momentum.u_e,
                                     model.free_energy_plus(model.momentum.ε_e, model.params.ν),
-                                    model.damage.Hprev
+                                    model.momentum.p_crack*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0)
+                                    # model.damage.Hprev,
+                                    # σe,σv,
+                                    # η,
+                                    # mf.viscosity_stress(σe, model.params.n, 1.e-14,A=mf.rate_factor(model.T)/model.params.A),
+                                    # mf.viscosity_stress(σv, model.params.n, 1.e-14, A=mf.rate_factor(model.T)/model.params.A),
                                     ],
                                     ["u","d",
+                                    # "ε_e","ε_v","ε",
                                     "ue","uv",
                                     "psi_plus",
-                                    "H"
+                                    "water_pressure"
+                                    # "H",
+                                    # "σe",
+                                    # "σv",
+                                    # "η","η_e","η_v",
                                     ],
                                 t=i)
     

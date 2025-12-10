@@ -14,6 +14,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--l", type=float, default=2, help="Regularization length scale in meters")
 parser.add_argument("--type", type=str, default="normal", help="degraded or normal")
+parser.add_argument("--cellfactor", type=float, default=1.0, help="Mesh cell size factor")
 
 args = parser.parse_args()
 
@@ -59,12 +60,19 @@ nondim_length = true_length/L
 nondim_height = true_height/L
 
 ρi = 900
-ρw = 1000
+ρw = 1027
 
-refineH = (2.5,0.2)
+refineH = (3.0,0.2)
 msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L, ρi/ρw,
-                                     aspect_ratios=(aspect_ratio_x,1), refine=refineH,
-                                     cell_factor=1)
+                                     aspect_ratios=(aspect_ratio_x,10), refine=refineH,
+                                     cell_factor=args.cellfactor)
+
+# msh = kr.utilities.create_iceberg_gmsh_mesh(
+#     args.l/(args.cellfactor*L), 
+#     [2, 0.25, 0.125], 
+#     nondim_length/2, 
+#     ρi/ρw
+#     )
 
 # add slope to mesh
 slope = 0
@@ -73,37 +81,59 @@ msh.geometry.x[:,1] = msh.geometry.x[:,1]*(1- slope*msh.geometry.x[:,0])
 
 no_bc = lambda V: []
 bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0),
-                  bc.internal_bc(V, crack, 1.0)
+                #   bc.internal_bc(V, crack, 1.0)
                 #   bc.get_zero_bc(V.sub(1), all_boundaries)
                   ]
 
-
-u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
+if args.type == "pressure":
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary)]
+else:
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
+               
 
 if args.type == "degraded":
     elast = kr.momentum.elastic.ElasticDegraded
-else:
+elif args.type == "normal":
     elast = kr.momentum.elastic.Elasticity
+elif args.type == "pressure":
+    elast = kr.momentum.elastic.ElasticPressure
 
 model = kr.base.Simulation(msh, 
                            elast,
                            kr.damage.higherorder.HigherOrder,
-                            [u_bc, bc_d], level=0.00)
+                            [u_bc, bc_d], level=0.00, split = 'dp')
+# model.free_energy_plus = lambda ε, ν: es.free_energy_plus_lo_pressure(ε, model.momentum.p, ν)
 
 # model = kr.models.elasticity.elastic_damage(msh, [u_bc,no_bc])
+
+x = ufl.SpatialCoordinate(msh)
+z = x[msh.geometry.dim-1]
+δ = 1 - ρi/ρw
+z = z - δ
+#linear profile
+Gcb = 0.4; Gcs = 20.0
+Gc = -(Gcb - Gcs)*z + Gcs
 
 model.params.L.value = L
 model.params.l.value = l
 model.params.dt.value = 60*60*2
-model.params.patm.value = 0.0
+model.params.patm.value = 0
 model.params.ρi.value = ρi
 model.params.ρw.value = ρw
 model.params.g.value = 9.8
+model.params.Gc.value = 1.0
 
+model.params.ψcrit.value = 0.25
+model.params.ν.value = 0.49
+# model.params.Gc = Gc
+# ψcrit_top = 2.0
+# ψcrit_bottom = 0.2
+# model.params.ψcrit = -(ψcrit_bottom - ψcrit_top)*z + ψcrit_top
 
-model.params.ψcrit.value = 1.0
-model.params.Gc.value = 0.5
-
+# Es = 9.33e9; Eb = 1e9
+# model.params.E = -(Eb - Es)*z + Es
+# model.params.ψcrit.value = 0.0
+# model.params.Gc.value = 1
 # model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
 #                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
 
@@ -115,22 +145,26 @@ model.setup()
 
 
 
-model.fixed_point(min_its=3,solve_damage=True,max_its=200,tol=1e-5)
+model.fixed_point(min_its=3,solve_damage=True,max_its=400,tol=1e-5)
 import adios4dolfinx
 
-filename = './scripts/{}elastic_l{}.bp'.format(
-    args.type,
-    l,
-    model.params.Gc.value,
-    model.params.ψcrit.value
-)
-adios4dolfinx.write_mesh(filename, msh)
-adios4dolfinx.write_function(filename, model.momentum.u, name="u")
-adios4dolfinx.write_function(filename, model.damage.w, name="w")
-kr.utilities.write_xdmf("./outputs/elastictest.xdmf",
+# filename = './scripts/{}elastic_l{}.bp'.format(
+#     args.type,
+#     l,
+#     model.params.Gc.value,
+#     model.params.ψcrit.value
+# )
+# adios4dolfinx.write_mesh(filename, msh)
+# adios4dolfinx.write_function(filename, model.momentum.u, name="u")
+# adios4dolfinx.write_function(filename, model.damage.w, name="w")
+kr.utilities.write_xdmf("./outputs/elastictest" + args.type + ".xdmf",
                             msh, [model.momentum.u, model.damage.d, 
-                                  model.free_energy_plus(model.momentum.ε_e, model.params.ν)],
-                            ["u", "d", "psi_plus"])
+                                  model.free_energy_plus(model.momentum.ε_e, model.params.ν),
+                                #   es.free_energy_plus_lo_pressure(model.momentum.ε_e, model.momentum.p, model.params.ν),
+                                  ],
+                            ["u", "d", "psi_plus",
+                            #  "psi_plus_pressure"
+                             ])
     # model.d_prev_time.x.array[:] = model.d.x.array[:]
 
 

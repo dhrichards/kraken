@@ -65,6 +65,9 @@ class Damage:
         adios4dolfinx.write_function(filename, self.w, name = "w_damage",time = t)
         adios4dolfinx.write_function(filename, self.Hprev, name = "Hprev_damage", time = t)
 
+    def read_checkpoint(self, filename, t=0):
+        adios4dolfinx.read_function(filename, self.w, name = "w_damage", time = t)
+        adios4dolfinx.read_function(filename, self.Hprev, name = "Hprev_damage", time = t)
 
 
 

@@ -17,6 +17,13 @@ def degraded_scalar(f, f_prev, g):
     return g*fplus + fminus
 
 
+def Aplus(A, A_prev):
+    D = ufl.shape(A)[0]
+    i,j,k,l = ufl.indices(4)
+    P = projection_tensor(A_prev)
+    return ufl.as_tensor(P[i,j,k,l]*A[k,l],(i,j))
+
+
 def stress_plus(ε,ε_prev,ν):
     λoverμ = 2*ν/(1-2*ν)
     D = ufl.shape(ε)[0]

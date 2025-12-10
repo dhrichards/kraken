@@ -43,7 +43,7 @@ class Momentum:
         # return mf.water_pressure_static(self.sim.msh, self.sim.level) + self.sim.params.patmstar
         
     def stress(self,ε):
-        g = self.sim.damage.g
+        g = es.degradation_default(self.sim.damage.d,1e-12)
         σ0 = es.cauchy_stress(ε, self.sim.params.ν)
         σplus = self.sim.stress_plus(ε, self.sim.params.ν)
         # ψplus = self.sim.free_energy_plus(ε, self.sim.params.ν)
@@ -96,6 +96,10 @@ class Momentum:
     def write_checkpoint(self, filename, t=0):
         adios4dolfinx.write_function(filename, self.w, name = "w_momentum",time = t)
         adios4dolfinx.write_function(filename, self.area_ratio, name = "area_ratio", time = t)
+
+    def read_checkpoint(self, filename, t=0):
+        adios4dolfinx.read_function(filename, self.w, name = "w_momentum", time = t)
+        adios4dolfinx.read_function(filename, self.area_ratio, name = "area_ratio", time = t)
 
 
         

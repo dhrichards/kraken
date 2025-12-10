@@ -1,7 +1,7 @@
 import ufl
 from math import sqrt
 from .invariants import eigenstate, matrix_function
-from .maths_functions import dev3, largest_eigenvalue, positive_part, negative_part
+from .maths_functions import dev3, largest_eigenvalue, positive_part, negative_part, tensor_2d_to_3d
 
 
 def stress_plus_consistent(σplus, ψplus, ψcrit):
@@ -14,9 +14,16 @@ def λoverμ(ν):
 def Koverμ(ν):
     return λoverμ(ν) + 2/3
 
+def Koverλ(ν):
+    return (1+ν)/(3*ν)
+
 def cauchy_stress(ε,ν):
     D = ufl.shape(ε)[0]
     return λoverμ(ν)*ufl.tr(ε)*ufl.Identity(D) + 2*ε 
+
+def cauchy_stress_pressure(ε,p):
+    D = ufl.shape(ε)[0]
+    return -p*ufl.Identity(D) + 2*ε
 
 def principal_stress(ε,λ,μ):
     return largest_eigenvalue(cauchy_stress(ε,λ,μ))
@@ -27,6 +34,11 @@ def stress_plus_spectral(ε,ν):
     I = ufl.Identity(ufl.shape(ε)[0])
     εplus = matrix_function(ε,positive_part)
     return λoverμ(ν)*positive_part(ufl.tr(ε))*I + 2*εplus
+
+def stress_plus_spectral_pressure(ε,p):
+    I = ufl.Identity(ufl.shape(ε)[0])
+    εplus = matrix_function(ε,positive_part)
+    return positive_part(-p)*I + 2*εplus
 
 
 def stress_plus_amor(ε,ν):
@@ -39,6 +51,9 @@ def stress_plus_amor(ε,ν):
 
 def free_energy(ε,ν):
     return 0.5*λoverμ(ν)*ufl.tr(ε)**2 + ufl.inner(ε,ε) 
+
+def free_energy_pressure(ε,p,ν):
+    return 0.5*(-p)**2/λoverμ(ν) + ufl.inner(ε,ε)
 
 
 
@@ -56,11 +71,11 @@ def free_energy_plus_dplike(ε, ν, γ=1):
 
 
 
-def free_energy_plus_dp(ε, ν, B = -0.25):
+def free_energy_plus_dp(ε, ν, B = -0.3):
     # B = -0.4
     K = Koverμ(ν)
     I1 = ufl.tr(ε)
-    εD = dev3(ε)
+    εD = ufl.dev(tensor_2d_to_3d(ε))
     J2 = 0.5*ufl.inner(εD, εD)
     
     ψ1 = 0.5*K*I1**2 + 2*J2
@@ -75,25 +90,45 @@ def free_energy_plus_dp(ε, ν, B = -0.25):
 
 
 
-def stress_plus_dp(ε, ν, B = -0.25):
+def stress_plus_dp(ε, ν, B = -0.3, eps=1e-12):
+    #-0.3 is good
     # B = -0.4
     εD = dev3(ε)
     K = Koverμ(ν)
     I1 = ufl.tr(ε)
-    J2 = 0.5*ufl.inner(εD, εD)
+    εD3 = ufl.dev(tensor_2d_to_3d(ε))
+    J2 = 0.5*ufl.inner(εD3, εD3)
     δ = ufl.Identity(ufl.shape(ε)[0])
     
 
     σ1 = K*I1*δ + 2*εD
-    σ2 = ((18*B**2*K**2*I1 - 12*B*K*ufl.sqrt(J2+1e-9))*δ \
-          +(4 - 6*B*K*I1/ufl.sqrt(J2+1e-6))*εD
+    σ2 = ((18*B**2*K**2*I1 - 12*B*K*ufl.sqrt(J2+eps))*δ \
+          +(4 - 6*B*K*I1/ufl.sqrt(J2+eps))*εD
           )/(18*B**2*K + 2)
 
-    return ufl.conditional(ufl.lt(-6*B*ufl.sqrt(J2+1e-9), I1), σ1,
-                        ufl.conditional(2*ufl.sqrt(J2+1e-9) < 3*B*K*I1, 0.0*δ, 
+    return ufl.conditional(ufl.lt(-6*B*ufl.sqrt(J2+eps), I1), σ1,
+                        ufl.conditional(2*ufl.sqrt(J2+eps) < 3*B*K*I1, 0.0*δ, 
                                          σ2))
 
     
+def stress_plus_dp_pressure(ε, p, ν, B = -0.3,eps=1e-12):
+    K = Koverμ(ν)
+    εD = dev3(ε)
+    KI1 = Koverλ(ν)*(-p)
+    εD3 = ufl.dev(tensor_2d_to_3d(ε))
+    J2 = 0.5*ufl.inner(εD3, εD3)
+    δ = ufl.Identity(ufl.shape(ε)[0])
+    
+
+    σ1 = KI1*δ + 2*εD
+
+    σ2 = ((18*B**2*K*KI1 - 12*B*K*ufl.sqrt(J2+eps))*δ \
+          +(4 - 6*B*KI1/ufl.sqrt(J2+eps))*εD
+          )/(18*B**2*K + 2)
+
+    return ufl.conditional(ufl.lt(-6*B*K*ufl.sqrt(J2+eps), KI1), σ1,
+                        ufl.conditional(2*ufl.sqrt(J2+eps) < 3*B*KI1, 0.0*δ, 
+                                         σ2))
 
 
 
@@ -120,6 +155,12 @@ def free_energy_plus_spectral(ε,ν):
     εplus = matrix_function(ε,positive_part)
     return 0.5*λoverμ(ν)*positive_part(ufl.tr(ε))**2 \
             + ufl.inner(εplus,εplus) 
+
+def free_energy_plus_spectral_pressure(ε,p,ν):
+    ##Spectral:
+    εplus = matrix_function(ε,positive_part)
+    return 0.5*positive_part(-p)**2/λoverμ(ν) \
+            + ufl.inner(εplus,εplus)
 
 def free_energy_plus_stocek(ε,ν):
     κ = Koverμ(ν)
@@ -171,6 +212,17 @@ def free_energy_plus_lo(ε,ν):
                            ufl.conditional(ufl.gt((1-ν)*λ[1] + ν*λ[0],0),
                                            psi2,0))
 
+def free_energy_plus_lo_pressure(ε,p,ν):
+    
+    λ,M = eigenstate(ε)
+
+    psi1 = free_energy_pressure(ε,p,ν)
+    psi2 = (1-2*ν)*(1+ν)/(1-ν**2)*(λ[1]+0.5*(-p))**2
+
+    return ufl.conditional(ufl.gt(λ[0],0),psi1,
+                           ufl.conditional(ufl.gt((1-2*ν)*(λ[1] + 0.5*(-p)),0),
+                                           psi2,0))
+
 
 def free_energy_plus_lo_3d(ε,ν):
     Eoverμ = 2*(1+ν)
@@ -187,7 +239,6 @@ def free_energy_plus_lo_3d(ε,ν):
 
 
 def stress_plus_lo(ε,ν):
-    κ = Koverμ(ν)
 
     λ,M = eigenstate(ε)
 
@@ -203,6 +254,25 @@ def stress_plus_lo(ε,ν):
     return ufl.conditional(ufl.gt(λ[0],0),stress1,
                            ufl.conditional(ufl.gt((1-ν)*λ[1] + ν*λ[0],0),
                                            stress2,0*ufl.Identity(2)))
+
+def stress_plus_lo_pressure(ε,p,ν):
+    
+    λ,M = eigenstate(ε)
+
+    I = ufl.Identity(2)
+    # val1 = 0.5*κ*(λ[1]+λ[0])**2 + λ[1]**2 + λ[0]**2
+
+    stress1 = cauchy_stress_pressure(ε,p) 
+
+    # stress2 = 2*(1+ν)/(1-ν**2)*((1-ν)*M[1] + ν*M[0])*λ[1] \
+    #     + (1+ν)/(1-ν**2)*((1-ν)*M[1] + ν*M[0])*(-p) 
+
+    stress2 = 2*(1+ν)/(1-ν**2)*(λ[1]+0.5*(-p))*((1-2*ν)*M[1] + ν*I)
+
+    return ufl.conditional(ufl.gt(λ[0],0),stress1,
+                        #    ufl.conditional(ufl.gt((1-ν)*λ[1] + ν*λ[0],0),
+                           ufl.conditional(ufl.gt((1-2*ν)*(λ[1] + 0.5*(-p)),0),
+                                           stress2,0*I))
 
 
 def stress_plus_lo_3d(ε,ν):

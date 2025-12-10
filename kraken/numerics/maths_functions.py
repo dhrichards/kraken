@@ -152,6 +152,15 @@ def rate_factor(T):
     # A0 = 2.89165e-13
     return A0*ufl.exp(-Q/(R*(T+273.15)))
 
+def rate_factor_np(T):
+    # https://elmerice.elmerfem.org/wiki/doku.php?id=problems:rheology
+    R = 8.314
+    Q = np.where(T>-10,115e3,60e3)
+    A0 = np.where(T>-10,2.42736e-02,2.89165e-13)
+    # Q = 60e3
+    # A0 = 2.89165e-13
+    return A0*np.exp(-Q/(R*(T+273.15)))
+
 
 def temperature(msh,ρistar,Ts=-20.0,Tb=-2.0):
     x = ufl.SpatialCoordinate(msh)
@@ -164,9 +173,6 @@ def temperature(msh,ρistar,Ts=-20.0,Tb=-2.0):
 
 
 def tensor_2d_to_3d(A2):
-    A3 = ufl.zero((3,3))
-    A3[0,0] = A2[0,0]
-    A3[0,1] = A2[0,1]
-    A3[1,0] = A2[1,0]
-    A3[1,1] = A2[1,1]
-    return A3
+    return ufl.as_tensor([[A2[0,0], A2[0,1], 0.0],
+                          [A2[1,0], A2[1,1], 0.0],
+                          [0.0,      0.0,    0.0]])

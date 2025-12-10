@@ -34,7 +34,6 @@ class HigherOrder(Damage):
         self.H_space = fem.functionspace(self.sim.msh, ("DG", 1))
         self.Hprev = fem.Function(self.H_space, name="history")
 
-        self.g = es.degradation_default(self.d,1e-12)
 
         bc_func_mod = lambda V: self.sim.bc_funcs[1](V.sub(0))
         self.bc_d = bc_func_mod(self.W)
