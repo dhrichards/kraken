@@ -12,6 +12,7 @@ from kraken.numerics import energy_splits as es
 from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
 from petsc4py import PETSc
+from kraken.numerics.invariants import matrix_function
 
 
 class MixedDisplacement(Momentum):
@@ -27,7 +28,7 @@ class MixedDisplacement(Momentum):
         self.W = fem.functionspace(self.sim.msh, self.mixed_el)
 
         self.w = fem.Function(self.W, name="mixed function")
-        self.w.x.array[:] = 1.0
+        self.w.x.array[:] =1.0
         self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
         
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
@@ -59,25 +60,27 @@ class MixedDisplacement(Momentum):
         v, v_v, q = ufl.split(w_test)
         n = ufl.FacetNormal(self.sim.msh)
 
-        g = self.sim.damage.g
+        # g = self.sim.damage.g
 
-        
+        g = es.degradation_default(self.sim.damage.d,1e-12)
         
         
         σ = self.stress(self.ε_e)
-        σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
+        # σ = es.cauchy_stress_pressure(self.ε_e, self.p)
+        # σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         
         
         # σD0 = 2*mf.dev3(self.ε_e_prev_it)
-        # η = mf.viscosity_stress(σD0, self.sim.params.n, 1.e-14, A=A)
+        
 
        
      
 
         # g_v = es.degradation_default(self.sim.damage.d,self.sim.params.gv_tol)
-        A = mf.rate_factor(self.sim.T)/self.sim.params.A
+        A = mf.rate_factor(self.sim.params.T)/self.sim.params.A0
         
-        η0 = mf.viscosity(mf.εD(self.vel_prev_it), self.sim.params.n, 1.e-15, A=A)
+        # η0 = mf.viscosity_stress(es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν), self.sim.params.n, 0, A=A)
+        η0 = mf.viscosity(ufl.dev(mf.tensor_2d_to_3d(mf.ε(self.vel_prev_it))), self.sim.params.n, 1e-14, A=A)
       
         # σ_prev = self.stress(self.ε_e_prev_it)
         # σD_prev = mf.dev3(σ_prev)
@@ -88,7 +91,9 @@ class MixedDisplacement(Momentum):
         # self.gg = ufl.sqrt(ufl.inner(σD_prev, σD_prev)+1e-14)/ufl.sqrt(ufl.inner(σD0_prev, σD0_prev)+1e-14)
         
         η_lin = A**(-1/3.0) * self.sim.params.γdot**((1 - 3.0) / (2 * 3.0))
-        g_v = ufl.conditional(self.sim.damage.d > 0.5, 0.0, 1.0)
+        # g_v = ufl.conditional(self.sim.damage.d > 0.98, 0.0, 1.0)
+
+        g_v = es.degradation_default(self.sim.damage.d, 1e-12)
 
         η = g_v*η0 + (1-g_v)*self.sim.params.gv_tol
         # η = self.gg*η0
@@ -98,6 +103,13 @@ class MixedDisplacement(Momentum):
         # εDplus = ufl.as_tensor(P[i,j,k,l]*mf.εD(self.vel)[k,l],(i,j))
         # εDminus = mf.εD(self.vel) - εDplus
         # εD = g*εDplus + εDminusp
+
+        I = ufl.Identity(self.sim.msh.geometry.dim)
+        σv0 = -self.p*I + 2*η0*mf.ε(self.vel)
+        σvplus = mf.positive_part(-self.p)*I + 2*η0*matrix_function(mf.ε(self.vel),mf.positive_part)
+        σvminus = σv0 - σvplus
+        σv = g*σvplus + σvminus
+
 
         
         
@@ -116,16 +128,34 @@ class MixedDisplacement(Momentum):
               ) * ufl.dx \
             + self.pw * ufl.inner(n, v) * ufl.ds \
         
-        self.F+= (
-                # η0*ufl.inner(εD, mf.ε(v_v))\
-                g*η0*ufl.inner(mf.εD(self.vel), mf.ε(v_v))\
-                + ufl.inner(-self.p, ufl.div(v_v))  \
-            -    g*ufl.inner(σ0, mf.ε(v_v))
-             ) * ufl.dx
-       
-       
+        # self.F+= (
+        #         # η0*ufl.inner(εD, mf.ε(v_v))\
+        #         2*g_v*η0*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
+        #         + ufl.inner(-self.p, ufl.div(v_v))  \
+        #     -    ufl.inner(σ, mf.ε(v_v))
+        #      ) * ufl.dx
+        # self.F += (
+        #         2*η*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
+        #         + ufl.inner(-self.p, ufl.div(v_v))  \
+        #         - ufl.inner(σ, mf.ε(v_v))\
+        #             ) * ufl.dx
         self.F += (
-                - g*ufl.inner(ufl.div(self.vel), q) \
+                ufl.inner(σv0, mf.ε(v_v))\
+                + ufl.inner(σ, mf.ε(v_v))\
+        )         * ufl.dx
+
+        # σD2 = 2*mf.dev3(self.ε_e)
+        # σD3 = 2*ufl.dev(mf.tensor_2d_to_3d(self.ε_e))
+        # σe2 = 0.5*ufl.inner(σD3, σD3)
+        # self.F += (
+        #         ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
+        #         # + ufl.inner(-self.p, ufl.tr(τ))  \
+        #     -    A*σe2*ufl.inner(σD2, mf.ε(v_v))
+        #      ) * ufl.dx
+
+
+        self.F += (
+                - ufl.inner(ufl.div(self.du), q) \
                 # - (self.p-self.p_prev_time)*q/self.sim.params.dtstar
                 ) * ufl.dx 
         
@@ -276,6 +306,11 @@ class SemiLagrangianEpsilon(SemiLagrangian):
     def write_checkpoint(self, filename, t=0):
         super().write_checkpoint(filename, t)
         adios4dolfinx.write_function(filename, self.ε_e_prev_time, name="epsiloneprevtime", time=t)
+
+    def read_checkpoint(self, filename, t=0):
+        super().read_checkpoint(filename, t)
+        adios4dolfinx.read_function(filename, self.ε_e_prev_time, name="epsiloneprevtime", time=t)
+
         
         
     
