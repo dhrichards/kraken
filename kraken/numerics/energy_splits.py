@@ -3,11 +3,6 @@ from math import sqrt
 from .invariants import eigenstate, matrix_function
 from .maths_functions import dev3, largest_eigenvalue, positive_part, negative_part, tensor_2d_to_3d
 
-
-def stress_plus_consistent(σplus, ψplus, ψcrit):
-    I = ufl.Identity(ufl.shape(σplus)[0])
-    return ufl.conditional(ufl.gt(ψplus, ψcrit), σplus, 0*I)
-
 def λoverμ(ν):
     return 2*ν/(1-2*ν)
 
@@ -17,9 +12,12 @@ def Koverμ(ν):
 def Koverλ(ν):
     return (1+ν)/(3*ν)
 
+def Eoverμ(ν):
+    return 2*(1+ν)
+
 def cauchy_stress(ε,ν):
     D = ufl.shape(ε)[0]
-    return λoverμ(ν)*ufl.tr(ε)*ufl.Identity(D) + 2*ε 
+    return 1.5*λoverμ(ν)*ufl.tr(ε)*ufl.Identity(D) + 2*ε 
 
 def cauchy_stress_pressure(ε,p):
     D = ufl.shape(ε)[0]
@@ -27,7 +25,6 @@ def cauchy_stress_pressure(ε,p):
 
 def principal_stress(ε,λ,μ):
     return largest_eigenvalue(cauchy_stress(ε,λ,μ))
-
 
 
 def stress_plus_spectral(ε,ν):
@@ -202,6 +199,13 @@ def free_energy_plus_notension(ε,ν):
 
 
 def free_energy_plus_lo(ε,ν):
+    if ufl.shape(ε)[0] ==3:
+        return free_energy_plus_lo_3d(ε,ν)
+    else:
+        return free_energy_plus_lo_2d(ε,ν)
+
+
+def free_energy_plus_lo_2d(ε,ν):
 
     λ,M = eigenstate(ε)
 
@@ -239,6 +243,12 @@ def free_energy_plus_lo_3d(ε,ν):
 
 
 def stress_plus_lo(ε,ν):
+    if ufl.shape(ε)[0] ==3:
+        return stress_plus_lo_3d(ε,ν)
+    else:
+        return stress_plus_lo_2d(ε,ν)
+
+def stress_plus_lo_2d(ε,ν):
 
     λ,M = eigenstate(ε)
 
@@ -280,6 +290,9 @@ def stress_plus_lo_3d(ε,ν):
     E = 2*(1+ν)
 
     λ,M = eigenstate(ε)
+    # assume 3rd eigenvector is [0,0,1]
+    
+
 
 
     stress1 = cauchy_stress(ε,ν)
@@ -343,7 +356,5 @@ def degraded_free_energy(ε,g,ν,ψcrit,free_energy_plus=free_energy_plus_spectr
 
 
 
-def history_function(ε,Hprev,ν,ψcrit,free_energy_plus=free_energy_plus_spectral):
-    ψp = free_energy_plus(ε,ν) - ψcrit
-    return ufl.max_value(ψp,Hprev)
-    # return ufl.conditional(ufl.gt(ψp,Hprev),ψp,Hprev)
+def history_function(ψplus,Hprev,ψcrit):
+    return ufl.max_value(ψplus - ψcrit,Hprev)

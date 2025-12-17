@@ -43,9 +43,7 @@ class NonLinear(LowerOrder):
         C3 = self.sim.params.C3; l = self.sim.params.lstar
         ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
 
-        H = es.history_function(self.sim.momentum.ε_e, self.Hprev,
-                            self.sim.params.ν, self.sim.params.ψcritstar, 
-                            self.sim.free_energy_plus)
+        H = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
     
 
         v = ufl.TestFunction(self.D)

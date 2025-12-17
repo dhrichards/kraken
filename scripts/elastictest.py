@@ -64,7 +64,7 @@ nondim_height = true_height/L
 
 refineH = (3.0,0.2)
 msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L, ρi/ρw,
-                                     aspect_ratios=(aspect_ratio_x,10), refine=refineH,
+                                     aspect_ratios=(aspect_ratio_x,1), refine=refineH,
                                      cell_factor=args.cellfactor)
 
 # msh = kr.utilities.create_iceberg_gmsh_mesh(
@@ -97,6 +97,8 @@ elif args.type == "normal":
     elast = kr.momentum.elastic.Elasticity
 elif args.type == "pressure":
     elast = kr.momentum.elastic.ElasticPressure
+elif args.type == "3D":
+    elast = kr.momentum.elastic.Elastic3D
 
 model = kr.base.Simulation(msh, 
                            elast,
@@ -123,8 +125,8 @@ model.params.ρw.value = ρw
 model.params.g.value = 9.8
 model.params.Gc.value = 1.0
 
-model.params.ψcrit.value = 0.25
-model.params.ν.value = 0.49
+model.params.ψcrit.value = 1.0
+model.params.ν.value = 0.325
 # model.params.Gc = Gc
 # ψcrit_top = 2.0
 # ψcrit_bottom = 0.2
@@ -157,12 +159,35 @@ import adios4dolfinx
 # adios4dolfinx.write_mesh(filename, msh)
 # adios4dolfinx.write_function(filename, model.momentum.u, name="u")
 # adios4dolfinx.write_function(filename, model.damage.w, name="w")
+
+
+if args.type == "normal":
+    ψplus = es.free_energy_plus_lo_3d(mf.tensor_2d_to_3d(model.momentum.ε_e), model.params.ν)
+    ψplus2 = es.free_energy_plus_lo(model.momentum.ε_e, model.params.ν)
+
+elif args.type == "pressure":
+    import kraken.numerics.energy_splits_deviatoric as esd
+    ψplus = esd.free_energy_plus_dp(model.momentum.ε_eD, model.momentum.trε, model.params.ν)
+    εe = mf.deviatoric2d_to_3d(model.momentum.ε_eD) + (1/3)*model.momentum.trε*ufl.Identity(3)
+    ψplus2 = es.free_energy_plus_dp(εe, model.params.ν)
+
+elif args.type == "3D":
+    ψplus = es.free_energy_plus_lo_3d(model.momentum.ε_e, model.params.ν)
+    ψplus2 = es.free_energy_plus_lo_2d(mf.tensor_3d_to_2d(model.momentum.ε_e), model.params.ν)
+
+
 kr.utilities.write_xdmf("./outputs/elastictest" + args.type + ".xdmf",
                             msh, [model.momentum.u, model.damage.d, 
-                                  model.free_energy_plus(model.momentum.ε_e, model.params.ν),
+                                  ψplus,
+                                  ψplus2,
+                                    model.momentum.ε_e,
+                                #   ufl.tr(model.momentum.ε_eD),
                                 #   es.free_energy_plus_lo_pressure(model.momentum.ε_e, model.momentum.p, model.params.ν),
                                   ],
                             ["u", "d", "psi_plus",
+                             "psi_plus_2",
+                             "e_e",
+                            #  "tr_e_d",
                             #  "psi_plus_pressure"
                              ])
     # model.d_prev_time.x.array[:] = model.d.x.array[:]

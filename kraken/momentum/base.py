@@ -8,6 +8,7 @@ import numpy as np
 from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
+from kraken.numerics import energy_splits_deviatoric as esd
 from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
 from petsc4py import PETSc
@@ -22,7 +23,13 @@ class Momentum:
         self.V = fem.functionspace(self.sim.msh, self.sim.msh.ufl_domain().ufl_coordinate_element())
 
 
+        self.DG0 = fem.functionspace(self.sim.msh, ("DG", 0))
+        self.areaf = ufl.TestFunction(self.DG0)
+        self.cell_area_form = fem.form(self.areaf * ufl.dx)
+        self.area_0 = np.copy(fem.assemble_vector(self.cell_area_form).array)
 
+        self.area_ratio = fem.Function(self.DG0)
+        self.area_ratio.x.array[:] = 1.0
         
 
 
@@ -43,13 +50,27 @@ class Momentum:
         # return mf.water_pressure_static(self.sim.msh, self.sim.level) + self.sim.params.patmstar
         
     def stress(self,ε):
-        g = es.degradation_default(self.sim.damage.d,1e-12)
+        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
         σ0 = es.cauchy_stress(ε, self.sim.params.ν)
         σplus = self.sim.stress_plus(ε, self.sim.params.ν)
         # ψplus = self.sim.free_energy_plus(ε, self.sim.params.ν)
         # σpluscorrected = es.stress_plus_consistent(σplus, ψplus, self.sim.params.ψcritstar)
         σminus = σ0 - σplus
         return g*σplus+ σminus
+    
+    def stress_alt(self,εD,trε):
+        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
+        σ0 = esd.cauchy_stress(εD, trε, self.sim.params.ν)
+        σplus = self.sim.stress_plus_alt(εD, trε, self.sim.params.ν)
+        σminus = σ0 - σplus
+        return g*σplus+ σminus
+    
+    def deviatoric_stress(self,εD,trε):
+        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
+        τ0 = 2*εD
+        τplus = self.sim.deviatoric_stress_plus(εD, trε, self.sim.params.ν)
+        τminus = τ0 - τplus
+        return g*τplus + τminus
 
     
     def setup_solver(self):

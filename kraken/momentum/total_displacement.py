@@ -12,63 +12,83 @@ from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
 from petsc4py import PETSc
 
-class TotalDisplacement(Momentum):
+class SemiLagrangian(Momentum):
      
     def __init__(self, sim):
         super().__init__(sim)
 
         self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), 2, shape=(self.sim.msh.geometry.dim,))
-        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 2, shape=(2,2))
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(3,))
         self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
+
+
 
         self.mixed_el = bufl.mixed_element([self.u_el, self.ε_el, self.p_el])
 
         self.W = fem.functionspace(self.sim.msh, self.mixed_el)
 
         self.w = fem.Function(self.W, name="mixed function")
+        self.w.x.array[:] = 1.0
+        self.du, self.vec_dε_e, self.dp = ufl.split(self.w)
+        self.dε_e = self.map(self.vec_dε_e)
+
         self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
+        self.du_prev_it, self.vec_dε_e_prev_it, self.dp_prev_it = ufl.split(self.w_prev_it)
+        self.dε_e_prev_it = self.map(self.vec_dε_e_prev_it)
 
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
-        self.u_prev_time, self.ε_v_prev_time, self.p_prev_time = ufl.split(self.w_prev_time)
-
+        self.u_prev_time, self.vec_ε_e_prev_time, self.p_prev_time = ufl.split(self.w_prev_time)
+        self.ε_e_prev_time = self.map(self.vec_ε_e_prev_time)
+    
         self.bc_u = self.sim.bc_funcs[0](self.W)
 
-        self.DG0 = fem.functionspace(self.sim.msh, ("DG", 0))
-        self.areaf = ufl.TestFunction(self.DG0)
-        self.cell_area_form = fem.form(self.areaf * ufl.dx)
-        self.area_0 = np.copy(fem.assemble_vector(self.cell_area_form).array)
+        
+        self.u = self.u_prev_time + self.du
+        self.ε_e = self.ε_e_prev_time + self.dε_e
 
-        self.area_ratio = fem.Function(self.DG0)
-        self.area_ratio.x.array[:] = 1.0
+        self.p = self.p_prev_time + self.dp
+        self.p_prev_it = self.p_prev_time + self.dp_prev_it
+        
+        self.p_crack = self.crack_pressure(self.du)
+        self.pw = self.water_pressure(self.du)
+
+        self.dε_v = mf.ε(self.du) - self.dε_e
+        self.dε_v_prev_it = mf.ε(self.du_prev_it) - self.dε_e_prev_it
+        
+        self.ψplus = self.sim.free_energy_plus(self.ε_e, self.sim.params.ν)
+
+    def map(self, v):
+        return ufl.as_tensor([[v[0], v[2]],
+                              [v[2], v[1]]])
+    
+    def inverse_map(self, ε):
+        return ufl.as_vector([ε[0,0], ε[1,1], ε[0,1]])
 
 
     def setup_momentum(self):
         w_test = ufl.TestFunction(self.W)
-        v, τ, q = ufl.split(w_test)
+        v, S, q = ufl.split(w_test)
+        S = self.map(S)
         n = ufl.FacetNormal(self.sim.msh)
 
         g = es.degradation_default(self.sim.damage.d,1e-12)
-
         
         
-        # η0 = mf.viscosity(mf.dev3(self.dε_v_prev_it)/self.sim.params.dtstar, self.sim.params.n, 1.e-14)
-        # η = g*η0 + (1-g)*self.sim.params.gv_tol
 
+        # σ0 = es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν)
         σ = self.stress(self.ε_e)
-        # σ = es.cauchy_stress_pressure(self.ε_e, self.p)
-
-        # self.ρ = mf.ice_density(self.sim.msh,self.sim.params.ρi/self.sim.params.ρw,350/self.sim.params.ρw,32.5/300)/self.area_ratio
+        
+        
+        
+        # g_v = es.degradation_default(self.sim.damage.d,self.sim.params.gv_tol)
+        A = mf.rate_factor(self.sim.params.T)/self.sim.params.A0
+    
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
-        A = mf.rate_factor(self.sim.T)/self.sim.params.A0
 
-        σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
-        σD2 = 2*mf.dev3(self.ε_e)
-        σD3 = 2*ufl.dev(mf.tensor_2d_to_3d(self.ε_e_prev_it))
-        σe2 = 0.5*ufl.inner(σD3, σD3)
-
-        η = 1/(A*σe2)
+        η0 = mf.viscosity(self.dε_v_prev_it/self.sim.params.dtstar, self.sim.params.n, 1e-13, A=A)
+        g_v = es.degradation_default(self.sim.damage.d, self.sim.params.gv_tol)
 
         self.F = (
             ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
@@ -78,12 +98,14 @@ class TotalDisplacement(Momentum):
             + self.pw * ufl.inner(n, v) * ufl.ds \
         
 
-        self.F += (
-                η*ufl.inner(self.dε_v/self.sim.params.dtstar, τ)\
-                + ufl.inner(-self.p, ufl.tr(τ))  \
-            -    ufl.inner(σD2, τ)
+        self.F+= (
+                # η0*ufl.inner(εD, mf.ε(v_v))\
+                2*g_v*η0*ufl.inner(self.dε_v/self.sim.params.dtstar, S)\
+                - ufl.inner(self.p, ufl.tr(S))  \
+            -    ufl.inner(σ, S)
              ) * ufl.dx
         
+
         self.F += (
                 - ufl.div(self.du)*q \
                 ) * ufl.dx 
@@ -101,58 +123,11 @@ class TotalDisplacement(Momentum):
         self.w.x.scatter_forward()
         self.w_prev_it.x.array[:] = self.w.x.array[:]
 
-        
-
-class SmallDisplacement(TotalDisplacement):
-    def __init__(self, sim):
-        super().__init__(sim)
-
-        self.u, self.ε_v, self.p = ufl.split(self.w)
-        self.u_prev_it, self.ε_v_prev_it, self.p_prev_it = ufl.split(self.w_prev_it)
-        self.ε_e = mf.ε(self.u) - self.ε_v
-
-        self.p_crack = self.crack_pressure(self.u)
-        self.pw = self.water_pressure(self.u)
-
-        self.dε_v = self.ε_v - self.ε_v_prev_time
-        self.dε_v_prev_it = self.ε_v_prev_it - self.ε_v_prev_time
-
-    
-
 
     
     def timestep(self):
-
-        self.w_prev_time.x.array[:] += self.w.x.array[:]
-
-     
-class SemiLagrangian(TotalDisplacement):
-
-    def __init__(self, sim):
-        super().__init__(sim)
-
-        self.du, self.dε_v, self.dp = ufl.split(self.w)
-
-        self.du_prev_it, self.dε_v_prev_it, self.dp_prev_it = ufl.split(self.w_prev_it)
+        # self.vec_ε_e_prev_time.interpolate(fem.Expression(self.inverse_map(self.ε_e), self.E.element.interpolation_points()))
         
-        self.u = self.u_prev_time + self.du
-        self.ε_v = self.ε_v_prev_time + self.dε_v
-        self.ε_e = mf.ε(self.u) - self.ε_v
-
-        self.p = self.p_prev_time + self.dp
-        self.p_prev_it = self.p_prev_time + self.dp_prev_it
-
-        
-
-        
-        self.p_crack = self.crack_pressure(self.du)
-        self.pw = self.water_pressure(self.du)
-
-    
-
-
-    
-    def timestep(self):
 
         du = fem.Function(self.V)
         du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
@@ -168,22 +143,3 @@ class SemiLagrangian(TotalDisplacement):
 
 
 
-
-class SemiLagrangianEpsilon(SemiLagrangian):
-
-    def __init__(self, sim):
-        super().__init__(sim)
-
-        self.E = fem.functionspace(self.sim.msh, self.ε_el)
-
-        self.ε_e_prev_time = fem.Function(self.E, name="epsilon previous time")
-        self.ε_e = self.ε_e_prev_time + mf.ε(self.du) - self.dε_v
-        self.ε_e_prev_it = self.ε_e_prev_time + mf.ε(self.du_prev_it) - self.dε_v_prev_it
-
-    def timestep(self):
-        self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
-        
-        super().timestep()
-        
-        
-    

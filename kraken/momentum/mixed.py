@@ -9,6 +9,7 @@ import numpy as np
 from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
+from kraken.numerics import energy_splits_deviatoric as esd
 from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
 from petsc4py import PETSc
@@ -28,7 +29,7 @@ class MixedDisplacement(Momentum):
         self.W = fem.functionspace(self.sim.msh, self.mixed_el)
 
         self.w = fem.Function(self.W, name="mixed function")
-        self.w.x.array[:] =1.0
+        # self.w.x.array[:] =1.0
         self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
         
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
@@ -45,14 +46,7 @@ class MixedDisplacement(Momentum):
         
         self.bc_u = self.sim.bc_funcs[0](self.W)
 
-        self.DG0 = fem.functionspace(self.sim.msh, ("DG", 0))
-        self.areaf = ufl.TestFunction(self.DG0)
-        self.cell_area_form = fem.form(self.areaf * ufl.dx)
-        self.area_0 = np.copy(fem.assemble_vector(self.cell_area_form).array)
-
-        self.area_ratio = fem.Function(self.DG0)
-        self.area_ratio.x.array[:] = 1.0
-
+        
 
 
     def setup_momentum(self):
@@ -60,73 +54,40 @@ class MixedDisplacement(Momentum):
         v, v_v, q = ufl.split(w_test)
         n = ufl.FacetNormal(self.sim.msh)
 
-        # g = self.sim.damage.g
-
-        g = es.degradation_default(self.sim.damage.d,1e-12)
+        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
         
-        
-        σ = self.stress(self.ε_e)
-        # σ = es.cauchy_stress_pressure(self.ε_e, self.p)
-        # σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
-        
-        
-        # σD0 = 2*mf.dev3(self.ε_e_prev_it)
         
 
-       
-     
-
+        # σ0 = es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν)
+        # σ = self.stress(self.ε_e)
+        σ = 1.5*es.λoverμ(self.sim.params.ν)*ufl.tr(self.ε_e)*ufl.Identity(self.sim.msh.geometry.dim) + 2*self.ε_e
+        
+        
+        
         # g_v = es.degradation_default(self.sim.damage.d,self.sim.params.gv_tol)
         A = mf.rate_factor(self.sim.params.T)/self.sim.params.A0
         
         # η0 = mf.viscosity_stress(es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν), self.sim.params.n, 0, A=A)
-        η0 = mf.viscosity(ufl.dev(mf.tensor_2d_to_3d(mf.ε(self.vel_prev_it))), self.sim.params.n, 1e-14, A=A)
+        η0 = mf.viscosity(mf.ε(self.vel_prev_it), self.sim.params.n, 1e-13, A=A)
       
-        # σ_prev = self.stress(self.ε_e_prev_it)
-        # σD_prev = mf.dev3(σ_prev)
 
-        # σ0_prev = es.cauchy_stress(self.ε_e_prev_it, self.sim.params.ν)
-        # σD0_prev = mf.dev3(σ0_prev)
-
-        # self.gg = ufl.sqrt(ufl.inner(σD_prev, σD_prev)+1e-14)/ufl.sqrt(ufl.inner(σD0_prev, σD0_prev)+1e-14)
-        
-        η_lin = A**(-1/3.0) * self.sim.params.γdot**((1 - 3.0) / (2 * 3.0))
         # g_v = ufl.conditional(self.sim.damage.d > 0.98, 0.0, 1.0)
 
         g_v = es.degradation_default(self.sim.damage.d, self.sim.params.gv_tol)
 
         η = g_v*η0 + (1-g_v)*self.sim.params.gv_tol
-        # η = self.gg*η0
 
-        # P = pt.projection_tensor(mf.εD(self.vel_prev_it))
-        # i,j,k,l = ufl.indices(4)
-        # εDplus = ufl.as_tensor(P[i,j,k,l]*mf.εD(self.vel)[k,l],(i,j))
-        # εDminus = mf.εD(self.vel) - εDplus
-        # εD = g*εDplus + εDminusp
-
-        I = ufl.Identity(self.sim.msh.geometry.dim)
-        σv0 = -self.p*I + 2*η0*mf.ε(self.vel)
-        σvplus = mf.positive_part(-self.p)*I + 2*η0*matrix_function(mf.ε(self.vel),mf.positive_part)
-        σvminus = σv0 - σvplus
-        σv = g*σvplus + σvminus
-
-        εvplus = matrix_function(mf.ε(self.vel),mf.positive_part)
-        # εvplus = pt.Aplus(mf.ε(self.vel), mf.ε(self.vel_prev_it))
-
-        εvminus = mf.ε(self.vel) - εvplus
-        εv = g*εvplus + εvminus
         
+        τ3d = mf.deviatoric2d_to_3d(2*self.ε_eD)
+        τe2 = 0.5*ufl.inner(τ3d,τ3d) + 1e-8
+        η = 1/(A*τe2)
 
-        pplus = mf.positive_part(-self.p)
-        pminus = mf.negative_part(-self.p)
-        p_eff = g*pplus + pminus
-        # p_eff = pt.degraded_scalar(-self.p, -self.p_prev_it, g)
-        
         
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
         Iprime = 2*self.sim.damage.d
+
         # Iprime = 1.0
         self.F = (
             # 0.5*self.sim.params.C_inertia*ufl.inner(self.accel, v)  \
@@ -140,8 +101,8 @@ class MixedDisplacement(Momentum):
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
-                2*η0*ufl.inner(εv, mf.ε(v_v))\
-                + ufl.inner(p_eff, ufl.div(v_v))  \
+                2*g_v*η*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
+                - ufl.inner(self.p, ufl.div(v_v))  \
             -    ufl.inner(σ, mf.ε(v_v))
              ) * ufl.dx
         # self.F += (
@@ -156,7 +117,7 @@ class MixedDisplacement(Momentum):
 
 
         self.F += (
-                - ufl.inner(ufl.div(self.du), q) \
+                - ufl.div(self.du)*q \
                 ) * ufl.dx 
         
 
@@ -298,6 +259,11 @@ class SemiLagrangianEpsilon(SemiLagrangian):
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
         self.ε_e = mf.ε(self.du_e) + self.ε_e_prev_time
         self.ε_e_prev_it = mf.ε(self.du_e_prev_it) + self.ε_e_prev_time
+
+        self.ε_eD = self.ε_e - (1/3)*1.5*ufl.tr(self.ε_e)*ufl.Identity(self.sim.msh.geometry.dim)
+
+
+        self.ψplus = self.sim.free_energy_plus(self.ε_e,self.sim.params.ν)
 
     def timestep(self):
         self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))

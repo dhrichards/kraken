@@ -176,3 +176,41 @@ def tensor_2d_to_3d(A2):
     return ufl.as_tensor([[A2[0,0], A2[0,1], 0.0],
                           [A2[1,0], A2[1,1], 0.0],
                           [0.0,      0.0,    0.0]])
+
+def tensor_3d_to_2d(A3):
+    return ufl.as_tensor([[A3[0,0], A3[0,1]],
+                          [A3[1,0], A3[1,1]]])
+
+
+def grad3d(u):
+    gradu = ufl.grad(u)
+    return ufl.as_tensor([[gradu[0,0], gradu[0,1], 0],
+                                [gradu[1,0], gradu[1,1], 0],
+                                [gradu[2,0], gradu[2,1], 0]])
+
+def ε3d(u):
+    return 0.5*(grad3d(u) + ufl.transpose(grad3d(u)))
+
+
+
+def v2to3(v):
+    return ufl.as_vector([v[0], v[1], 0])
+
+def v3to2(v):
+    return ufl.as_vector([v[0], v[1]])
+
+
+def deviatoric2d_to_3d(A):
+    return ufl.as_tensor([[A[0,0], A[0,1], 0.0],
+                          [A[1,0], A[1,1], 0.0],
+                          [0.0,      0.0,   -A[0,0]-A[1,1]]])
+
+
+def short_voigt2tensor(v):
+    return ufl.as_tensor([[v[0], v[2], 0.0],
+                          [v[2], v[1], 0.0],
+                          [0.0,   0.0,  v[3]]])
+
+
+def tensor2short_voigt(A):
+    return ufl.as_vector([A[0,0], A[1,1], A[2,2], A[0,1]])

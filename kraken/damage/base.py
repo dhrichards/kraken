@@ -20,7 +20,7 @@ class Damage:
     def setup(self):
         self.setup_weak_form()
         self.setup_solver()
-        self.setup_history()
+        # self.setup_history()
 
 
     def setup_weak_form(self):
@@ -41,9 +41,8 @@ class Damage:
 
 
     def setup_history(self):
-        self.H_func = es.history_function(self.sim.momentum.ε_e, self.Hprev,
-                                self.sim.params.ν, self.sim.params.ψcritstar,
-                                self.sim.free_energy_plus)
+        self.H_func = es.history_function(self.sim.momentum.ψplus, self.Hprev,
+                                self.sim.params.ψcritstar)
         h = ufl.TrialFunction(self.H_space)
         v = ufl.TestFunction(self.H_space)
 
@@ -56,9 +55,8 @@ class Damage:
 
 
     def timestep(self):
-        self.H_func = es.history_function(self.sim.momentum.ε_e, self.Hprev,
-                                self.sim.params.ν, self.sim.params.ψcritstar,
-                                self.sim.free_energy_plus)
+        self.H_func = es.history_function(self.sim.momentum.ψplus, self.Hprev,
+                                self.sim.params.ψcritstar)
         self.Hprev.interpolate(fem.Expression(self.H_func, self.H_space.element.interpolation_points()))
 
     def write_checkpoint(self, filename, t=0):

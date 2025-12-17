@@ -1,5 +1,6 @@
 from kraken import parameters, utilities
 from kraken.numerics import energy_splits as es
+from kraken.numerics import energy_splits_deviatoric as esd
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import projection_tensors as pt
 from dolfinx import fem
@@ -16,17 +17,25 @@ class Simulation:
         self.params = parameters.Params_with_uc(self.msh)
         self.bc_funcs = bc_funcs
         self.level = level
-        self.T = -20.0  # Default temperature
 
         if split == "lo":
             self.free_energy_plus = es.free_energy_plus_lo
             self.stress_plus = es.stress_plus_lo
+            self.stress_plus_alt = esd.stress_plus_lo
+            self.deviatoric_stress_plus = esd.deviatoric_stress_plus_lo
+            self.free_energy_plus_alt = esd.free_energy_plus_lo
         elif split == "spectral":
             self.free_energy_plus = es.free_energy_plus_spectral
             self.stress_plus = es.stress_plus_spectral
+            self.stress_plus_alt = esd.stress_plus_spectral
+            self.deviatoric_stress_plus = esd.deviatoric_stress_plus_spectral
+            self.free_energy_plus_alt = esd.free_energy_plus_spectral
         elif split == "dp":
             self.free_energy_plus = es.free_energy_plus_dp
             self.stress_plus = es.stress_plus_dp
+            self.stress_plus_alt = esd.stress_plus_dp
+            self.deviatoric_stress_plus = esd.deviatoric_stress_plus_dp
+            self.free_energy_plus_alt = esd.free_energy_plus_dp
         elif split == "star":
             self.free_energy_plus = es.free_energy_plus_star
             self.stress_plus = es.stress_plus_star
@@ -36,9 +45,9 @@ class Simulation:
         elif split == "none":
             self.free_energy_plus = es.free_energy
             self.stress_plus = es.cauchy_stress
-        elif split == "lo_3d":
-            self.free_energy_plus = es.free_energy_plus_lo_3d
-            self.stress_plus = es.stress_plus_lo_3d
+            self.stress_plus_alt = esd.cauchy_stress
+            self.deviatoric_stress_plus = lambda εD,trε,ν: 2*εD
+            self.free_energy_plus_alt = esd.free_energy
         else:
             raise ValueError(f"Unknown energy split: {split}")
 
@@ -91,6 +100,7 @@ class Simulation:
                                 'dt' : self.params.dt.value,
                                 'patm': self.params.patm.value,
                                 'gv_tol': self.params.gv_tol.value,
+                                'T': self.params.T.value
                              }
             adios4dolfinx.write_attributes(filename, MPI.COMM_WORLD, 'params', dictofparams)
 

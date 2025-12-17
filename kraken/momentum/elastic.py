@@ -8,6 +8,7 @@ from kraken.momentum.base import Momentum
 from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
+from kraken.numerics import energy_splits_deviatoric as esd
 from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
 from petsc4py import PETSc
@@ -21,6 +22,7 @@ class Elasticity(Momentum):
 
         self.u = fem.Function(self.U, name="displacement")
         self.ε_e = mf.ε(self.u)
+        self.ψplus = self.sim.free_energy_plus(self.ε_e, self.sim.params.ν)
 
         self.u_prev_it = fem.Function(self.U, name="displacement previous iteration")
         self.u_prev_time = fem.Function(self.U, name="displacement previous time")
@@ -73,6 +75,73 @@ class Elasticity(Momentum):
 
     def timestep(self):
         self.u_prev_time.x.array[:] = self.u.x.array[:]
+
+
+class Elastic3D(Momentum):
+    def __init__(self, sim):
+
+        super().__init__(sim)
+        
+
+        self.U = fem.functionspace(self.sim.msh, ("Lagrange", 1, (3, )))
+
+        self.u = fem.Function(self.U, name="displacement")
+        self.ε_e = mf.ε3d(self.u)
+        self.ψplus = self.sim.free_energy_plus(self.ε_e, self.sim.params.ν)
+
+        self.u_prev_it = fem.Function(self.U, name="displacement previous iteration")
+        self.u_prev_time = fem.Function(self.U, name="displacement previous time")
+
+        self.bc_u = self.sim.bc_funcs[0](self.U)
+
+    def setup_momentum(self):
+        
+        v = ufl.TestFunction(self.U)
+
+        g = es.degradation_default(self.sim.damage.d,1e-12)
+
+        p_w = self.water_pressure(self.u)
+        p_crack = self.crack_pressure(self.u)
+
+        
+        
+        σ = self.stress(self.ε_e)
+    
+        
+        f = self.sim.params.ρistar*mf.body_force(self.sim.msh)
+
+        n = ufl.FacetNormal(self.sim.msh)
+
+        d = self.sim.damage.d
+        # Iprime = 2 - 2*d # Iprime*grad(d) = -grad(g)
+        Iprime = 2*self.sim.damage.d
+        # Iprime = 1.0
+
+
+
+        self.F = (ufl.inner(σ, mf.ε3d(v))\
+              - ufl.inner(mf.v2to3(f), v) 
+              -p_crack*ufl.inner(ufl.Dx(g, 0), v[0]) \
+            # - p_crack*ufl.inner(ufl.grad(g), v) \
+            #  + p_crack* ufl.inner(Iprime*ufl.grad(d), v)\
+              ) * ufl.dx \
+            + p_w * ufl.inner(mf.v2to3(n), v) * ufl.ds 
+        
+
+        self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.U))
+            
+        
+        self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_u)
+
+    def solve(self):
+        self.solver.solve(None, self.u.x.petsc_vec)
+        self.u_prev_it.x.array[:] = self.u.x.array[:]
+
+    def timestep(self):
+        self.u_prev_time.x.array[:] = self.u.x.array[:]
+
+
+
 
 
 class ElasticDegraded(Elasticity):
@@ -172,7 +241,10 @@ class ElasticPressure(Momentum):
 
         
         self.pw = self.water_pressure(self.u)
-        self.ε_e = mf.ε(self.u)
+        self.ε_eD = mf.εD(self.u)
+        self.trε = -self.p/es.Koverμ(self.sim.params.ν)
+
+        self.ψplus = esd.free_energy_plus_dp(self.ε_eD, self.trε, self.sim.params.ν)
 
 
     def setup_momentum(self):
@@ -188,10 +260,10 @@ class ElasticPressure(Momentum):
         
         
         # σ = self.stress(self.ε_e)
-        σ0 = -self.p*ufl.Identity(self.sim.msh.geometry.dim) + 2*(self.ε_e)
+        σ0 = -self.p*ufl.Identity(self.sim.msh.geometry.dim) + 2*self.ε_eD
 
         # σplus = es.stress_plus_lo_pressure(self.ε_e, self.p,self.sim.params.ν)
-        σplus = es.stress_plus_dp_pressure(self.ε_e, self.p,self.sim.params.ν)
+        σplus = esd.stress_plus_dp(self.ε_eD, self.trε,self.sim.params.ν)
         σminus = σ0 - σplus
 
         σ = g*σplus + σminus
@@ -207,9 +279,6 @@ class ElasticPressure(Momentum):
         # Iprime = 1.0
 
 
-        λ = es.λoverμ(self.sim.params.ν)
-
-
         self.F = (ufl.inner(σ, mf.ε(v))\
               - ufl.inner(f, v) 
               -p_crack*ufl.inner(ufl.Dx(g, 0), v[0]) \
@@ -219,7 +288,7 @@ class ElasticPressure(Momentum):
             + p_w * ufl.inner(n, v) * ufl.ds 
         
         self.F += (
-            + λ*ufl.inner(ufl.div(self.u), q)
+            + es.Koverμ(self.sim.params.ν)*ufl.inner(ufl.div(self.u), q)
             + self.p*q
              ) * ufl.dx
         

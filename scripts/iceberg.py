@@ -122,7 +122,7 @@ d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
 
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
+                        # bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
                         ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
@@ -198,7 +198,7 @@ if MPI.COMM_WORLD.rank == 0:
 
 solve_d = False
 if args.type == "relaxation":
-    i_start = 50
+    i_start = 100
     model.params.dt.value = 10*24*60*60
     
 else:
@@ -260,9 +260,13 @@ for i in range(1,args.nt):
 
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
-                                    model.momentum.u_v, model.momentum.u_e,
-                                    model.free_energy_plus(model.momentum.ε_e, model.params.ν),
-                                    model.momentum.p_crack*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0)
+                                    # model.momentum.u_v, model.momentum.u_e,
+                                    model.momentum.ψplus,
+                                    model.momentum.p_crack*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
+                                    # model.momentum.ε_eD,
+                                    model.momentum.ε_e,
+                                    model.momentum.ε_eD,
+                                    model.momentum.p,
                                     # model.damage.Hprev,
                                     # σe,σv,
                                     # η,
@@ -271,9 +275,13 @@ for i in range(1,args.nt):
                                     ],
                                     ["u","d",
                                     # "ε_e","ε_v","ε",
-                                    "ue","uv",
+                                    # "ue","uv",
                                     "psi_plus",
-                                    "water_pressure"
+                                    "water_pressure",
+                                    # "e_d",
+                                    "e",
+                                    "eD",
+                                    "p",
                                     # "H",
                                     # "σe",
                                     # "σv",
