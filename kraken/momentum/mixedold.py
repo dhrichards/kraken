@@ -8,7 +8,7 @@ import basix.ufl as bufl
 import numpy as np
 from kraken import parameters
 from kraken.numerics import maths_functions as mf
-from kraken.numerics import energy_splits as es
+from kraken.numerics import energy_splits_old as es
 from kraken.numerics import energy_splits_deviatoric as esd
 from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
@@ -46,7 +46,6 @@ class MixedDisplacement(Momentum):
         
         self.bc_u = self.sim.bc_funcs[0](self.W)
 
-        
 
 
     def setup_momentum(self):
@@ -54,13 +53,12 @@ class MixedDisplacement(Momentum):
         v, v_v, q = ufl.split(w_test)
         n = ufl.FacetNormal(self.sim.msh)
 
-        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
+        g = es.degradation_default(self.sim.damage.d,1e-12)
         
         
 
         # σ0 = es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν)
         σ = self.stress(self.ε_e)
-        # σ = 1.5*es.λoverμ(self.sim.params.ν)*ufl.tr(self.ε_e)*ufl.Identity(self.sim.msh.geometry.dim) + 2*self.ε_e
         
         
         
@@ -68,21 +66,14 @@ class MixedDisplacement(Momentum):
         A = mf.rate_factor(self.sim.params.T)/self.sim.params.A0
         
         # η0 = mf.viscosity_stress(es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν), self.sim.params.n, 0, A=A)
-        ϵD = ufl.dev(mf.ε(self.vel_prev_it))
-        ϵe2 = 0.5*ufl.inner(ϵD,ϵD) + 1e-12
-        # η0 = A**(-1/3)*ϵe2**((1-3)/3)/2
-        η0 = mf.viscosity(ufl.dev(mf.ε(self.vel_prev_it)), self.sim.params.n, 1e-13, A=A)
-
+        η0 = mf.viscosity(mf.ε(self.vel_prev_it), self.sim.params.n, 1e-14, A=A)
+      
+    
         # g_v = ufl.conditional(self.sim.damage.d > 0.98, 0.0, 1.0)
 
         g_v = es.degradation_default(self.sim.damage.d, self.sim.params.gv_tol)
 
         η = g_v*η0 + (1-g_v)*self.sim.params.gv_tol
-
-        
-        τ0 = 2*ufl.dev(self.ε_e)
-        τe2 = 0.5*ufl.inner(τ0,τ0) + 1e-8
-        η = 1/(A*τe2)
 
         
         self.ρ = self.sim.params.ρistar/self.area_ratio
@@ -103,7 +94,7 @@ class MixedDisplacement(Momentum):
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
-                2*g_v*η*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
+                2*g_v*η0*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
                 - ufl.inner(self.p, ufl.div(v_v))  \
             -    ufl.inner(σ, mf.ε(v_v))
              ) * ufl.dx
@@ -119,7 +110,7 @@ class MixedDisplacement(Momentum):
 
 
         self.F += (
-                - ufl.div(self.du)*q \
+                - ufl.inner(ufl.div(self.du), q) \
                 ) * ufl.dx 
         
 
@@ -261,9 +252,6 @@ class SemiLagrangianEpsilon(SemiLagrangian):
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
         self.ε_e = mf.ε(self.du_e) + self.ε_e_prev_time
         self.ε_e_prev_it = mf.ε(self.du_e_prev_it) + self.ε_e_prev_time
-
-        self.ε_eD = self.ε_e - (1/3)*1.5*ufl.tr(self.ε_e)*ufl.Identity(self.sim.msh.geometry.dim)
-
 
         self.ψplus = self.sim.free_energy_plus(self.ε_e,self.sim.params.ν)
 

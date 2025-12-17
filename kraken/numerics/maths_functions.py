@@ -13,9 +13,9 @@ def viscosity_stress(σ, n, eps=1.e-14, A=1.0):
     return A**(-1)* σDe2**((1 - n) / 2)
 
 
-def viscous_energy(ε, n):
-    η = viscosity(ε, n, 1.e-8)
-    return (n/(n+1))*η*ufl.inner(ε, ε) 
+def viscous_energy(ε, n, eps = 1e-12, A=1.0):
+    η = viscosity(ε, n, eps, A)
+    return (2*n/(n+1))*η*ufl.inner(ε, ε) 
 
 
 def viscous_stress(ε,p,η,C2=1):

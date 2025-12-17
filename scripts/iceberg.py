@@ -122,7 +122,7 @@ d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
 
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                        # bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
                         ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
@@ -198,7 +198,7 @@ if MPI.COMM_WORLD.rank == 0:
 
 solve_d = False
 if args.type == "relaxation":
-    i_start = 100
+    i_start = 50
     model.params.dt.value = 10*24*60*60
     
 else:
@@ -264,8 +264,8 @@ for i in range(1,args.nt):
                                     model.momentum.ψplus,
                                     model.momentum.p_crack*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
                                     # model.momentum.ε_eD,
-                                    model.momentum.ε_e,
-                                    model.momentum.ε_eD,
+                                    mf.viscous_energy(ufl.dev(mf.ε(model.momentum.vel)), model.params.n, 1.e-13, A=mf.rate_factor(model.params.T)/model.params.A0),
+                                    # model.momentum.ε_eD,
                                     model.momentum.p,
                                     # model.damage.Hprev,
                                     # σe,σv,
@@ -279,7 +279,7 @@ for i in range(1,args.nt):
                                     "psi_plus",
                                     "water_pressure",
                                     # "e_d",
-                                    "e",
+                                    "visc_diss",
                                     "eD",
                                     "p",
                                     # "H",
