@@ -77,12 +77,16 @@ class MixedDisplacement(Momentum):
 
         g_v = es.degradation_default(self.sim.damage.d, self.sim.params.gv_tol)
 
-        η = g_v*η0 + (1-g_v)*self.sim.params.gv_tol
+
+        η = g*η0 + (1-g)*self.sim.params.gv_tol
 
         
         τ0 = 2*ufl.dev(self.ε_e)
-        τe2 = 0.5*ufl.inner(τ0,τ0) + 1e-8
-        η = 1/(A*τe2)
+        τe2 = 0.5*ufl.inner(τ0,τ0) + 1e-7
+        # η = g_v/(A*τe2)
+
+        # τe2 = 0.5*(ufl.inner(ufl.dev(σ), ufl.dev(σ))) + 1e-8
+        η = g/(A*τe2) + (1-g)*self.sim.params.gv_tol
 
         
         self.ρ = self.sim.params.ρistar/self.area_ratio
@@ -103,7 +107,7 @@ class MixedDisplacement(Momentum):
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
-                2*g_v*η*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
+                2*g_v/A*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
                 - ufl.inner(self.p, ufl.div(v_v))  \
             -    ufl.inner(σ, mf.ε(v_v))
              ) * ufl.dx

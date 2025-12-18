@@ -198,8 +198,8 @@ if MPI.COMM_WORLD.rank == 0:
 
 solve_d = False
 if args.type == "relaxation":
-    i_start = 50
-    model.params.dt.value = 10*24*60*60
+    i_start = 10
+    # model.params.dt.value = 10*24*60*60
     
 else:
     i_start = 1
@@ -250,7 +250,6 @@ for i in range(1,args.nt):
     #         break
 
     
-    
     # η = mf.viscosity(mf.εD(model.momentum.vel), model.params.n, 1.e-14, A=mf.rate_factor(model.T)/model.params.A)
     # σv = η*mf.εD(model.momentum.vel)
     # σe = model.momentum.stress(model.momentum.ε_e)
@@ -263,10 +262,8 @@ for i in range(1,args.nt):
                                     # model.momentum.u_v, model.momentum.u_e,
                                     model.momentum.ψplus,
                                     model.momentum.p_crack*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
-                                    # model.momentum.ε_eD,
-                                    mf.viscous_energy(ufl.dev(mf.ε(model.momentum.vel)), model.params.n, 1.e-13, A=mf.rate_factor(model.params.T)/model.params.A0),
-                                    # model.momentum.ε_eD,
-                                    model.momentum.p,
+                                    # model.temperature.T,
+                                    # model.params.dtstar*model.params.C_temperature*mf.viscous_energy(ufl.dev(mf.ε(model.momentum.vel)), model.params.n, A=mf.rate_factor(model.temperature.T)/model.params.A0)
                                     # model.damage.Hprev,
                                     # σe,σv,
                                     # η,
@@ -278,10 +275,8 @@ for i in range(1,args.nt):
                                     # "ue","uv",
                                     "psi_plus",
                                     "water_pressure",
-                                    # "e_d",
-                                    "visc_diss",
-                                    "eD",
-                                    "p",
+                                    # "T",
+                                    # "viscous_heating"
                                     # "H",
                                     # "σe",
                                     # "σv",
@@ -296,6 +291,7 @@ for i in range(1,args.nt):
     if solve_d:
         model.damage.timestep()
     model.momentum.timestep()
+    # model.temperature.timestep()
     # model.params.dt.value *= 1.05
 
     

@@ -27,6 +27,8 @@ class Params_with_uc:
         self.patm = fem.Constant(msh,default_scalar_type(1e5)) # Atmospheric pressure
         self.gv_tol = fem.Constant(msh,default_scalar_type(1e-5)) # Viscous degradation tolerance
         self.ge_tol = fem.Constant(msh,default_scalar_type(1e-12)) # Elastic degradation tolerance
+        self.cp = fem.Constant(msh,default_scalar_type(2100)) # Specific heat capacity
+        self.κ = fem.Constant(msh,default_scalar_type(2)) # Thermal conductivity
         
 
 
@@ -159,6 +161,14 @@ class Params_with_uc:
     @property
     def C_inertia(self):
         return self.ρc * self.L**2 / (self.μ * self.τ**2)
+    
+    @property
+    def C_temperature(self):
+        return self.ηc*(self.ucstar/self.τ)**2*self.τ/(self.ρc*self.cp)
+    
+    @property
+    def κstar(self):
+        return self.κ*self.τ/(self.ρc*self.cp*self.L**2)
 
 
     def set_Gc_AT1_lowerorder(self):
