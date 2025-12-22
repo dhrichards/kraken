@@ -28,7 +28,10 @@ class Temperature:
 
 
 
+
     def setup(self):
+
+        self.temperature_dependence()
 
         v = ufl.TestFunction(self.T_space)
         
@@ -39,8 +42,11 @@ class Temperature:
         A = mf.rate_factor(self.T_prev)/self.sim.params.A0
         g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
 
+        x = ufl.SpatialCoordinate(self.sim.msh)
+
         self.F = (self.T - self.T_prev)/dt*v*ufl.dx + κ*ufl.inner(ufl.grad(self.T), ufl.grad(v))*ufl.dx \
-            - C*g*mf.viscous_energy(ufl.dev(mf.ε(self.sim.momentum.vel)), self.sim.params.n, A=A)*v*ufl.dx
+            - C*g*mf.viscous_energy(ufl.dev(mf.ε(self.sim.momentum.vel)), self.sim.params.n, A=A)*v*ufl.dx \
+            + ufl.conditional(ufl.gt(self.sim.damage.d,0.95),1,0)*ufl.conditional(ufl.lt(x[1],0.0),1,0)*(self.T - (270.))*v*ufl.dx
         
         self.J = ufl.derivative(self.F, self.T, ufl.TrialFunction(self.T_space))
         
@@ -59,6 +65,14 @@ class Temperature:
         self.solver.getKSP().setType("preonly")
         self.solver.getKSP().setTolerances(rtol=1.0e-9)
         self.solver.getKSP().getPC().setType("lu")
+
+
+    def temperature_dependence(self):
+        #psicrit = 1.0 at T0, 0.0 at 0C, linear
+        θ = self.T - 273.15
+        self.sim.params.ψcrit = 1/(-20)*(θ)
+        self.sim.params.Gc = self.sim.params.ψcrit/2
+
 
 
     def solve(self):

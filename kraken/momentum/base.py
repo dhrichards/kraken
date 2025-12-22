@@ -46,7 +46,7 @@ class Momentum:
     def crack_pressure(self, u):
         # x = ufl.SpatialCoordinate(self.sim.msh)
         # return ufl.conditional(ufl.gt(x[0],25.666),1.0,0.0)*
-        return mf.water_pressure(self.sim.msh, u, self.sim.params.ucstar, level=self.sim.level) + self.sim.params.patmstar
+        return mf.water_pressure(self.sim.msh, u, self.sim.params.ucstar, level=self.sim.params.water_level_star) + self.sim.params.patmstar
         # return mf.water_pressure_static(self.sim.msh, self.sim.level) + self.sim.params.patmstar
         
     def stress(self,ε):
@@ -58,20 +58,6 @@ class Momentum:
         σminus = σ0 - σplus
         return g*σplus+ σminus
     
-    def stress_alt(self,εD,trε):
-        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
-        σ0 = esd.cauchy_stress(εD, trε, self.sim.params.ν)
-        σplus = self.sim.stress_plus_alt(εD, trε, self.sim.params.ν)
-        σminus = σ0 - σplus
-        return g*σplus+ σminus
-    
-    def deviatoric_stress(self,εD,trε):
-        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
-        τ0 = 2*εD
-        τplus = self.sim.deviatoric_stress_plus(εD, trε, self.sim.params.ν)
-        τminus = τ0 - τplus
-        return g*τplus + τminus
-
     
     def setup_solver(self):
         

@@ -304,13 +304,22 @@ def create_iceberg_gmsh_mesh(small_size, refines = [2.5, 0.5, 0.2], Lx=8e3/300, 
     refine_x = Lx - refines[0]
 
     large_size = 1/3
+
+    cut_x = Lx - 0.1
    
 
     model.geo.addPoint(0, -Hw, 0, tag= 1)
     model.geo.addPoint(Lx, -Hw, 0, tag= 2)
 
 
-    model.geo.addPoint(Lx, 1 - Hw, 0, tag =3)
+    model.geo.addPoint(Lx, 1 - Hw, 0, tag =3) ## top right
+
+    model.geo.addPoint(cut_x+small_size/2, 1 - Hw, 0, tag= 6)  ## top right cut
+    model.geo.addPoint(cut_x+small_size/2, 1-Hw -0.1, 0, tag= 7)  ## bottom right cut
+    model.geo.addPoint(cut_x -small_size/2, 1-Hw -0.1, 0, tag= 8)  ## bottom left cut
+    model.geo.addPoint(cut_x -small_size/2, 1 - Hw, 0, tag= 9)  ## top right cut left
+
+
     model.geo.addPoint(refine_x, 1 - Hw, 0, tag=4)
     model.geo.addPoint(0, 1 - Hw, 0, tag=5)
 
@@ -321,7 +330,14 @@ def create_iceberg_gmsh_mesh(small_size, refines = [2.5, 0.5, 0.2], Lx=8e3/300, 
     model.geo.addLine(4, 5, 4)
     model.geo.addLine(5, 1, 5)
 
-    model.geo.addCurveLoop([1, 2, 3, 4, 5], 1)
+    model.geo.addLine(3, 6, 6)
+    model.geo.addLine(6, 7, 7)
+    model.geo.addLine(7, 8, 8)
+    model.geo.addLine(8, 9, 9)
+    model.geo.addLine(9, 4, 10)
+
+    # model.geo.addCurveLoop([1, 2, 3, 4, 5], 1)
+    model.geo.addCurveLoop([1, 2, 6,7,8,9,10,4,5], 1)
     model.geo.addPlaneSurface([1], 1)
     model.geo.synchronize()
 
@@ -370,9 +386,12 @@ def create_iceberg_gmsh_mesh(small_size, refines = [2.5, 0.5, 0.2], Lx=8e3/300, 
 
     model.mesh.generate(2)
 
+    #save gmsh
+    # gmsh.write("icebergrefined.msh")
+
     mesh, ct, ft = io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, rank=0, gdim=2)
 
-    # filename = "icebergrefined.xdmf"
+    filename = "icebergrefined.xdmf"
 
     # with io.XDMFFile(MPI.COMM_WORLD,filename,"w") as file:
     #     file.write_mesh(mesh)

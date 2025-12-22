@@ -42,18 +42,18 @@ def free_energy(ε,ν):
 
 
 
-def free_energy_plus_dp(ε, ν, B = -0.3):
+def free_energy_plus_dp(ε, ν, B = -0.4, eps=1e-12):
     # B = -0.4
     K = Koverμ(ν)
     I1 = 1.5*ufl.tr(ε)
     εD = ufl.dev(ε)
-    J2 = 0.5*ufl.inner(εD, εD)
+    J2 = 0.5*ufl.inner(εD, εD) + eps
     
     ψ1 = 0.5*K*I1**2 + 2*J2
-    ψ2 = (-3*B*K*I1 + 2*ufl.sqrt(J2+1e-9))**2 / (18*B**2*K + 2)
+    ψ2 = (-3*B*K*I1 + 2*ufl.sqrt(J2))**2 / (18*B**2*K + 2)
 
-    ψ = ufl.conditional(ufl.lt(-6*B*ufl.sqrt(J2+1e-9), I1), ψ1,
-                        ufl.conditional(2*ufl.sqrt(J2+1e-9) < 3*B*K*I1, 0.0, 
+    ψ = ufl.conditional(ufl.lt(-6*B*ufl.sqrt(J2), I1), ψ1,
+                        ufl.conditional(2*ufl.sqrt(J2) < 3*B*K*I1, 0.0, 
                                          ψ2))
     return ψ
 
@@ -61,7 +61,7 @@ def free_energy_plus_dp(ε, ν, B = -0.3):
 
 
 
-def stress_plus_dp(ε, ν, B = -0.3, eps=1e-12):
+def stress_plus_dp(ε, ν, B = -0.4, eps=1e-12):
     #-0.3 is good
     # B = -0.4
     εD = ufl.dev(ε)

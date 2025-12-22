@@ -29,6 +29,7 @@ class Params_with_uc:
         self.ge_tol = fem.Constant(msh,default_scalar_type(1e-12)) # Elastic degradation tolerance
         self.cp = fem.Constant(msh,default_scalar_type(2100)) # Specific heat capacity
         self.κ = fem.Constant(msh,default_scalar_type(2)) # Thermal conductivity
+        self.water_level = fem.Constant(msh,default_scalar_type(0.0)) # Water level for hydrostatic pressure
         
 
 
@@ -54,6 +55,10 @@ class Params_with_uc:
     def ucstar_float(self):
         μ = self.E.value / (2 * (1 + self.ν.value))
         return self.ρc.value * self.g.value * self.L.value / μ
+    
+    @property
+    def water_level_star(self):
+        return self.water_level / self.L
     
     @property
     def τ(self):

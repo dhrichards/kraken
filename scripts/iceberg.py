@@ -78,6 +78,10 @@ def crack(x,x_c):
     width = args.l/args.cellfactor / args.height
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>0.07)
 
+def basal_crack(x,x_c):
+    width = args.l/args.cellfactor / args.height
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<-0.6)
+
 def fixed(x):
     return (x[0]<(nondim_length/2 - args.refine_x*0.98*nondim_height))# + (x[0]>(nondim_length/2 - nondim_height/2))
 
@@ -115,15 +119,26 @@ elif args.meshtype == "gmsh":
 
 
 
-d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
+d_bc = lambda V: [
+                bc.internal_bc(V, fixed, 0.0),
                 #   bc.internal_bc(V, cracks, 1.0)
                   ]
 
 
 
-u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary)
+if type == "cliff":
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary)
                         ]
+else:
+
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                            # bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
+                            # bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary)
+                            ]
 
 # u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 if args.damagemodel == "AT1lower":
@@ -142,11 +157,11 @@ elif args.damagemodel == "AT2higher_bounded":
 model = kr.base.Simulation(msh,
                            kr.momentum.mixed.SemiLagrangianEpsilon,
                            damage_model, [u_bc, d_bc], 
-                           level=args.level, split=args.split)
+                           split=args.split)
 
 
-# model.T = mf.temperature(msh,args.rhoi/args.rhow,-30,-1)
-model.params.T.value = args.T
+model.params.T = mf.temperature(msh,args.rhoi/args.rhow,args.T,-1)
+# model.params.T.value = args.T
 model.params.A0.value = mf.rate_factor_np(args.T)
 model.params.L.value = args.height
 model.params.l.value = args.l
@@ -155,8 +170,9 @@ model.params.ρi.value = args.rhoi
 model.params.ρw.value = args.rhow
 model.params.ψcrit.value = args.psicrit
 model.params.Gc.value = args.Gc
-model.params.patm.value = 0.0
+model.params.patm.value = 1e5
 model.params.gv_tol.value = args.gv_tol
+model.params.water_level.value = args.level
 # model.params.E.value = 1e8
 
 x = ufl.SpatialCoordinate(msh)
@@ -166,6 +182,8 @@ z = z - δ
 # ψcrit_top = args.psicrit
 # ψcrit_bottom = 0.01
 # model.params.ψcrit = -(ψcrit_bottom - ψcrit_top)*z + ψcrit_top
+
+model.params.Gc = -(0.01 - args.Gc)*z + args.Gc
 
 
 # μ = model.params.E.value / (2 * (1 + model.params.ν.value))
@@ -181,7 +199,7 @@ z = z - δ
 model.setup()
 
 crack_spacing = 0.1
-crack_start = 0.1
+crack_start = 0.2
 crack_end = args.refine_x - 0.05
 crack_x_cs = nondim_length/2 - np.arange(crack_start, crack_end, crack_spacing)
 def cracks(x):
@@ -189,6 +207,18 @@ def cracks(x):
     for x_c in crack_x_cs:
         val += crack(x,x_c)
     return val
+
+
+basal_crack_spacking = 0.1
+basal_crack_start = 0.2
+basal_crack_end = args.refine_x - 0.05
+basal_crack_x_cs = nondim_length/2 - np.arange(basal_crack_start, basal_crack_end, basal_crack_spacking)
+def basal_cracks(x):
+    val = np.zeros(x.shape[1],dtype=bool)
+    for x_c in basal_crack_x_cs:
+        val += basal_crack(x,x_c)
+    return val
+    
 
 
 
@@ -208,7 +238,10 @@ else:
 
 
 t = 0.0
-model.write_checkpoint(path + "/" + filename +".bp", t)
+# model.write_checkpoint(path + "/" + filename +".bp", t)
+
+# period = 60*60*24
+
 
 
 for i in range(1,args.nt):
@@ -216,12 +249,18 @@ for i in range(1,args.nt):
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
+    # model.params.water_level.value = args.level + 2.0*np.sin(2*ufl.pi*t/period)
+    # if MPI.COMM_WORLD.rank == 0:
+        # print("Water level: ", model.params.water_level.value)
+
 
     if i == i_start:
-        # model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
+        # model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x).astype(np.float64))
+        
         # model.fixed_point(min_its=3, tol=1e-6, max_its=100, solve_damage=False)
+        # model.damage.timestep()
         solve_d = True
-        model.params.dt.value = args.dt*24*60*60
+        
         
 
         
@@ -238,7 +277,7 @@ for i in range(1,args.nt):
         #     model.fixed_point(min_its=3, tol=1e-5, max_its=50, solve_damage=solve_d)
 
     
-    flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
+    flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d, save=False)
     
     # while flag == -1:
     #     model.params.gv_tol.value *= 10
@@ -253,16 +292,18 @@ for i in range(1,args.nt):
     # η = mf.viscosity(mf.εD(model.momentum.vel), model.params.n, 1.e-14, A=mf.rate_factor(model.T)/model.params.A)
     # σv = η*mf.εD(model.momentum.vel)
     # σe = model.momentum.stress(model.momentum.ε_e)
+    # model.temperature.solve()
 
     t += model.params.dt.value
-    model.write_checkpoint(path + "/" + filename +".bp", t)
+    # model.write_checkpoint(path + "/" + filename +".bp", t)
 
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                     # model.momentum.u_v, model.momentum.u_e,
                                     model.momentum.ψplus,
                                     model.momentum.p_crack*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
-                                    # model.temperature.T,
+                                    model.temperature.T,
+                                    model.params.ψcrit,
                                     # model.params.dtstar*model.params.C_temperature*mf.viscous_energy(ufl.dev(mf.ε(model.momentum.vel)), model.params.n, A=mf.rate_factor(model.temperature.T)/model.params.A0)
                                     # model.damage.Hprev,
                                     # σe,σv,
@@ -275,7 +316,8 @@ for i in range(1,args.nt):
                                     # "ue","uv",
                                     "psi_plus",
                                     "water_pressure",
-                                    # "T",
+                                    "T",
+                                    "psi_crit",
                                     # "viscous_heating"
                                     # "H",
                                     # "σe",

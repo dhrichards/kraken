@@ -11,11 +11,11 @@ import adios4dolfinx
 class Simulation:
     def __init__(self, msh, MomentumSolver, DamageSolver, 
                  bc_funcs=[lambda V: [], lambda V: []],
-                   level=0.0, split="lo"):
+                 split="lo"):
         self.msh = msh
         self.params = parameters.Params_with_uc(self.msh)
         self.bc_funcs = bc_funcs
-        self.level = level
+        
 
         if split == "lo":
             self.free_energy_plus = es.free_energy_plus_lo
@@ -43,7 +43,7 @@ class Simulation:
         self.momentum = MomentumSolver(self)
         self.damage = DamageSolver(self)
         # self.mass = Mass(self)
-        # self.temperature = temperature.Temperature(self)
+        self.temperature = temperature.Temperature(self)
 
 
 

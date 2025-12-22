@@ -60,6 +60,7 @@ class MixedDisplacement(Momentum):
 
         # σ0 = es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν)
         σ = self.stress(self.ε_e)
+        σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         # σ = 1.5*es.λoverμ(self.sim.params.ν)*ufl.tr(self.ε_e)*ufl.Identity(self.sim.msh.geometry.dim) + 2*self.ε_e
         
         
@@ -86,13 +87,14 @@ class MixedDisplacement(Momentum):
         # η = g_v/(A*τe2)
 
         # τe2 = 0.5*(ufl.inner(ufl.dev(σ), ufl.dev(σ))) + 1e-8
-        η = g/(A*τe2) + (1-g)*self.sim.params.gv_tol
+        # η = g/(A*τe2) + (1-g)*self.sim.params.gv_tol
 
         
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
         Iprime = 2*self.sim.damage.d
+
 
         # Iprime = 1.0
         self.F = (
@@ -107,9 +109,9 @@ class MixedDisplacement(Momentum):
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
-                2*g_v/A*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
-                - ufl.inner(self.p, ufl.div(v_v))  \
-            -    ufl.inner(σ, mf.ε(v_v))
+                2*g/A*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
+                - g*ufl.inner(self.p, ufl.div(v_v))  \
+            -    g*ufl.inner(σ0, mf.ε(v_v))
              ) * ufl.dx
         # self.F += (
         #         2*η*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
@@ -123,7 +125,7 @@ class MixedDisplacement(Momentum):
 
 
         self.F += (
-                - ufl.div(self.du)*q \
+                - g*ufl.div(self.du)*q \
                 ) * ufl.dx 
         
 
@@ -237,8 +239,8 @@ class SemiLagrangian(MixedDisplacement):
         self.w_prev_2.x.array[:] = self.w_prev_time.x.array[:]
         self.w_prev_time.x.array[:] += self.w.x.array[:]
 
-        self.area = fem.assemble_vector(self.cell_area_form).array
-        self.area_ratio.x.array[:] = self.area/self.area_0
+        # self.area = fem.assemble_vector(self.cell_area_form).array
+        # self.area_ratio.x.array[:] = self.area/self.area_0
         
 
         self.w_start.x.array[:] = self.w.x.array[:]
