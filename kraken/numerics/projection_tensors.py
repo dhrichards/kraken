@@ -1,6 +1,6 @@
 import ufl
 from .invariants import matrix_function, eigenstate
-from .maths_functions import ε, εD
+from .maths_functions import ε
 from .energy_splits import positive_part
 
 
@@ -33,17 +33,6 @@ def stress_plus(ε,ε_prev,ν):
     σplus = λoverμ*heaviside(ufl.tr(ε_prev))*ufl.tr(ε)*I + \
         2*ufl.as_tensor(P[i,j,k,l]*ε[k,l],(i,j))
     return σplus   
-
-
-def degraded_stress_jakub(u, u_prev, g, ν):
-    λoverμ = 2*ν/(1-2*ν); I = ufl.Identity(len(u))
-    i,j,k,l = ufl.indices(4)
-    σ = (λoverμ+2/3)*ufl.tr(ε(u))*I + 2*εD(u)
-    P = projection_tensor(εD(u_prev))
-    σplus = (λoverμ+2/3)*heaviside(ufl.tr(ε(u_prev)))*ufl.tr(ε(u))*I + \
-        2*ufl.as_tensor(P[i,j,k,l]*εD(u)[k,l],(i,j))
-    σminus = σ - σplus
-    return g*σplus + σminus
 
 
 def degraded_deviatoric(εD,ε_prev, g, ν):

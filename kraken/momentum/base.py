@@ -41,12 +41,12 @@ class Momentum:
         self.setup_solver()
 
     def water_pressure(self,u):
-        return mf.water_pressure(self.sim.msh, u, self.sim.params.ucstar) + self.sim.params.patmstar
+        return mf.water_pressure(self.sim.msh, u, self.sim.params.ρwstar, self.sim.params.ucstar) + self.sim.params.patmstar
     
     def crack_pressure(self, u):
         # x = ufl.SpatialCoordinate(self.sim.msh)
         # return ufl.conditional(ufl.gt(x[0],25.666),1.0,0.0)*
-        return mf.water_pressure(self.sim.msh, u, self.sim.params.ucstar, level=self.sim.params.water_level_star) + self.sim.params.patmstar
+        return mf.water_pressure(self.sim.msh, u, self.sim.params.ρwstar, self.sim.params.ucstar, level=self.sim.params.water_level_star) + self.sim.params.patmstar
         # return mf.water_pressure_static(self.sim.msh, self.sim.level) + self.sim.params.patmstar
         
     def stress(self,ε):

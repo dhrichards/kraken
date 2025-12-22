@@ -102,7 +102,7 @@ class Params_with_uc:
     @property
     def ρc(self):
         """Characteristic density."""
-        return self.ρw
+        return self.ρi
     
     @property
     def pwc(self):
@@ -113,6 +113,10 @@ class Params_with_uc:
         return self.ρi/self.ρc
     
     @property
+    def ρwstar(self):
+        return self.ρw/self.ρc
+    
+    @property
     def σc(self):
         return self.μ*self.ucstar
     
@@ -121,11 +125,7 @@ class Params_with_uc:
     #     """Non dimensional tensile strength."""
     #     return self.σcrit / self.σc
     
-    
-    @property
-    def δ(self):
-        """Non dimensional density difference."""
-        return 1.0 - self.ρistar
+
     
     @property
     def patmstar(self):

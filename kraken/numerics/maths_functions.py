@@ -7,21 +7,10 @@ def viscosity(ε, n, eps=1.e-11, A=1.0):
     εe2 = ufl.inner(ε, ε) / 2 + eps
     return  A**(-1/n) * εe2**((1 - n) / (2 * n))
 
-def viscosity_stress(σ, n, eps=1.e-14, A=1.0):
-    σD = dev3(σ)
-    σDe2 = ufl.inner(σD, σD) / 2 + eps
-    return A**(-1)* σDe2**((1 - n) / 2)
-
-
 def viscous_energy(ε, n, eps = 1e-12, A=1.0):
     η = viscosity(ε, n, eps, A)
     return (2*n/(n+1))*η*ufl.inner(ε, ε) 
 
-
-def viscous_stress(ε,p,η,C2=1):
-    D = ufl.shape(ε)[0]
-    δ = ufl.Identity(D)
-    return η*ε/C2 - p*δ
 
 def ε(u):
     return ufl.sym(ufl.grad(u))
@@ -30,7 +19,7 @@ def dev3(A):
     δ = ufl.Identity(ufl.shape(A)[0])
     return A - ufl.tr(A)/3*δ
 
-def εD(u):
+def εD3(u):
     return dev3(ε(u))
 
 
@@ -39,33 +28,24 @@ def largest_eigenvalue(A):
     return λ[-1]
 
 def positive_part(x,eps=1e-8):
-    # return 0.5*(x + (x**2 + eps**2)**0.5)
     return ufl.max_value(0.0,x)
-    # return ufl.conditional(ufl.gt(x,0),x,0)
-    # return 0.5*(x + abs(x))
-    # return 0.5*(x + ufl.sign(x)*x)
 
 
 def negative_part(x,eps=1e-6):
     return 0.5*(x-abs(x))
-    # return 0.5*(x - (x**2 + eps**2)**0.5)
 
 
-def water_pressure(msh,v,ucstar=1.0, level = 0.0):
+def water_pressure(msh,v,ρw,ucstar=1.0, level = 0.0):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1] + ucstar*v[msh.geometry.dim-1]
     z = z - level
-    return ufl.max_value(0.0,-z) 
-    # return ufl.conditional(ufl.gt(z,0),0.0,-ρw*g*z)
-    # return 0.5*(-z + (z**2 + eps**2)**0.5)
+    return ufl.max_value(0.0,-ρw*z) 
 
-def water_pressure_static(msh,level=0.0):
+def water_pressure_static(msh,ρw,level=0.0):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1]
     z = z - level
-    return ufl.max_value(0.0,-z) 
-    # return ufl.conditional(ufl.gt(z,level),0.0,-ρw*g*z)
-    # return 0.5*(-z + (z**2 + eps**2)**0.5)
+    return ufl.max_value(0.0,-ρw*z) 
 
 
 def body_force(msh):
@@ -78,7 +58,7 @@ def body_force(msh):
 def external_density(msh):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1]
-    ρa = 1e-3; ρw = 1.0
+    ρa = 1e-3; ρw = 1/0.9
     return ufl.conditional(ufl.gt(z,0),0.0,ρw)
 
 
@@ -108,7 +88,7 @@ def body_force_with_water(msh,ρi,g):
     return g*ρi*f + (1-g)*ρw*f
 
 
-def overburden_pressure(msh,ρistar, uz=0.0, ucstar=1.0):
+def overburden_pressure(msh,ρistar=1.0, uz=0.0, ucstar=1.0):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1] + ucstar*uz
     δ = 1 - ρistar
