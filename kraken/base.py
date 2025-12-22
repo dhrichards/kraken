@@ -146,13 +146,12 @@ class Simulation:
                 #     self.mass.solve()
 
                 if save:
-                    η = mf.viscosity(mf.εD(self.momentum.vel_prev_it), self.params.n, 1.e-15, 1.0)
                     utilities.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, [self.momentum.u,self.damage.d,
-                                        self.momentum.u_e, self.momentum.u_v, η
+                                        self.momentum.u_e, self.momentum.u_v
                                         ],
                                         ["u","d",
-                                        "ue","uv","viscosity"
+                                        "ue","uv",
                                         ],
                                     t=i)
     
