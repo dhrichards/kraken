@@ -109,7 +109,7 @@ class MixedDisplacement(Momentum):
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
-                2*g/A*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
+                2*g*η0*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
                 - g*ufl.inner(self.p, ufl.div(v_v))  \
             -    g*ufl.inner(σ0, mf.ε(v_v))
              ) * ufl.dx

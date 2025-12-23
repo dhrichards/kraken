@@ -191,7 +191,7 @@ def extract_line(points,msh,functions):
 
 
 def create_refined_mesh(nondim_length, nondim_height, 
-                        lstar,Hw,
+                        lstar,
                         aspect_ratios=(100,100), refine = (2.2,0.3),
                         cell_factor=2.1, refine_right=True, cell_type = mesh.CellType.triangle):
     
@@ -238,7 +238,7 @@ def create_refined_mesh(nondim_length, nondim_height,
     z[z>z_change/aspect_ratio_z] = z_change + z[z>z_change/aspect_ratio_z] - z_change/aspect_ratio_z
     z[z<=z_change/aspect_ratio_z] = z[z<=z_change/aspect_ratio_z]*aspect_ratio_z
 
-    msh.geometry.x[:,1] = z - Hw
+    # msh.geometry.x[:,1] = z - Hw
 
     return msh
 

@@ -12,7 +12,7 @@ import kraken as kr
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks, non dimensional")
+parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks above sea level (m)")
 parser.add_argument("--split", type=str, default="lo", help="Energy split to use")
 parser.add_argument("--l", type=float, default=2, help="Regularization length scale in meters")
 parser.add_argument("--dt", type=float, default=3, help="Time step in days")
@@ -23,7 +23,6 @@ parser.add_argument("--Gc", type=float, default=0.5, help="Gc")
 parser.add_argument("--type", type=str, default="relaxation", help="gravity loop initilisation or relaxation first")
 parser.add_argument("--damagemodel", type=str, default="AT2higher", help="damage model to use")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
-parser.add_argument("--gv_tol", type=float, default=1e-3, help="tolerance for viscous degradation")
 parser.add_argument("--nt", type=int, default=200, help="number of timesteps")
 parser.add_argument("--crack_x", type=float, default=0.5, help="x position of crack center from end (non dimensional)")
 parser.add_argument("--rhoi", type=float, default=900, help="ice density")
@@ -37,6 +36,7 @@ parser.add_argument("--tol", type=float, default=1e-6, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=3, help="Minimum number of solver iterations")
 parser.add_argument("--max_its", type=int, default=500, help="Maximum number of solver iterations")
 parser.add_argument("--meshtype", type=str, default="refined", help="Type of mesh to use: gmsh or refined")
+parser.add_argument("--sealevel", type=float, default=0.9, help="Non dimensional water level for hydrostatic pressure")
 
 args = parser.parse_args()
 
@@ -44,7 +44,7 @@ args = parser.parse_args()
 filename = args.type + "_" + args.split + "_level" + str(args.level) + "height" + str(args.height) +"Gc" + str(args.Gc)\
                      +"dt" + str(args.dt) + "psicrit" + str(args.psicrit)\
                         + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)\
-                            + "gv_tol" + str(-np.log10(args.gv_tol)) + \
+                            + "T" + str(abs(args.T)) +  \
                             "_damagemodel" + args.damagemodel + "_" + args.suffix + "_"
 
 
@@ -67,20 +67,16 @@ def right_boundary(x):
     return np.isclose(x[0], nondim_length/2)
 
 def bottom_boundary(x):
-    return np.isclose(x[1], -flotation_height)
+    return np.isclose(x[1], 0)#*(x[0]<=(nondim_length/2 - nondim_height))
 
-# def crack(x):
-#     x_c = nondim_length/2 - args.crack_x*nondim_height
-#     width = args.l/args.cellfactor / args.height
-#     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<-0.85)
 
 def crack(x,x_c):
     width = args.l/args.cellfactor / args.height
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>0.07)
 
-def basal_crack(x,x_c):
-    width = args.l/args.cellfactor / args.height
-    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<-0.6)
+def basal_crack(x,x_c,height=0.5):
+    width = args.l/args.cellfactor / args.height*0.9
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<height)
 
 def fixed(x):
     return (x[0]<(nondim_length/2 - args.refine_x*0.98*nondim_height))# + (x[0]>(nondim_length/2 - nondim_height/2))
@@ -94,15 +90,12 @@ os.makedirs(path, exist_ok=True)
 nondim_length = args.length/args.height
 nondim_height = 1.0
 
-flotation_height = args.rhoi/args.rhow
-
-
 aspect_ratio_x = int(300/args.l)
 
 if args.meshtype == "refined":
     msh = kr.utilities.create_refined_mesh(
         args.length/args.height, 1.0, 
-        args.l/args.height, flotation_height,
+        args.l/args.height,
         aspect_ratios=(aspect_ratio_x,args.aspect_ratio_z), 
         refine=(args.refine_x,args.refine_z),
         cell_factor=args.cellfactor, cell_type=mesh.CellType.triangle)
@@ -116,21 +109,35 @@ elif args.meshtype == "gmsh":
     args.rhoi/args.rhow
     )
 
+elif args.meshtype == "uniform":
+    cell_size = args.l/(args.cellfactor*args.height)
+    nx = int((nondim_length/2)/cell_size)
+    nz = int(nondim_height/cell_size)
+    msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                            [[0.0, 0.0],
+                            [nondim_length/2, nondim_height]],
+                            [nx, nz],
+                            cell_type=mesh.CellType.triangle)
 
 
 
-d_bc = lambda V: [
+if args.meshtype == "uniform":
+    d_bc = lambda V: []
+else:   
+    d_bc = lambda V: [
                 bc.internal_bc(V, fixed, 0.0),
                 #   bc.internal_bc(V, cracks, 1.0)
                   ]
 
 
 
-if type == "cliff":
+if args.type == "cliff":
     u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
-                        bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary)
+                        bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary),
+                        bc.get_zero_bc(V.sub(0).sub(0), right_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), right_boundary),
                         ]
 else:
 
@@ -159,9 +166,10 @@ model = kr.base.Simulation(msh,
                            damage_model, [u_bc, d_bc], 
                            split=args.split)
 
-
-model.params.T = mf.temperature(msh,args.rhoi/args.rhow,args.T,-1)
-# model.params.T.value = args.T
+x = ufl.SpatialCoordinate(msh)
+z = x[msh.geometry.dim-1]
+# model.params.T = -1 + (args.T - -1)*z
+model.params.T.value = args.T
 model.params.A0.value = mf.rate_factor_np(args.T)
 model.params.L.value = args.height
 model.params.l.value = args.l
@@ -169,27 +177,21 @@ model.params.dt.value = args.dt*24*60*60
 model.params.ρi.value = args.rhoi
 model.params.ρw.value = args.rhow
 model.params.ψcrit.value = args.psicrit
+model.params.patm.value = 0.0
 model.params.Gc.value = args.Gc
-model.params.patm.value = 1e5
-model.params.gv_tol.value = args.gv_tol
-model.params.water_level.value = args.level
+model.params.crack_level_above_sea.value = args.level
+model.params.sea_level.value = args.sealevel * args.height
 # model.params.E.value = 1e8
 
-x = ufl.SpatialCoordinate(msh)
-z = x[msh.geometry.dim-1]
-δ = 1 - args.rhoi/args.rhow
-z = z - δ
+
 # ψcrit_top = args.psicrit
 # ψcrit_bottom = 0.01
-# model.params.ψcrit = -(ψcrit_bottom - ψcrit_top)*z + ψcrit_top
+# model.params.ψcrit = ψcrit_bottom + (ψcrit_top - ψcrit_bottom)*z
 
-model.params.Gc = -(0.01 - args.Gc)*z + args.Gc
+model.params.Gc = (args.Gc - 0.01)*z**2 + 0.01
 
-
-# μ = model.params.E.value / (2 * (1 + model.params.ν.value))
-# # τ = (args.rhow*9.8*args.height)**(1-3.0)/(mf.rate_factor_np(args.T)*μ)
-# # model.params.dt.value = 30*τ
-
+if MPI.COMM_WORLD.rank == 0:
+    print(model.params.ucstar_float )
 
 #%%
 
@@ -209,14 +211,15 @@ def cracks(x):
     return val
 
 
-basal_crack_spacking = 0.1
+basal_crack_spacking = 0.2
 basal_crack_start = 0.2
 basal_crack_end = args.refine_x - 0.05
-basal_crack_x_cs = nondim_length/2 - np.arange(basal_crack_start, basal_crack_end, basal_crack_spacking)
+# basal_crack_x_cs = nondim_length/2 - np.arange(basal_crack_start, basal_crack_end, basal_crack_spacking)
+basal_crack_x_cs = np.arange(0, nondim_length/2, basal_crack_spacking)
 def basal_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
     for x_c in basal_crack_x_cs:
-        val += basal_crack(x,x_c)
+        val += basal_crack(x,x_c,height=0.3)
     return val
     
 
@@ -227,12 +230,12 @@ if MPI.COMM_WORLD.rank == 0:
     print(path + "/" + filename)
 
 solve_d = False
-if args.type == "relaxation":
-    i_start = 10
+if args.type == "iceberg":
+    i_start = 1
     # model.params.dt.value = 10*24*60*60
     
 else:
-    i_start = 1
+    i_start = 10
     
 
 
@@ -240,7 +243,6 @@ else:
 t = 0.0
 # model.write_checkpoint(path + "/" + filename +".bp", t)
 
-# period = 60*60*24
 
 
 
@@ -249,22 +251,24 @@ for i in range(1,args.nt):
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
-    # model.params.water_level.value = args.level + 2.0*np.sin(2*ufl.pi*t/period)
-    # if MPI.COMM_WORLD.rank == 0:
-        # print("Water level: ", model.params.water_level.value)
 
 
     if i == i_start:
         # model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x).astype(np.float64))
-        
         # model.fixed_point(min_its=3, tol=1e-6, max_its=100, solve_damage=False)
         # model.damage.timestep()
         solve_d = True
-        
+        if args.type == "cliff":
+            u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary),
+                        ]
+            model.momentum.update_bcs(u_bc)
         
 
         
-        # for factor in factors:
+        # for factor in [8,4,2,1]:
         #     model.params.Gc.value = args.Gc * factor
         #     if MPI.COMM_WORLD.rank == 0:
         #         print("Setting Gc to ", model.params.Gc.value)
@@ -277,7 +281,7 @@ for i in range(1,args.nt):
         #     model.fixed_point(min_its=3, tol=1e-5, max_its=50, solve_damage=solve_d)
 
     
-    flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d, save=False)
+    flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d, save=True)
     
     # while flag == -1:
     #     model.params.gv_tol.value *= 10
@@ -289,40 +293,25 @@ for i in range(1,args.nt):
     #         break
 
     
-    # η = mf.viscosity(mf.εD(model.momentum.vel), model.params.n, 1.e-14, A=mf.rate_factor(model.T)/model.params.A)
-    # σv = η*mf.εD(model.momentum.vel)
-    # σe = model.momentum.stress(model.momentum.ε_e)
-    # model.temperature.solve()
+
 
     t += model.params.dt.value
     # model.write_checkpoint(path + "/" + filename +".bp", t)
 
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
-                                    # model.momentum.u_v, model.momentum.u_e,
+                                    model.momentum.u_v, model.momentum.u_e,
                                     model.momentum.ψplus,
-                                    model.momentum.p_crack*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
-                                    model.temperature.T,
+                                    model.momentum.water_pressure(model.momentum.u),#*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
+                                    model.params.T,
                                     model.params.ψcrit,
-                                    # model.params.dtstar*model.params.C_temperature*mf.viscous_energy(ufl.dev(mf.ε(model.momentum.vel)), model.params.n, A=mf.rate_factor(model.temperature.T)/model.params.A0)
-                                    # model.damage.Hprev,
-                                    # σe,σv,
-                                    # η,
-                                    # mf.viscosity_stress(σe, model.params.n, 1.e-14,A=mf.rate_factor(model.T)/model.params.A),
-                                    # mf.viscosity_stress(σv, model.params.n, 1.e-14, A=mf.rate_factor(model.T)/model.params.A),
                                     ],
                                     ["u","d",
-                                    # "ε_e","ε_v","ε",
-                                    # "ue","uv",
+                                    "uv","ue",
                                     "psi_plus",
                                     "water_pressure",
                                     "T",
                                     "psi_crit",
-                                    # "viscous_heating"
-                                    # "H",
-                                    # "σe",
-                                    # "σv",
-                                    # "η","η_e","η_v",
                                     ],
                                 t=i)
     
