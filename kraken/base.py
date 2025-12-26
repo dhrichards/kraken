@@ -1,4 +1,4 @@
-from kraken import parameters, utilities, temperature#, mass
+from kraken import parameters, utilities, temperature, mass
 from kraken.numerics import energy_splits as es
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import projection_tensors as pt
@@ -60,9 +60,9 @@ class Simulation:
         if self.temperature_on:
             self.temperature = temperature.Temperature(self)
             self.temperature.setup()
-        # if self.mass_on:
-        #     self.mass = mass.Mass(self)
-        #     self.mass.setup()
+        if self.mass_on:
+            self.mass = mass.Mass(self)
+            self.mass.setup()
         
 
 
