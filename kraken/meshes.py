@@ -67,10 +67,13 @@ def create_structured_unstructured_mesh(small_size, L=8e3/300,
                                         htop=0.125,
                                         large_size=0.25):
     gmsh.initialize()
-    gmsh.model.add("structured_unstructured_domain")
+
+    model = gmsh.model()
+
+    model.add("structured_unstructured_domain")
 
     # Use OpenCASCADE kernel
-    gmsh.model.occ.synchronize()
+    model.occ.synchronize()
 
     # ------------------
     # Parameters
@@ -91,70 +94,70 @@ def create_structured_unstructured_mesh(small_size, L=8e3/300,
     # ------------------
     # Points
     # ------------------
-    gmsh.model.geo.addPoint(0,     0,      0, Lc_coarse, 1)
-    gmsh.model.geo.addPoint(xc,    0,      0, Lc_coarse, 2)
-    gmsh.model.geo.addPoint(xmid,  0,      0, Lc_fine,   3)
-    gmsh.model.geo.addPoint(L,     0,      0, Lc_fine,   4)
+    model.geo.addPoint(0,     0,      0, Lc_coarse, 1)
+    model.geo.addPoint(xc,    0,      0, Lc_coarse, 2)
+    model.geo.addPoint(xmid,  0,      0, Lc_fine,   3)
+    model.geo.addPoint(L,     0,      0, Lc_fine,   4)
 
-    gmsh.model.geo.addPoint(0,     H-htop, 0, Lc_coarse, 5)
-    gmsh.model.geo.addPoint(xc,    H-htop, 0, Lc_coarse, 6)
-    gmsh.model.geo.addPoint(xmid,  H-htop, 0, Lc_fine,   7)
-    gmsh.model.geo.addPoint(L,     H-htop, 0, Lc_fine,   8)
+    model.geo.addPoint(0,     H-htop, 0, Lc_coarse, 5)
+    model.geo.addPoint(xc,    H-htop, 0, Lc_coarse, 6)
+    model.geo.addPoint(xmid,  H-htop, 0, Lc_fine,   7)
+    model.geo.addPoint(L,     H-htop, 0, Lc_fine,   8)
 
-    gmsh.model.geo.addPoint(0,     H,      0, Lc_coarse, 9)
-    gmsh.model.geo.addPoint(xc,    H,      0, Lc_coarse, 10)
-    gmsh.model.geo.addPoint(xmid,  H,      0, Lc_fine,   11)
-    gmsh.model.geo.addPoint(L,     H,      0, Lc_fine,   12)
+    model.geo.addPoint(0,     H,      0, Lc_coarse, 9)
+    model.geo.addPoint(xc,    H,      0, Lc_coarse, 10)
+    model.geo.addPoint(xmid,  H,      0, Lc_fine,   11)
+    model.geo.addPoint(L,     H,      0, Lc_fine,   12)
 
     # ------------------
     # Lines
     # ------------------
     # bottom
-    gmsh.model.geo.addLine(1, 2, 1)
-    gmsh.model.geo.addLine(2, 3, 2)
-    gmsh.model.geo.addLine(3, 4, 3)
+    model.geo.addLine(1, 2, 1)
+    model.geo.addLine(2, 3, 2)
+    model.geo.addLine(3, 4, 3)
 
     # verticals
-    gmsh.model.geo.addLine(1, 5, 4)
-    gmsh.model.geo.addLine(2, 6, 5)
-    gmsh.model.geo.addLine(3, 7, 6)
-    gmsh.model.geo.addLine(4, 8, 7)
+    model.geo.addLine(1, 5, 4)
+    model.geo.addLine(2, 6, 5)
+    model.geo.addLine(3, 7, 6)
+    model.geo.addLine(4, 8, 7)
 
-    gmsh.model.geo.addLine(5, 9, 8)
-    gmsh.model.geo.addLine(6, 10, 9)
-    gmsh.model.geo.addLine(7, 11, 10)
-    gmsh.model.geo.addLine(8, 12, 11)
+    model.geo.addLine(5, 9, 8)
+    model.geo.addLine(6, 10, 9)
+    model.geo.addLine(7, 11, 10)
+    model.geo.addLine(8, 12, 11)
 
     # top
-    gmsh.model.geo.addLine(9, 10, 12)
-    gmsh.model.geo.addLine(10, 11, 13)
-    gmsh.model.geo.addLine(11, 12, 14)
+    model.geo.addLine(9, 10, 12)
+    model.geo.addLine(10, 11, 13)
+    model.geo.addLine(11, 12, 14)
 
     # middle horizontals
-    gmsh.model.geo.addLine(5, 6, 15)
-    gmsh.model.geo.addLine(6, 7, 16)
-    gmsh.model.geo.addLine(7, 8, 17)
+    model.geo.addLine(5, 6, 15)
+    model.geo.addLine(6, 7, 16)
+    model.geo.addLine(7, 8, 17)
 
     # ------------------
     # Surfaces
     # ------------------
-    gmsh.model.geo.addCurveLoop([1, 5, -15, -4], 1)
-    gmsh.model.geo.addPlaneSurface([1], 1)
+    model.geo.addCurveLoop([1, 5, -15, -4], 1)
+    model.geo.addPlaneSurface([1], 1)
 
-    gmsh.model.geo.addCurveLoop([2, 6, -16, -5], 2)
-    gmsh.model.geo.addPlaneSurface([2], 2)
+    model.geo.addCurveLoop([2, 6, -16, -5], 2)
+    model.geo.addPlaneSurface([2], 2)
 
-    gmsh.model.geo.addCurveLoop([3, 7, -17, -6], 3)
-    gmsh.model.geo.addPlaneSurface([3], 3)
+    model.geo.addCurveLoop([3, 7, -17, -6], 3)
+    model.geo.addPlaneSurface([3], 3)
 
-    gmsh.model.geo.addCurveLoop([15, 9, -12, -8], 4)
-    gmsh.model.geo.addPlaneSurface([4], 4)
+    model.geo.addCurveLoop([15, 9, -12, -8], 4)
+    model.geo.addPlaneSurface([4], 4)
 
-    gmsh.model.geo.addCurveLoop([16, 10, -13, -9], 5)
-    gmsh.model.geo.addPlaneSurface([5], 5)
+    model.geo.addCurveLoop([16, 10, -13, -9], 5)
+    model.geo.addPlaneSurface([5], 5)
 
-    gmsh.model.geo.addCurveLoop([17, 11, -14, -10], 6)
-    gmsh.model.geo.addPlaneSurface([6], 6)
+    model.geo.addCurveLoop([17, 11, -14, -10], 6)
+    model.geo.addPlaneSurface([6], 6)
 
     # ------------------
     # Structured meshing
@@ -167,46 +170,46 @@ def create_structured_unstructured_mesh(small_size, L=8e3/300,
     Nx_mid   = int((xmid - xc)/small_size)
 
     # Bottom-right structured block
-    gmsh.model.geo.mesh.setTransfiniteCurve(3,  Nx_right)
-    gmsh.model.geo.mesh.setTransfiniteCurve(17, Nx_right)
-    gmsh.model.geo.mesh.setTransfiniteCurve(6,  Ny_full)
-    gmsh.model.geo.mesh.setTransfiniteCurve(7,  Ny_full)
+    model.geo.mesh.setTransfiniteCurve(3,  Nx_right)
+    model.geo.mesh.setTransfiniteCurve(17, Nx_right)
+    model.geo.mesh.setTransfiniteCurve(6,  Ny_full)
+    model.geo.mesh.setTransfiniteCurve(7,  Ny_full)
 
-    gmsh.model.geo.mesh.setTransfiniteSurface(3)
-    # gmsh.model.geo.mesh.setRecombine(2, 3)
+    model.geo.mesh.setTransfiniteSurface(3)
+    # model.geo.mesh.setRecombine(2, 3)
 
     # Top-middle structured block
-    gmsh.model.geo.mesh.setTransfiniteCurve(16, Nx_mid)
-    gmsh.model.geo.mesh.setTransfiniteCurve(13, Nx_mid)
-    gmsh.model.geo.mesh.setTransfiniteCurve(9,  Ny_top)
-    gmsh.model.geo.mesh.setTransfiniteCurve(10, Ny_top)
+    model.geo.mesh.setTransfiniteCurve(16, Nx_mid)
+    model.geo.mesh.setTransfiniteCurve(13, Nx_mid)
+    model.geo.mesh.setTransfiniteCurve(9,  Ny_top)
+    model.geo.mesh.setTransfiniteCurve(10, Ny_top)
 
-    gmsh.model.geo.mesh.setTransfiniteSurface(5)
-    # gmsh.model.geo.mesh.setRecombine(2, 5)
+    model.geo.mesh.setTransfiniteSurface(5)
+    # model.geo.mesh.setRecombine(2, 5)
 
     # Top-right structured block
-    gmsh.model.geo.mesh.setTransfiniteCurve(17, Nx_right)
-    gmsh.model.geo.mesh.setTransfiniteCurve(14, Nx_right)
-    gmsh.model.geo.mesh.setTransfiniteCurve(10, Ny_top)
-    gmsh.model.geo.mesh.setTransfiniteCurve(11, Ny_top)
+    model.geo.mesh.setTransfiniteCurve(17, Nx_right)
+    model.geo.mesh.setTransfiniteCurve(14, Nx_right)
+    model.geo.mesh.setTransfiniteCurve(10, Ny_top)
+    model.geo.mesh.setTransfiniteCurve(11, Ny_top)
 
-    gmsh.model.geo.mesh.setTransfiniteSurface(6)
-    # gmsh.model.geo.mesh.setRecombine(2, 6)
+    model.geo.mesh.setTransfiniteSurface(6)
+    # model.geo.mesh.setRecombine(2, 6)
 
     # ------------------
     # Finalize & mesh
     # ------------------
-    gmsh.model.geo.synchronize()
+    model.geo.synchronize()
 
     # gmsh.option.setNumber("Mesh.RecombineAll", 0)
     #change all quads to tris
     # gmsh.option.setNumber("Mesh.RecombineAll", 0)
     gmsh.option.setNumber("Mesh.TransfiniteTri", 1)
 
-    gmsh.model.mesh.generate(2)
+    model.mesh.generate(2)
 
-    # gmsh.write("mesh.msh")
-    msh, ct, ft = io.gmshio.model_to_mesh(gmsh.model(), MPI.COMM_WORLD, rank=0, gdim=2)
+    gmsh.write("mesh.msh")
+    msh, ct, ft = io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, rank=0, gdim=2)
 
     gmsh.finalize()
 

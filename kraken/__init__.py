@@ -1,2 +1,2 @@
 from . import boundaryconditions, utilities, parameters, numerics, plotting, base
-from . import momentum, damage, temperature
+from . import momentum, damage, temperature, mass, meshes

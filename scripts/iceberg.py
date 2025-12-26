@@ -93,7 +93,7 @@ nondim_height = 1.0
 aspect_ratio_x = int(300/args.l)
 
 if args.meshtype == "refined":
-    msh = kr.utilities.create_refined_mesh(
+    msh = kr.meshes.create_refined_mesh(
         args.length/args.height, 1.0, 
         args.l/args.height,
         aspect_ratios=(aspect_ratio_x,args.aspect_ratio_z), 
@@ -102,13 +102,17 @@ if args.meshtype == "refined":
 
 
 elif args.meshtype == "gmsh":
-    msh = kr.utilities.create_iceberg_gmsh_mesh(
+    msh = kr.meshes.create_iceberg_gmsh_mesh(
     args.l/(args.cellfactor*args.height), 
     [args.refine_x, 0.25, args.refine_z], 
     args.length/(2*args.height), 
-    args.rhoi/args.rhow
     )
 
+elif args.meshtype == "gmsh_struct":
+    msh = kr.meshes.create_structured_unstructured_mesh(
+    args.l/(args.cellfactor*args.height),args.length/2/args.height,
+    0.25,args.refine_x,args.refine_z,
+    )
 elif args.meshtype == "uniform":
     cell_size = args.l/(args.cellfactor*args.height)
     nx = int((nondim_length/2)/cell_size)
@@ -166,6 +170,10 @@ model = kr.base.Simulation(msh,
                            damage_model, [u_bc, d_bc], 
                            split=args.split)
 
+model.tol = args.tol
+model.min_its = args.min_its
+model.max_its = args.max_its
+
 x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
 # model.params.T = -1 + (args.T - -1)*z
@@ -188,10 +196,14 @@ model.params.sea_level.value = args.sealevel * args.height
 # ψcrit_bottom = 0.01
 # model.params.ψcrit = ψcrit_bottom + (ψcrit_top - ψcrit_bottom)*z
 
-model.params.Gc = (args.Gc - 0.01)*z**2 + 0.01
+# model.params.Gc = (args.Gc - 0.01)*z**2 + 0.01
 
 if MPI.COMM_WORLD.rank == 0:
     print(model.params.ucstar_float )
+
+import dolfinx.fem as fem
+model.params.Gc = fem.Function(fem.functionspace(msh, ("CG", 1)))
+model.params.Gc.interpolate(lambda x: (args.Gc - 0.01)*x[1]**2 + 0.01)
 
 #%%
 
@@ -229,13 +241,13 @@ def basal_cracks(x):
 if MPI.COMM_WORLD.rank == 0:
     print(path + "/" + filename)
 
-solve_d = False
+model.damage_on = False
 if args.type == "iceberg":
     i_start = 1
     # model.params.dt.value = 10*24*60*60
     
 else:
-    i_start = 10
+    i_start = 100
     
 
 
@@ -257,7 +269,7 @@ for i in range(1,args.nt):
         # model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x).astype(np.float64))
         # model.fixed_point(min_its=3, tol=1e-6, max_its=100, solve_damage=False)
         # model.damage.timestep()
-        solve_d = True
+        model.damage_on = True
         if args.type == "cliff":
             u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
@@ -281,7 +293,7 @@ for i in range(1,args.nt):
         #     model.fixed_point(min_its=3, tol=1e-5, max_its=50, solve_damage=solve_d)
 
     
-    flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d, save=True)
+    flag = model.fixed_point(save=True)
     
     # while flag == -1:
     #     model.params.gv_tol.value *= 10
@@ -304,14 +316,18 @@ for i in range(1,args.nt):
                                     model.momentum.ψplus,
                                     model.momentum.water_pressure(model.momentum.u),#*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
                                     model.params.T,
-                                    model.params.ψcrit,
+                                    model.params.Gc,
+                                    # model.momentum.ρ,
+                                    # model.mass.ρ,
                                     ],
                                     ["u","d",
                                     "uv","ue",
                                     "psi_plus",
                                     "water_pressure",
                                     "T",
-                                    "psi_crit",
+                                    "Gc",
+                                    # "density_ratio",
+                                    # "rho",
                                     ],
                                 t=i)
     
@@ -319,10 +335,10 @@ for i in range(1,args.nt):
     if flag == -1:
         break
 
-    if solve_d:
-        model.damage.timestep()
-    model.momentum.timestep()
-    # model.temperature.timestep()
+    
+    model.timestep()
+    
+    # model.temperature.timestep(
     # model.params.dt.value *= 1.05
 
     

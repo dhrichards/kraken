@@ -1,4 +1,4 @@
-from kraken import parameters, utilities, temperature
+from kraken import parameters, utilities, temperature, mass
 from kraken.numerics import energy_splits as es
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import projection_tensors as pt
@@ -15,6 +15,15 @@ class Simulation:
         self.msh = msh
         self.params = parameters.Params_with_uc(self.msh)
         self.bc_funcs = bc_funcs
+
+        self.damage_on = False
+        self.temperature_on = False
+        self.mass_on = False
+
+        self.tol = 5e-6
+        self.min_its = 2
+        self.max_its = 300
+
         
 
         if split == "lo":
@@ -42,27 +51,31 @@ class Simulation:
 
         self.momentum = MomentumSolver(self)
         self.damage = DamageSolver(self)
-        # self.mass = Mass(self)
-        self.temperature = temperature.Temperature(self)
-
 
 
     def setup(self):
         
         self.momentum.setup()
         self.damage.setup()
-        # self.temperature.setup()
-        # self.mass.setup()
+        if self.temperature_on:
+            self.temperature = temperature.Temperature(self)
+            self.temperature.setup()
+        if self.mass_on:
+            self.mass = mass.Mass(self)
+            self.mass.setup()
         
 
 
     def timestep(self):
-        # self.mass.solve()
-        # self.mass.timestep()
-        self.damage.timestep()
+        if self.temperature_on:
+            self.temperature.timestep()
+        if self.mass_on:
+            self.mass.solve()
+            self.mass.timestep()
+        if self.damage_on:
+            self.damage.timestep()
         self.momentum.timestep()
-        # self.temperature.timestep()
-        # self.mass.timestep()
+      
 
     def revert(self):
         self.damage.revert()
@@ -123,7 +136,7 @@ class Simulation:
         self.damage.read_checkpoint(filename, t)
 
         
-    def fixed_point(self, max_its=100, tol=1e-4, min_its=2, solve_damage=True, save=False):
+    def fixed_point(self, save=False):
             L2_old = 0.0
 
             one = fem.Function(self.damage.D)
@@ -137,9 +150,9 @@ class Simulation:
             errors = []
              
             i = 0
-            while i < max_its:
+            while i < self.max_its:
                 
-                if solve_damage:
+                if self.damage_on:
                     self.damage.solve()
                 self.momentum.solve()
                 # if solve_mass:
@@ -167,23 +180,15 @@ class Simulation:
 
                 errors.append(error_L2)
 
-                if self.momentum.solver.getConvergedReason() == -3: #and self.params.gv_tol.value < 0.999e-3:
-                    # return with a flag to tell the caller to do something
+                if self.momentum.solver.getConvergedReason() == -3: 
                     return -1
 
-                    # self.params.gv_tol.value *= 10
-                    # self.revert()
-                    # i = 0 
-                    # if MPI.COMM_WORLD.rank == 0:
-                    #     print("Reverting and setting gv_tol to ", self.params.gv_tol.value)
-                    # continue
-                # else:
                 i += 1
     
 
                 
 
-                if i >=min_its and (error_L2 < tol) and (error_L2 <= error_prev) and (error_prev < tol):
+                if i >=self.min_its and (error_L2 < self.tol) and (error_L2 <= error_prev) and (error_prev < self.tol):
                     break
                 
                 error_prev = error_L2
