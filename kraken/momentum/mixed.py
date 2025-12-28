@@ -14,6 +14,7 @@ from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
 from petsc4py import PETSc
 from kraken.numerics.invariants import matrix_function
+from kraken.numerics import deviatoric_stress_split as dss
 
 
 class MixedDisplacement(Momentum):
@@ -55,7 +56,6 @@ class MixedDisplacement(Momentum):
         n = ufl.FacetNormal(self.sim.msh)
 
         g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
-        
         
 
         # σ0 = es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν)
@@ -239,8 +239,8 @@ class SemiLagrangian(MixedDisplacement):
         self.w_prev_2.x.array[:] = self.w_prev_time.x.array[:]
         self.w_prev_time.x.array[:] += self.w.x.array[:]
 
-        # self.area = fem.assemble_vector(self.cell_area_form).array
-        # self.area_ratio.x.array[:] = self.area/self.area_0
+        self.area = fem.assemble_vector(self.cell_area_form).array
+        self.area_ratio.x.array[:] = self.area/self.area_0
         
 
         self.w_start.x.array[:] = self.w.x.array[:]

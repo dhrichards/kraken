@@ -1,5 +1,6 @@
 from kraken import parameters, utilities, temperature, mass
 from kraken.numerics import energy_splits as es
+from kraken.numerics import hydrostaticspectraldeviatoric as hsd
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import projection_tensors as pt
 from dolfinx import fem
@@ -33,8 +34,8 @@ class Simulation:
             self.free_energy_plus = es.free_energy_plus_spectral
             self.stress_plus = es.stress_plus_spectral
         elif split == "dp":
-            self.free_energy_plus = es.free_energy_plus_dp
-            self.stress_plus = es.stress_plus_dp
+            self.free_energy_plus = lambda ε, ν: es.free_energy_plus_dp(ε, ν, self.params.B)
+            self.stress_plus = lambda ε, ν: es.stress_plus_dp(ε, ν, self.params.B)
         elif split == "star":
             self.free_energy_plus = es.free_energy_plus_star
             self.stress_plus = es.stress_plus_star
@@ -44,6 +45,9 @@ class Simulation:
         elif split == "none":
             self.free_energy_plus = es.free_energy
             self.stress_plus = es.cauchy_stress
+        elif split == "hsd":
+            self.free_energy_plus = lambda ε, ν: hsd.free_energy_plus(ε, ν, self.params.friction_angle, self.params.cohesion_star)
+            self.stress_plus = lambda ε, ν: hsd.stress_plus(ε, ν, self.params.friction_angle, self.params.cohesion_star)
         else:
             raise ValueError(f"Unknown energy split: {split}")
 
@@ -161,10 +165,10 @@ class Simulation:
                 if save:
                     utilities.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, [self.momentum.u,self.damage.d,
-                                        self.momentum.u_e, self.momentum.u_v
+                                        # self.momentum.u_e, self.momentum.u_v
                                         ],
                                         ["u","d",
-                                        "ue","uv",
+                                        # "ue","uv",
                                         ],
                                     t=i)
     
@@ -195,8 +199,6 @@ class Simulation:
                 L2_old = L2
             
             return 1
-
-
-
+   
 
 

@@ -53,7 +53,7 @@ def free_energy_plus_dp(ε, ν, B = -0.4, eps=1e-12):
     ψ2 = (-3*B*K*I1 + 2*ufl.sqrt(J2))**2 / (18*B**2*K + 2)
 
     ψ = ufl.conditional(ufl.lt(-6*B*ufl.sqrt(J2), I1), ψ1,
-                        ufl.conditional(2*ufl.sqrt(J2) < 3*B*K*I1, 0.0, 
+                        ufl.conditional(ufl.lt(2*ufl.sqrt(J2), 3*B*K*I1), 0.0, 
                                          ψ2))
     return ψ
 
@@ -77,7 +77,7 @@ def stress_plus_dp(ε, ν, B = -0.4, eps=1e-12):
           )/(18*B**2*K + 2)
 
     return ufl.conditional(ufl.lt(-6*B*ufl.sqrt(J2+eps), I1), σ1,
-                        ufl.conditional(2*ufl.sqrt(J2+eps) < 3*B*K*I1, 0.0*δ, 
+                        ufl.conditional(ufl.lt(2*ufl.sqrt(J2+eps), 3*B*K*I1), 0.0*δ, 
                                          σ2))
 
 

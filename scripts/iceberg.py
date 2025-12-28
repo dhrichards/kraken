@@ -32,9 +32,9 @@ parser.add_argument("--T", type=float, default=-10, help="Temperature in Celsius
 parser.add_argument("--refine_x", type=float, default=2.0, help="refinement in x direction near crack")
 parser.add_argument("--refine_z", type=float, default=0.2, help="refinement in z direction near crack")
 parser.add_argument("--length", type=float, default=16000, help="Length of iceberg in meters")
-parser.add_argument("--tol", type=float, default=1e-6, help="Solver tolerance")
-parser.add_argument("--min_its", type=int, default=3, help="Minimum number of solver iterations")
-parser.add_argument("--max_its", type=int, default=500, help="Maximum number of solver iterations")
+parser.add_argument("--tol", type=float, default=5e-6, help="Solver tolerance")
+parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
+parser.add_argument("--max_its", type=int, default=400, help="Maximum number of solver iterations")
 parser.add_argument("--meshtype", type=str, default="refined", help="Type of mesh to use: gmsh or refined")
 parser.add_argument("--sealevel", type=float, default=0.9, help="Non dimensional water level for hydrostatic pressure")
 
@@ -72,7 +72,7 @@ def bottom_boundary(x):
 
 def crack(x,x_c):
     width = args.l/args.cellfactor / args.height
-    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>0.07)
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>0.97)
 
 def basal_crack(x,x_c,height=0.5):
     width = args.l/args.cellfactor / args.height*0.9
@@ -108,11 +108,14 @@ elif args.meshtype == "gmsh":
     args.length/(2*args.height), 
     )
 
-elif args.meshtype == "gmsh_struct":
-    msh = kr.meshes.create_structured_unstructured_mesh(
-    args.l/(args.cellfactor*args.height),args.length/2/args.height,
-    0.25,args.refine_x,args.refine_z,
-    )
+elif args.meshtype == "refined2":
+    small_size = args.l/(args.cellfactor*args.height)
+    L = args.length/2/args.height
+    meshfilename = f"refined_mesh_length{L:.2f}_size{small_size:.2f}.xdmf"
+    with io.XDMFFile(MPI.COMM_WORLD, meshfilename, "r") as xdmf:
+        msh = xdmf.read_mesh()
+
+
 elif args.meshtype == "uniform":
     cell_size = args.l/(args.cellfactor*args.height)
     nx = int((nondim_length/2)/cell_size)
@@ -123,9 +126,19 @@ elif args.meshtype == "uniform":
                             [nx, nz],
                             cell_type=mesh.CellType.triangle)
 
+elif args.meshtype == "foot":
+    msh = kr.meshes.with_foot(
+        args.l/args.cellfactor/args.height,
+        L=nondim_length/2,
+        foot_length=0.5,
+        foot_height=0.5
+        )
+    
+
+# msh.geometry.x[:,0] = msh.geometry.x[:,0] - 0.01*msh.geometry.x[:,1]*msh.geometry.x[:,0]
 
 
-if args.meshtype == "uniform":
+if args.meshtype == "uniform" or args.meshtype == "foot":
     d_bc = lambda V: []
 else:   
     d_bc = lambda V: [
@@ -189,12 +202,14 @@ model.params.patm.value = 0.0
 model.params.Gc.value = args.Gc
 model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
-# model.params.E.value = 1e8
+
+B = -0.3
+model.params.friction_angle.value = np.arcsin(3*np.sqrt(3)*B/(2-np.sqrt(3)*B))
 
 
-# ψcrit_top = args.psicrit
-# ψcrit_bottom = 0.01
-# model.params.ψcrit = ψcrit_bottom + (ψcrit_top - ψcrit_bottom)*z
+ψcrit_top = args.psicrit
+ψcrit_bottom = 0.01
+
 
 # model.params.Gc = (args.Gc - 0.01)*z**2 + 0.01
 
@@ -202,11 +217,9 @@ if MPI.COMM_WORLD.rank == 0:
     print(model.params.ucstar_float )
 
 import dolfinx.fem as fem
-model.params.Gc = fem.Function(fem.functionspace(msh, ("CG", 1)))
-model.params.Gc.interpolate(lambda x: (args.Gc - 0.01)*x[1]**2 + 0.01)
-
-#%%
-
+# z = ufl.SpatialCoordinate(msh)[msh.geometry.dim-1]
+# model.params.Gc = ufl.conditional(ufl.gt(z, 0.9), args.Gc, args.Gc*0.01)
+# model.params.ψcrit = ψcrit_bottom + (ψcrit_top - ψcrit_bottom)*z**2
 
 
 
@@ -247,7 +260,7 @@ if args.type == "iceberg":
     # model.params.dt.value = 10*24*60*60
     
 else:
-    i_start = 100
+    i_start = 10
     
 
 
@@ -266,8 +279,8 @@ for i in range(1,args.nt):
 
 
     if i == i_start:
-        # model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x).astype(np.float64))
-        # model.fixed_point(min_its=3, tol=1e-6, max_its=100, solve_damage=False)
+        model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
+        model.fixed_point()
         # model.damage.timestep()
         model.damage_on = True
         if args.type == "cliff":
@@ -276,6 +289,7 @@ for i in range(1,args.nt):
                         bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
                         bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary),
                         ]
+        
             model.momentum.update_bcs(u_bc)
         
 
@@ -317,7 +331,7 @@ for i in range(1,args.nt):
                                     model.momentum.water_pressure(model.momentum.u),#*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
                                     model.params.T,
                                     model.params.Gc,
-                                    # model.momentum.ρ,
+                                    model.momentum.ρ,
                                     # model.mass.ρ,
                                     ],
                                     ["u","d",
@@ -326,7 +340,7 @@ for i in range(1,args.nt):
                                     "water_pressure",
                                     "T",
                                     "Gc",
-                                    # "density_ratio",
+                                    "density_ratio",
                                     # "rho",
                                     ],
                                 t=i)

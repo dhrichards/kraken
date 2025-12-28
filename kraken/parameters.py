@@ -1,4 +1,6 @@
 from dolfinx import fem, default_scalar_type
+import numpy as np
+import ufl
 from kraken.utilities import mesh_sizes
 secperyr = 31556926
 
@@ -33,6 +35,13 @@ class Params_with_uc:
         self.sea_level = fem.Constant(msh,default_scalar_type(0.9*self.L.value)) # Sea level height
         
 
+        self.friction_angle = fem.Constant(msh, default_scalar_type(np.atan(0.3))) # Friction angle in radians
+        self.cohesion = fem.Constant(msh, default_scalar_type(164e3))
+        
+    
+    @property
+    def B(self):
+        return 2*ufl.sin(self.friction_angle)/(np.sqrt(3)*(3+ufl.sin(self.friction_angle)))
 
     # @property
     # def q(self):
@@ -42,7 +51,9 @@ class Params_with_uc:
     #     for i in range(100):
     #         q = a/np.log((1+q)/q)
     #     return q
-        
+    @property
+    def cohesion_star(self):
+        return self.cohesion / self.μ
 
     @property
     def uc(self):

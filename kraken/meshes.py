@@ -2,7 +2,7 @@
 import gmsh
 from mpi4py import MPI
 from dolfinx import io, mesh
-
+import numpy as np
 
 
 
@@ -329,4 +329,94 @@ def create_iceberg_gmsh_mesh(small_size, refines = [2.5, 0.5, 0.2], Lx=8e3/300):
     return msh
 
 
+def with_foot(small_size,L=8e3/300,foot_length=0.5,foot_height=0.5):
+    gmsh.initialize()
+    model = gmsh.model()
+
+    model.add("iceberg")
+
+
+
+    model.geo.addPoint(0, 0, 0, small_size, tag= 1)
+    model.geo.addPoint(L, 0, 0, small_size, tag= 2)
+
+
+    # model.geo.addPoint(L, foot_height, 0, small_size, tag =3) 
+    # model.geo.addPoint(L - foot_length, foot_height, 0, small_size, tag= 4)
+    model.geo.addPoint(L - foot_length, 1, 0, small_size, tag=5)
+    model.geo.addPoint(0, 1, 0, small_size, tag=6)
+
+
+    model.geo.addLine(1, 2, 1)
+    model.geo.addLine(2, 5, 2)
+    # model.geo.addLine(3, 5, 3)
+    # model.geo.addLine(4, 5, 4)
+    model.geo.addLine(5, 6, 5)
+    model.geo.addLine(6, 1, 6)
+
+   
+
+    model.geo.addCurveLoop([1, 2, 5, 6], 1)
+    # model.geo.addCurveLoop([1, 2, 6,7,8,9,10,4,5], 1)
+    model.geo.addPlaneSurface([1], 1)
+    model.geo.synchronize()
+
+    model.addPhysicalGroup(1, [1, 2, 5, 6], 1)
+    model.addPhysicalGroup(2, [1], 1)
+
+   
+    model.mesh.generate(2)
+
+    #save gmsh
+    # gmsh.write("icebergrefW
+    msh, ct, ft = io.gmshio.model_to_mesh(model, MPI.COMM_WORLD, rank=0, gdim=2)
+
+
+    gmsh.finalize()
+
+    return msh
+
+    
+
+def fenicsx_refined_mesh(small_size,L=8e3/300,
+                        full_thickness_fine_length=0.2, 
+                                        top_fine_length=2.0, 
+                                        htop=0.125,
+                        large_size=0.32,
+                        cell_type = mesh.CellType.triangle):
+    
+    
+    H=1
+    # make large_size a power of 2 of small_size
+    n_div = int(np.log2(large_size/small_size))
+    large_size = small_size*2**n_div
+
+    msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                                    [np.array([0, 0]), np.array([L, H])],
+                                    [int(L/large_size),int(H/large_size)], cell_type)
+        
+
+    def cell_criterion(x):
+        return (x[0] > L-full_thickness_fine_length*H)\
+            |((x[1]>H*(1-htop))*(x[0]>(L-top_fine_length*H)))
+
+    for i in range(n_div):
+        # Compute midpoints for all cells on process
+        cells_local = np.arange(msh.topology.index_map(
+            msh.topology.dim).size_local, dtype=np.int32)
+        midpoints = mesh.compute_midpoints(
+            msh, msh.topology.dim, cells_local).T
+
+        # Check midpoint criterion and find edges connected to cells
+        should_refine = np.flatnonzero(cell_criterion(midpoints)).astype(np.int32)
+        msh.topology.create_entities(1)
+        local_edges = mesh.compute_incident_entities(
+            msh.topology, should_refine, msh.topology.dim, 1)
+        msh, _, _ = mesh.refine(msh, local_edges)
+
+
+
+    return msh
+
+    
 
