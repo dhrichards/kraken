@@ -59,11 +59,9 @@ aspect_ratio_x = int(25/l)
 nondim_length = true_length/L
 nondim_height = true_height/L
 
-ρi = 900
-ρw = 1027
 
-refineH = (3.0,0.2)
-msh = kr.utilities.create_refined_mesh(nondim_length,nondim_height, l/L, ρi/ρw,
+refineH = (1.75,0.125)
+msh = kr.meshes.create_refined_mesh(nondim_length,nondim_height, l/L,
                                      aspect_ratios=(aspect_ratio_x,1), refine=refineH,
                                      cell_factor=args.cellfactor)
 
@@ -99,55 +97,44 @@ elif args.type == "pressure":
     elast = kr.momentum.elastic.ElasticPressure
 elif args.type == "3D":
     elast = kr.momentum.elastic.Elastic3D
+elif args.type == "energy":
+    elast = kr.momentum.elastic.ElasticEnergySplit
 
 model = kr.base.Simulation(msh, 
                            elast,
                            kr.damage.higherorder.HigherOrder,
-                            [u_bc, bc_d], level=0.00, split = 'dp')
-# model.free_energy_plus = lambda ε, ν: es.free_energy_plus_lo_pressure(ε, model.momentum.p, ν)
-
-# model = kr.models.elasticity.elastic_damage(msh, [u_bc,no_bc])
-
-x = ufl.SpatialCoordinate(msh)
-z = x[msh.geometry.dim-1]
-δ = 1 - ρi/ρw
-z = z - δ
-#linear profile
-Gcb = 0.4; Gcs = 20.0
-Gc = -(Gcb - Gcs)*z + Gcs
+                            [u_bc, bc_d], split = 'dp')
 
 model.params.L.value = L
 model.params.l.value = l
 model.params.dt.value = 60*60*2
 model.params.patm.value = 0
-model.params.ρi.value = ρi
-model.params.ρw.value = ρw
-model.params.g.value = 9.8
 model.params.Gc.value = 1.0
+model.params.crack_level_above_sea.value = 0.0
+model.params.sea_level.value = 0.9 * true_height
 
 model.params.ψcrit.value = 1.0
-model.params.ν.value = 0.325
-# model.params.Gc = Gc
-# ψcrit_top = 2.0
-# ψcrit_bottom = 0.2
-# model.params.ψcrit = -(ψcrit_bottom - ψcrit_top)*z + ψcrit_top
 
-# Es = 9.33e9; Eb = 1e9
-# model.params.E = -(Eb - Es)*z + Es
-# model.params.ψcrit.value = 0.0
-# model.params.Gc.value = 1
-# model = oc.viscoelastic_damage(msh, [symm_bc,symm_bc,bc_d], kp.Params_no_uc(), 
-#                                dt = 1.0)#g = lambda d: mf.degradation_Lo2023(d,0.05))
 
+
+# B = -0.34
+B = -0.45
+model.params.friction_angle.value = np.arcsin(3*np.sqrt(3)*B/(2-np.sqrt(3)*B))
 
 #%%
 
-
+model.damage_on = True
 model.setup()
 
+model.momentum.solve()
 
 
-model.fixed_point(min_its=3,solve_damage=True,max_its=400,tol=1e-5)
+model.msh.geometry.x[:,:model.msh.geometry.dim] -= model.params.ucstar_float*model.momentum.u.x.array.reshape((-1, model.msh.geometry.dim))
+        
+
+
+
+model.fixed_point(save=True)
 import adios4dolfinx
 
 # filename = './scripts/{}elastic_l{}.bp'.format(
@@ -176,16 +163,17 @@ elif args.type == "3D":
     ψplus2 = es.free_energy_plus_lo_2d(mf.tensor_3d_to_2d(model.momentum.ε_e), model.params.ν)
 
 
-kr.utilities.write_xdmf("./outputs/elastictest" + args.type + ".xdmf",
+kr.utilities.write_xdmf("./outputs/elastictestx" + args.type + ".xdmf",
                             msh, [model.momentum.u, model.damage.d, 
-                                  ψplus,
-                                  ψplus2,
+                                #   ψplus,
+                                #   ψplus2,
                                     model.momentum.ε_e,
                                 #   ufl.tr(model.momentum.ε_eD),
                                 #   es.free_energy_plus_lo_pressure(model.momentum.ε_e, model.momentum.p, model.params.ν),
                                   ],
-                            ["u", "d", "psi_plus",
-                             "psi_plus_2",
+                            ["u", "d", 
+                            #  "psi_plus",
+                            #  "psi_plus_2",
                              "e_e",
                             #  "tr_e_d",
                             #  "psi_plus_pressure"

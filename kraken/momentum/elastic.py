@@ -11,6 +11,7 @@ from kraken.numerics import energy_splits as es
 from kraken.numerics import energy_splits_deviatoric as esd
 from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
+from kraken.numerics import fansplit as fs
 from petsc4py import PETSc
 
 
@@ -18,30 +19,42 @@ class Elasticity(Momentum):
     def __init__(self, sim):
         super().__init__(sim)
 
-        self.U = fem.functionspace(self.sim.msh, ("Lagrange", 1, (self.sim.msh.geometry.dim, )))
+        self.W = fem.functionspace(self.sim.msh, ("Lagrange", 1, (self.sim.msh.geometry.dim, )))
 
-        self.u = fem.Function(self.U, name="displacement")
+        self.u = fem.Function(self.W, name="displacement")
+        self.w = self.u
         self.ε_e = mf.ε(self.u)
         self.ψplus = self.sim.free_energy_plus(self.ε_e, self.sim.params.ν)
 
-        self.u_prev_it = fem.Function(self.U, name="displacement previous iteration")
-        self.u_prev_time = fem.Function(self.U, name="displacement previous time")
+        self.u_prev_it = fem.Function(self.W, name="displacement previous iteration")
+        self.u_prev_time = fem.Function(self.W, name="displacement previous time")
 
-        self.bc_u = self.sim.bc_funcs[0](self.U)
+        self.bc_u = self.sim.bc_funcs[0](self.W)
 
 
     def setup_momentum(self):
         
-        v = ufl.TestFunction(self.U)
+        v = ufl.TestFunction(self.W)
 
         g = es.degradation_default(self.sim.damage.d,1e-12)
 
         p_w = self.water_pressure(self.u)
         p_crack = self.crack_pressure(self.u)
 
-        
+        # Efactor = fem.Function(fem.functionspace(self.sim.msh, ("CG", 1)))
+        # Efactor.x.array[:] = 1
+        # y = self.sim.msh.geometry.x[:,1]
+        # Efactor.x.array[y>10] = 1e4
         
         σ = self.stress(self.ε_e)
+
+        # σplus, F = fs.stress_plus(self.ε_e, self.sim.params.ν)
+
+        # σ0 = es.λoverμ(self.sim.params.ν)*ufl.tr(self.ε_e)*ufl.Identity(2) + 2*self.ε_e
+        # σminus = σ0 - σplus
+        # σ = g*σplus + σminus
+
+        # self.ψplus = F
     
         
         f = self.sim.params.ρistar*mf.body_force(self.sim.msh)
@@ -64,7 +77,7 @@ class Elasticity(Momentum):
             + p_w * ufl.inner(n, v) * ufl.ds 
         
 
-        self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.U))
+        self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.W))
             
         
         self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_u)
@@ -148,9 +161,9 @@ class ElasticDegraded(Elasticity):
     def setup_momentum(self):
         
 
-        v = ufl.TestFunction(self.U)
+        v = ufl.TestFunction(self.W)
 
-        g = self.sim.damage.g
+        g = es.degradation_default(self.sim.damage.d,1e-12)
 
         p_w = self.water_pressure(self.u)
         p_crack = self.crack_pressure(self.u)
@@ -164,9 +177,9 @@ class ElasticDegraded(Elasticity):
 
         n = ufl.FacetNormal(self.sim.msh)
 
-        d = self.sim.damage.d
+        
         # Iprime = 2 - 2*d # Iprime*grad(d) = -grad(g)
-        Iprime = 2*self.sim.damage.d
+        # Iprime = 2*self.sim.damage.d
         # Iprime = 1.0
 
 
@@ -180,7 +193,7 @@ class ElasticDegraded(Elasticity):
             + p_w * ufl.inner(n, v) * ufl.ds 
         
 
-        self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.U))
+        self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.W))
             
         
         self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_u)
@@ -204,14 +217,19 @@ class ElasticEnergySplit(Elasticity):
         ψplus = self.sim.free_energy_plus(self.ε_e, self.sim.params.ν)
         ψminus = ψ0 - ψplus
 
+        Efactor = fem.Function(fem.functionspace(self.sim.msh, ("CG", 1)))
+        Efactor.x.array[:] = 1
+        y = self.sim.msh.geometry.x[:,1]
+        Efactor.x.array[y>10] = 1e4
+
         energy = (
-                g*ψplus + ψminus - ufl.inner(f,self.u) \
+                Efactor*(g*ψplus + ψminus) - ufl.inner(f,self.u) \
                 - p_crack*ufl.inner(ufl.Dx(g, 0), self.u[0]) \
                     )*ufl.dx \
                 + p_w * ufl.inner(n, self.u) * ufl.ds
         
-        self.F = ufl.derivative(energy, self.u, ufl.TestFunction(self.U))
-        self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.U))
+        self.F = ufl.derivative(energy, self.u, ufl.TestFunction(self.W))
+        self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.W))
 
         self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_u)
 

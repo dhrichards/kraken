@@ -203,7 +203,7 @@ model.params.Gc.value = args.Gc
 model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
 
-B = -0.3
+B = -0.34
 model.params.friction_angle.value = np.arcsin(3*np.sqrt(3)*B/(2-np.sqrt(3)*B))
 
 
@@ -279,8 +279,8 @@ for i in range(1,args.nt):
 
 
     if i == i_start:
-        model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
-        model.fixed_point()
+        # model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
+        # model.fixed_point()
         # model.damage.timestep()
         model.damage_on = True
         if args.type == "cliff":
