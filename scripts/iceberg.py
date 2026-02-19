@@ -284,7 +284,8 @@ for i in range(1,args.nt):
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(0), bottom_boundary),
                         bc.get_zero_bc(V.sub(1), bottom_boundary),
-                        ]
+            ]
+            model.momentum.update_bcs(u_bc)
         elif args.type == "cliff_sliding":
             u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
