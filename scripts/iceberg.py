@@ -126,19 +126,12 @@ elif args.meshtype == "uniform":
                             [nx, nz],
                             cell_type=mesh.CellType.triangle)
 
-elif args.meshtype == "foot":
-    msh = kr.meshes.with_foot(
-        args.l/args.cellfactor/args.height,
-        L=nondim_length/2,
-        foot_length=0.5,
-        foot_height=0.5
-        )
     
 
 # msh.geometry.x[:,0] = msh.geometry.x[:,0] - 0.01*msh.geometry.x[:,1]*msh.geometry.x[:,0]
 
 
-if args.meshtype == "uniform" or args.meshtype == "foot":
+if args.meshtype == "uniform":
     d_bc = lambda V: []
 else:   
     d_bc = lambda V: [
@@ -148,7 +141,15 @@ else:
 
 
 
-if args.type == "cliff":
+if args.type == "cliff_frozen":
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(0), bottom_boundary),
+                        bc.get_zero_bc(V.sub(1), bottom_boundary),
+                        bc.get_zero_bc(V.sub(0).sub(0), right_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), right_boundary),
+                        ]
+elif args.type == "cliff_sliding":
     u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
@@ -160,11 +161,9 @@ else:
 
     u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                             bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
-                            # bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
-                            # bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary)
+
                             ]
 
-# u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
 if args.damagemodel == "AT1lower":
     damage_model = kr.damage.lowerorder.Bounded
 elif args.damagemodel == "AT1higher":
@@ -203,15 +202,12 @@ model.params.Gc.value = args.Gc
 model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
 
-B = -0.34
-model.params.friction_angle.value = np.arcsin(3*np.sqrt(3)*B/(2-np.sqrt(3)*B))
-
 
 ψcrit_top = args.psicrit
 ψcrit_bottom = 0.01
 
 
-# model.params.Gc = (args.Gc - 0.01)*z**2 + 0.01
+model.params.Gc = (args.Gc - 0.1)*z**2 + 0.1
 
 if MPI.COMM_WORLD.rank == 0:
     print(model.params.ucstar_float )
@@ -283,7 +279,13 @@ for i in range(1,args.nt):
         # model.fixed_point()
         # model.damage.timestep()
         model.damage_on = True
-        if args.type == "cliff":
+        if args.type == "cliff_frozen":
+            u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(0), bottom_boundary),
+                        bc.get_zero_bc(V.sub(1), bottom_boundary),
+                        ]
+        elif args.type == "cliff_sliding":
             u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
@@ -309,26 +311,16 @@ for i in range(1,args.nt):
     
     flag = model.fixed_point(save=True)
     
-    # while flag == -1:
-    #     model.params.gv_tol.value *= 10
-    #     if MPI.COMM_WORLD.rank == 0:
-    #         print("Reverting and setting gv_tol to ", model.params.gv_tol.value)
-    #     model.revert()
-    #     flag = model.fixed_point(min_its=args.min_its, tol=args.tol, max_its=args.max_its, solve_damage=solve_d)
-    #     if model.params.gv_tol.value >= 0.1:
-    #         break
-
-    
-
 
     t += model.params.dt.value
     # model.write_checkpoint(path + "/" + filename +".bp", t)
-
+    g = es.degradation_default(model.damage.d)
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                     model.momentum.u_v, model.momentum.u_e,
                                     model.momentum.ψplus,
                                     model.momentum.water_pressure(model.momentum.u),#*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
+                                    (1-g)*ufl.div(model.momentum.p_crack*model.momentum.u),#*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
                                     model.params.T,
                                     model.params.Gc,
                                     model.momentum.ρ,
@@ -338,6 +330,7 @@ for i in range(1,args.nt):
                                     "uv","ue",
                                     "psi_plus",
                                     "water_pressure",
+                                    "crack_driving",
                                     "T",
                                     "Gc",
                                     "density_ratio",
@@ -345,15 +338,12 @@ for i in range(1,args.nt):
                                     ],
                                 t=i)
     
-    # if still not converged after gv_tol increases, end
     if flag == -1:
         break
 
     
     model.timestep()
     
-    # model.temperature.timestep(
-    # model.params.dt.value *= 1.05
 
     
 
