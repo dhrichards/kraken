@@ -48,6 +48,7 @@ class HigherOrder(Damage):
         # H = es.history_function(self.sim.momentum.ε_e, self.Hprev,
         #                     self.sim.params.ν, self.sim.params.ψcritstar,
         #                     self.sim.free_energy_plus)
+        g = es.degradation_default(self.d,self.sim.params.ge_tol)
         H = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
 
         mixed_test = ufl.TestFunction(self.W)
@@ -57,7 +58,7 @@ class HigherOrder(Damage):
         # self.F = (C3*4*l0*c*v*H + c*v - 2*l0**2*self.lap*v - l0**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
         #         -1.0*v ) * ufl.dx \
         #         - (self.lap*q + ufl.inner(ufl.grad(c), ufl.grad(q))) * ufl.dx
-                
+                 # -C3*2*(1-self.d)*l*ufl.div(self.sim.momentum.p_crack*self.sim.momentum.u)*v*ufl.dx\
         self.F = -C3*2*l*(1-self.d)*v*H*ufl.dx \
                   +(1/2)*(2*self.d*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
                 ) * ufl.dx \

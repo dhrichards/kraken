@@ -41,6 +41,14 @@ def free_energy(ε,ν):
     return 0.5*1.5*λoverμ(ν)*ufl.tr(ε)**2 + ufl.inner(ε,ε) 
 
 
+def free_energy_plus_ulloa(ε, p, ν):
+    K = Koverμ(ν)
+    ψp = 0.5/K*(1.5*K*ufl.tr(ε) + p)**2 + ufl.inner(ufl.dev(ε), ufl.dev(ε)) 
+
+    σ0 = cauchy_stress(ε,ν)
+    trsp = 1.5*ufl.tr(σ0) + 3*p
+    return ufl.conditional(ufl.gt(trsp, 0), ψp, 0.0)
+
 
 def free_energy_plus_dp(ε, ν, B = -0.4, eps=1e-12):
     # B = -0.4
@@ -122,7 +130,6 @@ def free_energy_plus_lo(ε,ν):
             ufl.conditional(ufl.gt(λ[1] + ν*λ[0],0),psi2,
              ufl.conditional(ufl.gt((1-ν)*λ[2] + ν*(λ[0]+λ[1]),0),psi3,
                              0)))
-
 
 def free_energy_plus_lo_3d(ε,ν):
     Eoverμ = 2*(1+ν)

@@ -69,6 +69,11 @@ def right_boundary(x):
 def bottom_boundary(x):
     return np.isclose(x[1], 0)#*(x[0]<=(nondim_length/2 - nondim_height))
 
+def bottom_left(x):
+    return np.isclose(x[1], 0)*(x[0]<=(nondim_length/4))
+
+def bottom_right(x):
+    return np.isclose(x[1], 0)*(x[0]>=(nondim_length/4))
 
 def crack(x,x_c):
     width = args.l/args.cellfactor / args.height
@@ -126,9 +131,15 @@ elif args.meshtype == "uniform":
                             [nx, nz],
                             cell_type=mesh.CellType.triangle)
 
-    
+# bottom_facets = mesh.locate_entities_boundary(msh, msh.topology.dim-1, bottom_boundary)
+# right_facets = mesh.locate_entities_boundary(msh, msh.topology.dim-1, right_boundary)
+# facets = np.hstack([bottom_facets, right_facets])
+# values = np.hstack([np.full_like(bottom_facets, 1), np.full_like(right_facets, 2)])
+# sorted_facets = np.argsort(facets)
+# mt = mesh.meshtags(msh, msh.topology.dim-1, facets[sorted_facets], values[sorted_facets])
+# ds = ufl.Measure("ds", domain=msh, subdomain_data=mt)
 
-# msh.geometry.x[:,0] = msh.geometry.x[:,0] - 0.01*msh.geometry.x[:,1]*msh.geometry.x[:,0]
+
 
 
 if args.meshtype == "uniform":
@@ -138,6 +149,9 @@ else:
                 bc.internal_bc(V, fixed, 0.0),
                 #   bc.internal_bc(V, cracks, 1.0)
                   ]
+    
+
+
 
 
 
@@ -146,19 +160,29 @@ if args.type == "cliff_frozen":
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(0), bottom_boundary),
                         bc.get_zero_bc(V.sub(1), bottom_boundary),
-                        bc.get_zero_bc(V.sub(0).sub(0), right_boundary),
-                        bc.get_zero_bc(V.sub(1).sub(0), right_boundary),
-                        ]
+            ]
 elif args.type == "cliff_sliding":
     u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
                         bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary),
-                        bc.get_zero_bc(V.sub(0).sub(0), right_boundary),
-                        bc.get_zero_bc(V.sub(1).sub(0), right_boundary),
+                        ]
+elif args.type == "cliff_stickslip":
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(0), bottom_left),
+                        bc.get_zero_bc(V.sub(1), bottom_left),
+                        bc.get_zero_bc(V.sub(0).sub(1), bottom_right),
+                        bc.get_zero_bc(V.sub(1).sub(1), bottom_right),
+                        ]
+elif args.type == "ssa":
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary),
+                        bc.get_bc(V.sub(1).sub(0), right_boundary, 0.1),
                         ]
 else:
-
     u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                             bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
 
@@ -191,7 +215,7 @@ z = x[msh.geometry.dim-1]
 # model.params.T = -1 + (args.T - -1)*z
 model.params.T.value = args.T
 model.params.A0.value = mf.rate_factor_np(args.T)
-model.params.L.value = args.height
+model.params.H.value = args.height
 model.params.l.value = args.l
 model.params.dt.value = args.dt*24*60*60
 model.params.ρi.value = args.rhoi
@@ -201,21 +225,15 @@ model.params.patm.value = 0.0
 model.params.Gc.value = args.Gc
 model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
+model.params.length.value = args.length
+
+model.params.ge_tol.value = 1e-6
 
 
-ψcrit_top = args.psicrit
-ψcrit_bottom = 0.01
-
-
-model.params.Gc = (args.Gc - 0.1)*z**2 + 0.1
+# model.params.Gc = (args.Gc - 0.1)*z**2 + 0.1
 
 if MPI.COMM_WORLD.rank == 0:
     print(model.params.ucstar_float )
-
-import dolfinx.fem as fem
-# z = ufl.SpatialCoordinate(msh)[msh.geometry.dim-1]
-# model.params.Gc = ufl.conditional(ufl.gt(z, 0.9), args.Gc, args.Gc*0.01)
-# model.params.ψcrit = ψcrit_bottom + (ψcrit_top - ψcrit_bottom)*z**2
 
 
 
@@ -251,12 +269,11 @@ if MPI.COMM_WORLD.rank == 0:
     print(path + "/" + filename)
 
 model.damage_on = False
-if args.type == "iceberg":
-    i_start = 1
-    # model.params.dt.value = 10*24*60*60
-    
-else:
+if args.type == "relaxation":
     i_start = 10
+    # model.params.dt.value = 10*24*60*60
+else:
+    i_start = 1
     
 
 
@@ -275,42 +292,18 @@ for i in range(1,args.nt):
 
 
     if i == i_start:
-        # model.damage.w.sub(0).interpolate(lambda x: cracks(x).astype(np.float64))
-        # model.fixed_point()
-        # model.damage.timestep()
+        
         model.damage_on = True
-        if args.type == "cliff_frozen":
-            u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
-                        bc.get_zero_bc(V.sub(0), bottom_boundary),
-                        bc.get_zero_bc(V.sub(1), bottom_boundary),
-            ]
-            model.momentum.update_bcs(u_bc)
-        elif args.type == "cliff_sliding":
-            u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
-                        bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
-                        bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary),
-                        ]
-        
-            model.momentum.update_bcs(u_bc)
-        
-
-        
-        # for factor in [8,4,2,1]:
-        #     model.params.Gc.value = args.Gc * factor
-        #     if MPI.COMM_WORLD.rank == 0:
-        #         print("Setting Gc to ", model.params.Gc.value)
-        #     model.fixed_point(min_its=3, tol=args.tol, max_its=50, solve_damage=solve_d)
-        # for height in heights:
-        #     model.params.L.value = height
-        #     model.params.l.value = args.l * (height/args.height)
-        #     if MPI.COMM_WORLD.rank == 0:
-        #         print("Setting height to ", model.params.L.value)
-        #     model.fixed_point(min_its=3, tol=1e-5, max_its=50, solve_damage=solve_d)
+        # model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x).astype(np.float64))
+        # model.momentum.solve()
+        # model.damage.timestep()
 
     
     flag = model.fixed_point(save=True)
+
+    ε = model.momentum.ε_e
+    p = model.momentum.water_pressure(model.momentum.u)
+    ψplus = es.free_energy_plus_lo(ε, model.params.ν)/model.params.ψcritstar
     
 
     t += model.params.dt.value
@@ -319,23 +312,16 @@ for i in range(1,args.nt):
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                     model.momentum.u_v, model.momentum.u_e,
-                                    model.momentum.ψplus,
-                                    model.momentum.water_pressure(model.momentum.u),#*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
-                                    (1-g)*ufl.div(model.momentum.p_crack*model.momentum.u),#*ufl.Dx(es.degradation_default(model.damage.d,1e-12),0),
-                                    model.params.T,
-                                    model.params.Gc,
-                                    model.momentum.ρ,
+                                    model.momentum.ψplus/model.params.ψcritstar,
+                                    ψplus,
+                                    p,
                                     # model.mass.ρ,
                                     ],
                                     ["u","d",
                                     "uv","ue",
                                     "psi_plus",
-                                    "water_pressure",
-                                    "crack_driving",
-                                    "T",
-                                    "Gc",
-                                    "density_ratio",
-                                    # "rho",
+                                    "psi_plus_mod",
+                                    "pressure",
                                     ],
                                 t=i)
     

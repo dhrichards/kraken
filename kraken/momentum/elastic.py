@@ -19,17 +19,21 @@ class Elasticity(Momentum):
     def __init__(self, sim):
         super().__init__(sim)
 
-        self.W = fem.functionspace(self.sim.msh, ("Lagrange", 1, (self.sim.msh.geometry.dim, )))
+        self.W = fem.functionspace(self.sim.msh, ("Lagrange", 2, (self.sim.msh.geometry.dim, )))
 
         self.u = fem.Function(self.W, name="displacement")
         self.w = self.u
         self.ε_e = mf.ε(self.u)
-        self.ψplus = self.sim.free_energy_plus(self.ε_e, self.sim.params.ν)
+        # self.ψplus = self.sim.free_energy_plus(self.ε_e, self.sim.params.ν)
+        self.p_crack = self.crack_pressure(self.u)
+        self.ψplus  = es.free_energy_plus_lo(self.ε_e + self.p_crack*ufl.Identity(self.sim.msh.geometry.dim)/(3*es.Koverμ(self.sim.params.ν)), self.sim.params.ν)
 
         self.u_prev_it = fem.Function(self.W, name="displacement previous iteration")
         self.u_prev_time = fem.Function(self.W, name="displacement previous time")
 
         self.bc_u = self.sim.bc_funcs[0](self.W)
+
+        
 
 
     def setup_momentum(self):
@@ -66,11 +70,15 @@ class Elasticity(Momentum):
         Iprime = 2*self.sim.damage.d
         # Iprime = 1.0
 
+        I = ufl.Identity(ufl.shape(self.ε_e)[0])
 
-
-        self.F = (ufl.inner(σ, mf.ε(v))\
+        # σ0 = es.cauchy_stress(self.ε_e,self.sim.params.ν)
+        # trsp = 1.5*ufl.tr(σ0) + 3*p_crack
+        # σ = ufl.conditional(ufl.gt(trsp,0), g*σ0 - (1-g)*p_crack*I, σ0)
+        
+        self.F = (ufl.inner(σ - (1-g)*p_crack*I, mf.ε(v))\
               - ufl.inner(f, v) 
-              -p_crack*ufl.inner(ufl.Dx(g, 0), v[0]) \
+            #   -p_crack*ufl.inner(ufl.Dx(g, 0), v[0]) \
             # - p_crack*ufl.inner(ufl.grad(g), v) \
             #  + p_crack* ufl.inner(Iprime*ufl.grad(d), v)\
               ) * ufl.dx \

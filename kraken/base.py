@@ -30,6 +30,11 @@ class Simulation:
         if split == "lo":
             self.free_energy_plus = es.free_energy_plus_lo
             self.stress_plus = es.stress_plus_lo
+        elif split == "lo_p":
+            pw = mf.water_pressure_static(self.msh, self.params.ρwstar, self.params.sea_level_star) + self.params.patmstar
+            I = ufl.Identity(self.msh.geometry.dim)
+            self.free_energy_plus = lambda ε, ν: es.free_energy_plus_lo(ε + pw*I/(3*es.Koverμ(ν)), ν)
+            self.stress_plus = lambda ε, ν: es.stress_plus_lo(ε + pw*I/(3*es.Koverμ(ν)), ν)
         elif split == "spectral":
             self.free_energy_plus = es.free_energy_plus_spectral
             self.stress_plus = es.stress_plus_spectral
@@ -45,9 +50,6 @@ class Simulation:
         elif split == "none":
             self.free_energy_plus = es.free_energy
             self.stress_plus = es.cauchy_stress
-        elif split == "hsd":
-            self.free_energy_plus = lambda ε, ν: hsd.free_energy_plus(ε, ν, self.params.friction_angle, self.params.cohesion_star)
-            self.stress_plus = lambda ε, ν: hsd.stress_plus(ε, ν, self.params.friction_angle, self.params.cohesion_star)
         else:
             raise ValueError(f"Unknown energy split: {split}")
 
@@ -100,7 +102,7 @@ class Simulation:
                              'A' : self.params.A0.value,
                              'n' : self.params.n.value,
                              'Gc' : self.params.Gc.value,
-                             'L' : self.params.L.value,
+                             'L' : self.params.H.value,
                              'l' : self.params.l.value,
                              'sigmacrit' : self.params.σcrit.value,
                              'psicrit' : self.params.ψcrit.value,
@@ -128,7 +130,7 @@ class Simulation:
         self.params.A0.value = dictofparams['A']
         self.params.n.value = dictofparams['n']
         self.params.Gc.value = dictofparams['Gc']
-        self.params.L.value = dictofparams['L']
+        self.params.H.value = dictofparams['L']
         self.params.l.value = dictofparams['l']
         self.params.σcrit.value = dictofparams['sigmacrit']
         self.params.ψcrit.value = dictofparams['psicrit']
@@ -156,18 +158,22 @@ class Simulation:
             i = 0
             while i < self.max_its:
                 
+                self.momentum.solve()
                 if self.damage_on:
                     self.damage.solve()
-                self.momentum.solve()
+                
                 # if solve_mass:
                 #     self.mass.solve()
+               
 
                 if save:
                     utilities.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, [self.momentum.u,self.damage.d,
+                                           self.momentum.ψplus/self.params.ψcritstar,
                                         # self.momentum.u_e, self.momentum.u_v
                                         ],
                                         ["u","d",
+                                            "psi_plus",
                                         # "ue","uv",
                                         ],
                                     t=i)

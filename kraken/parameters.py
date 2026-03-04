@@ -21,7 +21,7 @@ class Params_with_uc:
         self.A0 = fem.Constant(msh,default_scalar_type(1.2e-25)) # Flow law parameter
         self.n = fem.Constant(msh,default_scalar_type(3.0)) # Flow law exponent
         self.Gc = fem.Constant(msh,default_scalar_type(1.0)) # Fracture toughness
-        self.L = fem.Constant(msh,default_scalar_type(100)) # Characteristic length
+        self.H = fem.Constant(msh,default_scalar_type(100)) # Characteristic length
         self.l = fem.Constant(msh,default_scalar_type(0.5)) # Regularisation length
         self.σcrit = fem.Constant(msh,default_scalar_type(0.2e6)) # tensile strength
         self.ψcrit = fem.Constant(msh,default_scalar_type(1.0)) 
@@ -32,7 +32,8 @@ class Params_with_uc:
         self.cp = fem.Constant(msh,default_scalar_type(2100)) # Specific heat capacity
         self.κ = fem.Constant(msh,default_scalar_type(2)) # Thermal conductivity
         self.crack_level_above_sea = fem.Constant(msh,default_scalar_type(0.0)) # Water level for hydrostatic pressure
-        self.sea_level = fem.Constant(msh,default_scalar_type(0.9*self.L.value)) # Sea level height
+        self.sea_level = fem.Constant(msh,default_scalar_type(0.9*self.H.value)) # Sea level height
+        self.length = fem.Constant(msh,default_scalar_type(16e3)) # Length of domain in flow direction
         
 
         self.friction_angle = fem.Constant(msh, default_scalar_type(np.atan(0.3))) # Friction angle in radians
@@ -57,24 +58,24 @@ class Params_with_uc:
 
     @property
     def uc(self):
-        return self.ρc * self.g * self.L**2 / self.μ
+        return self.ρc * self.g * self.H**2 / self.μ
 
     @property
     def ucstar(self):
-        return self.uc/self.L
+        return self.uc/self.H
     
     @property
     def ucstar_float(self):
         μ = self.E.value / (2 * (1 + self.ν.value))
-        return self.ρc.value * self.g.value * self.L.value / μ
+        return self.ρc.value * self.g.value * self.H.value / μ
     
     @property
     def crack_level_star(self):
-        return self.crack_level_above_sea / self.L + self.sea_level_star
+        return self.crack_level_above_sea / self.H + self.sea_level_star
     
     @property
     def sea_level_star(self):
-        return self.sea_level / self.L
+        return self.sea_level / self.H
     
     @property
     def τ(self):
@@ -122,7 +123,7 @@ class Params_with_uc:
     
     @property
     def pwc(self):
-        return self.ρc * self.g * self.L
+        return self.ρc * self.g * self.H
     
     @property
     def ρistar(self):
@@ -151,7 +152,7 @@ class Params_with_uc:
 
     @property
     def lstar(self):
-        return self.l/self.L
+        return self.l/self.H
 
 
     @property
@@ -170,18 +171,18 @@ class Params_with_uc:
     def C2(self):
         """Non dimensional constant describing ratio between
         elastic and viscousc stresses."""
-        return self.A0**(1/self.n) * (self.uc/self.L)**(1-1/self.n) * \
+        return self.A0**(1/self.n) * (self.uc/self.H)**(1-1/self.n) * \
                 self.μ * self.τ**(1/self.n)
 
     @property
     def C3(self):
         """Non dimensional constant describing ratio between
         elastic and fracture stresses."""
-        return self.μ * self.uc**2 / (self.Gc * self.L)
+        return self.μ * self.uc**2 / (self.Gc * self.H)
 
     @property
     def C_inertia(self):
-        return self.ρc * self.L**2 / (self.μ * self.τ**2)
+        return self.ρc * self.H**2 / (self.μ * self.τ**2)
     
     @property
     def C_temperature(self):
@@ -189,14 +190,18 @@ class Params_with_uc:
     
     @property
     def κstar(self):
-        return self.κ*self.τ/(self.ρc*self.cp*self.L**2)
+        return self.κ*self.τ/(self.ρc*self.cp*self.H**2)
 
+    @property
+    def length_star(self):
+        return self.length / self.H
 
     def set_Gc_AT1_lowerorder(self):
         self.Gc.value = 8* self.σcrit.value**2 * self.l.value / (3*self.E.value)
 
     def set_Gc_AT1_higherorder(self):
         self.Gc.value = 2* self.σcrit.value**2 * self.l.value / self.E.value
+
 
 
 

@@ -1,5 +1,6 @@
 import numpy as np
 from dolfinx import fem, mesh, default_scalar_type
+import ufl
 
 
 def get_boundary_dofs(V,boundary):
@@ -80,6 +81,22 @@ def get_bc_func(V,boundary,bc_expr):
     bc_val = fem.Function(V)
     bc_val.interpolate(bc_expr)
     return fem.dirichletbc(bc_val, boundary_dofs_x)
+
+
+def marked_ds(msh, boundaries):
+
+    facets = []
+    for boundary in boundaries:
+        boundary_facets = mesh.locate_entities_boundary(msh, msh.topology.dim-1, boundary)
+        facets.append(boundary_facets)
+
+    facets = np.hstack(facets)
+    values = np.hstack([np.full_like(facets[i], i+1) for i in range(len(boundaries))])
+    sorted_facets = np.argsort(facets)
+    mt = mesh.meshtags(msh, msh.topology.dim-1, facets[sorted_facets], values[sorted_facets])
+    ds = ufl.Measure("ds", domain=msh, subdomain_data=mt)
+    return ds
+
 
 
         

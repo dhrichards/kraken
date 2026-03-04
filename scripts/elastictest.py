@@ -26,10 +26,10 @@ def right_boundary(x):
     return np.isclose(x[0], nondim_length/2)
 
 def bottom_boundary(x):
-    return np.isclose(x[1], -Hw)
+    return np.isclose(x[1], 0)
 
 def top_boundary(x):
-    return np.isclose(x[1], nondim_height - Hw)
+    return np.isclose(x[1], nondim_height)
 
 def all_boundaries(x):
     return left_boundary(x) + right_boundary(x) + bottom_boundary(x) + top_boundary(x)
@@ -42,8 +42,8 @@ def fixed(x):
     return (x[0]<(nondim_length/2 - refineH[0]*0.9*nondim_height))# + (x[1]<(0.1-0.9*refineH[1]))
 
 
-true_length = 16e3
-true_height = 300
+true_length = 5e3
+true_height = 100
 
 
 
@@ -61,9 +61,19 @@ nondim_height = true_height/L
 
 
 refineH = (1.75,0.125)
-msh = kr.meshes.create_refined_mesh(nondim_length,nondim_height, l/L,
-                                     aspect_ratios=(aspect_ratio_x,1), refine=refineH,
-                                     cell_factor=args.cellfactor)
+# msh = kr.meshes.create_refined_mesh(nondim_length,nondim_height, l/L,
+#                                      aspect_ratios=(aspect_ratio_x,1), refine=refineH,
+#                                      cell_factor=args.cellfactor)
+
+from dolfinx import mesh
+cell_size = args.l/(args.cellfactor*L)
+nx = int((nondim_length/2)/cell_size)
+nz = int(nondim_height/cell_size)
+msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                        [[0.0, 0.0],
+                        [nondim_length/2, nondim_height]],
+                        [nx, nz],
+                        cell_type=mesh.CellType.triangle)
 
 # msh = kr.utilities.create_iceberg_gmsh_mesh(
 #     args.l/(args.cellfactor*L), 
@@ -78,7 +88,8 @@ msh.geometry.x[:,1] = msh.geometry.x[:,1]*(1- slope*msh.geometry.x[:,0])
 # msh.geometry.x[:,1] += 0.5
 
 no_bc = lambda V: []
-bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0),
+bc_d = lambda V: [
+    # bc.internal_bc(V, fixed, 0.0),
                 #   bc.internal_bc(V, crack, 1.0)
                 #   bc.get_zero_bc(V.sub(1), all_boundaries)
                   ]
@@ -86,7 +97,9 @@ bc_d = lambda V: [bc.internal_bc(V, fixed, 0.0),
 if args.type == "pressure":
     u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary)]
 else:
-    u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary)]
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary),
+                    # bc.get_zero_bc(V.sub(1), bottom_boundary)
+                    ]
                
 
 if args.type == "degraded":
@@ -103,9 +116,9 @@ elif args.type == "energy":
 model = kr.base.Simulation(msh, 
                            elast,
                            kr.damage.higherorder.HigherOrder,
-                            [u_bc, bc_d], split = 'dp')
+                            [u_bc, bc_d])
 
-model.params.L.value = L
+model.params.H.value = L
 model.params.l.value = l
 model.params.dt.value = 60*60*2
 model.params.patm.value = 0
@@ -129,12 +142,12 @@ model.setup()
 model.momentum.solve()
 
 
-model.msh.geometry.x[:,:model.msh.geometry.dim] -= model.params.ucstar_float*model.momentum.u.x.array.reshape((-1, model.msh.geometry.dim))
+# model.msh.geometry.x[:,:model.msh.geometry.dim] -= model.params.ucstar_float*model.momentum.u.x.array.reshape((-1, model.msh.geometry.dim))
         
 
 
 
-model.fixed_point(save=True)
+# model.fixed_point(save=True)
 import adios4dolfinx
 
 # filename = './scripts/{}elastic_l{}.bp'.format(
@@ -148,23 +161,9 @@ import adios4dolfinx
 # adios4dolfinx.write_function(filename, model.damage.w, name="w")
 
 
-if args.type == "normal":
-    ψplus = es.free_energy_plus_lo_3d(mf.tensor_2d_to_3d(model.momentum.ε_e), model.params.ν)
-    ψplus2 = es.free_energy_plus_lo(model.momentum.ε_e, model.params.ν)
-
-elif args.type == "pressure":
-    import kraken.numerics.energy_splits_deviatoric as esd
-    ψplus = esd.free_energy_plus_dp(model.momentum.ε_eD, model.momentum.trε, model.params.ν)
-    εe = mf.deviatoric2d_to_3d(model.momentum.ε_eD) + (1/3)*model.momentum.trε*ufl.Identity(3)
-    ψplus2 = es.free_energy_plus_dp(εe, model.params.ν)
-
-elif args.type == "3D":
-    ψplus = es.free_energy_plus_lo_3d(model.momentum.ε_e, model.params.ν)
-    ψplus2 = es.free_energy_plus_lo_2d(mf.tensor_3d_to_2d(model.momentum.ε_e), model.params.ν)
-
-
 kr.utilities.write_xdmf("./outputs/elastictestx" + args.type + ".xdmf",
                             msh, [model.momentum.u, model.damage.d, 
+                                  model.momentum.ψplus,
                                 #   ψplus,
                                 #   ψplus2,
                                     model.momentum.ε_e,
@@ -172,7 +171,7 @@ kr.utilities.write_xdmf("./outputs/elastictestx" + args.type + ".xdmf",
                                 #   es.free_energy_plus_lo_pressure(model.momentum.ε_e, model.momentum.p, model.params.ν),
                                   ],
                             ["u", "d", 
-                            #  "psi_plus",
+                             "psi_plus",
                             #  "psi_plus_2",
                              "e_e",
                             #  "tr_e_d",
