@@ -13,7 +13,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks above sea level (m)")
-parser.add_argument("--split", type=str, default="lo", help="Energy split to use")
+parser.add_argument("--split", type=str, default="lo_p", help="Energy split to use")
 parser.add_argument("--l", type=float, default=2, help="Regularization length scale in meters")
 parser.add_argument("--dt", type=float, default=3, help="Time step in days")
 parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
@@ -131,14 +131,36 @@ elif args.meshtype == "uniform":
                             [nx, nz],
                             cell_type=mesh.CellType.triangle)
 
-# bottom_facets = mesh.locate_entities_boundary(msh, msh.topology.dim-1, bottom_boundary)
-# right_facets = mesh.locate_entities_boundary(msh, msh.topology.dim-1, right_boundary)
-# facets = np.hstack([bottom_facets, right_facets])
-# values = np.hstack([np.full_like(bottom_facets, 1), np.full_like(right_facets, 2)])
-# sorted_facets = np.argsort(facets)
-# mt = mesh.meshtags(msh, msh.topology.dim-1, facets[sorted_facets], values[sorted_facets])
-# ds = ufl.Measure("ds", domain=msh, subdomain_data=mt)
 
+
+model = kr.base.Simulation(msh,split=args.split)
+
+model.tol = args.tol
+model.min_its = args.min_its
+model.max_its = args.max_its
+
+x = ufl.SpatialCoordinate(msh)
+z = x[msh.geometry.dim-1]
+# model.params.T = -1 + (args.T - -1)*z
+model.params.T.value = args.T
+model.params.A0.value = mf.rate_factor_np(args.T)
+model.params.H.value = args.height
+model.params.l.value = args.l
+model.params.dt.value = args.dt*24*60*60
+model.params.ρi.value = args.rhoi
+model.params.ρw.value = args.rhow
+model.params.ψcrit.value = args.psicrit
+model.params.patm.value = 0.0
+model.params.Gc.value = args.Gc
+model.params.crack_level_above_sea.value = args.level
+model.params.sea_level.value = args.sealevel * args.height
+model.params.length.value = args.length
+
+
+# model.params.Gc = (args.Gc - 0.1)*z**2 + 0.1
+
+if MPI.COMM_WORLD.rank == 0:
+    print(model.params.ucstar_float )
 
 
 
@@ -176,11 +198,17 @@ elif args.type == "cliff_stickslip":
                         bc.get_zero_bc(V.sub(1).sub(1), bottom_right),
                         ]
 elif args.type == "ssa":
-    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+    δ = model.params.δ; ν = model.params.ν
+    duedx = lambda z: (-0.125*δ*ν + 0.25*δ + 1.0*ν - 0.5 - 1.0*z*ν + 0.5*z)/((ν + 1))
+    ue_x = lambda x: duedx(x[1])*nondim_length/2
+    duvdx = model.params.dtstar*(δ/4)**3
+    uv_x = duvdx*nondim_length/2
+    u_x = lambda x: uv_x + ue_x(x)
+    u_bc = lambda V: [
+                        bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
-                        bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
-                        bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary),
-                        bc.get_bc(V.sub(1).sub(0), right_boundary, 0.1),
+                        bc.get_bc_func(V.sub(0).sub(0), right_boundary, u_x),
+                        bc.get_bc(V.sub(1).sub(0), right_boundary, uv_x),
                         ]
 else:
     u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
@@ -201,43 +229,10 @@ elif args.damagemodel == "AT2lower":
 elif args.damagemodel == "AT2higher_bounded":
     damage_model = kr.damage.higherorder.Bounded
 
-model = kr.base.Simulation(msh,
-                           kr.momentum.mixed.SemiLagrangianEpsilon,
-                           damage_model, [u_bc, d_bc], 
-                           split=args.split)
-
-model.tol = args.tol
-model.min_its = args.min_its
-model.max_its = args.max_its
-
-x = ufl.SpatialCoordinate(msh)
-z = x[msh.geometry.dim-1]
-# model.params.T = -1 + (args.T - -1)*z
-model.params.T.value = args.T
-model.params.A0.value = mf.rate_factor_np(args.T)
-model.params.H.value = args.height
-model.params.l.value = args.l
-model.params.dt.value = args.dt*24*60*60
-model.params.ρi.value = args.rhoi
-model.params.ρw.value = args.rhow
-model.params.ψcrit.value = args.psicrit
-model.params.patm.value = 0.0
-model.params.Gc.value = args.Gc
-model.params.crack_level_above_sea.value = args.level
-model.params.sea_level.value = args.sealevel * args.height
-model.params.length.value = args.length
-
-model.params.ge_tol.value = 1e-6
 
 
-# model.params.Gc = (args.Gc - 0.1)*z**2 + 0.1
-
-if MPI.COMM_WORLD.rank == 0:
-    print(model.params.ucstar_float )
-
-
-
-model.setup()
+model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
+                           damage_model, [u_bc, d_bc])
 
 crack_spacing = 0.1
 crack_start = 0.2
@@ -297,6 +292,16 @@ for i in range(1,args.nt):
         # model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x).astype(np.float64))
         # model.momentum.solve()
         # model.damage.timestep()
+
+    if i == 2 and args.type == "ssa":
+        u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+
+                            ]
+        
+        model.momentum.update_bcs(u_bc)
+        
+    
 
     
     flag = model.fixed_point(save=True)

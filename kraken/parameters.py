@@ -134,6 +134,10 @@ class Params_with_uc:
         return self.ρw/self.ρc
     
     @property
+    def δ(self):
+        return 1-self.ρi/self.ρw
+    
+    @property
     def σc(self):
         return self.μ*self.ucstar
     

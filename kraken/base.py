@@ -1,4 +1,4 @@
-from kraken import parameters, utilities, temperature, mass
+from kraken import parameters, utilities, temperature, mass, momentum, damage
 from kraken.numerics import energy_splits as es
 from kraken.numerics import hydrostaticspectraldeviatoric as hsd
 from kraken.numerics import maths_functions as mf
@@ -10,12 +10,10 @@ import numpy as np
 import adios4dolfinx
 
 class Simulation:
-    def __init__(self, msh, MomentumSolver, DamageSolver, 
-                 bc_funcs=[lambda V: [], lambda V: []],
-                 split="lo"):
+    def __init__(self, msh,split="lo_p"):
         self.msh = msh
         self.params = parameters.Params_with_uc(self.msh)
-        self.bc_funcs = bc_funcs
+        
 
         self.damage_on = False
         self.temperature_on = False
@@ -55,14 +53,21 @@ class Simulation:
 
 
 
+        
+
+
+    def setup(self,MomentumSolver=momentum.mixed.SemiLagrangianEpsilon,
+                    DamageSolver=damage.higherorder.HigherOrder,
+                    bc_funcs=[lambda V: [], lambda V: []]):
+
+
+        self.bc_funcs = bc_funcs
         self.momentum = MomentumSolver(self)
         self.damage = DamageSolver(self)
-
-
-    def setup(self):
         
         self.momentum.setup()
         self.damage.setup()
+        
         if self.temperature_on:
             self.temperature = temperature.Temperature(self)
             self.temperature.setup()

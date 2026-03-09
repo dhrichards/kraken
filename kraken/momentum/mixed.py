@@ -9,12 +9,10 @@ import numpy as np
 from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
-from kraken.numerics import energy_splits_deviatoric as esd
 from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
 from petsc4py import PETSc
 from kraken.numerics.invariants import matrix_function
-from kraken.numerics import deviatoric_stress_split as dss
 from kraken.boundaryconditions import marked_ds
 
 
@@ -99,9 +97,20 @@ class MixedDisplacement(Momentum):
         def right_boundary(x):
             return np.isclose(x[0], self.sim.params.length.value/2/self.sim.params.H.value)
         
+        def bottom_boundary(x):
+            return np.isclose(x[1], 0.0)
         
-        facets = mesh.locate_entities_boundary(self.sim.msh, self.sim.msh.topology.dim-1, right_boundary)
-        mt = mesh.meshtags(self.sim.msh, self.sim.msh.topology.dim-1, facets, 1)
+        def left_boundary(x):
+            return np.isclose(x[0], 0.0)
+        
+        
+        r_facets = mesh.locate_entities_boundary(self.sim.msh, self.sim.msh.topology.dim-1, right_boundary)
+        b_facets = mesh.locate_entities_boundary(self.sim.msh, self.sim.msh.topology.dim-1, bottom_boundary)
+        l_facets = mesh.locate_entities_boundary(self.sim.msh, self.sim.msh.topology.dim-1, left_boundary)
+        facets = np.hstack([r_facets, b_facets, l_facets])
+        values = np.hstack([np.full_like(r_facets, 1), np.full_like(b_facets, 2), np.full_like(l_facets, 3)])
+        sorted_facets = np.argsort(facets)
+        mt = mesh.meshtags(self.sim.msh, self.sim.msh.topology.dim-1, facets[sorted_facets], values[sorted_facets])
         ds = ufl.Measure("ds", domain=self.sim.msh, subdomain_data=mt)
 
         x = ufl.SpatialCoordinate(self.sim.msh)
@@ -119,9 +128,13 @@ class MixedDisplacement(Momentum):
             # + self.p_crack*Iprime*ufl.inner(ufl.grad(self.sim.damage.d), v)
               ) * ufl.dx 
               
-        self.F += (self.pw * ufl.inner(n, v) * ufl.ds)
+        self.F += (
+            self.pw * ufl.inner(n, v) * ufl.ds\
             # + ufl.inner(t, v) * ds(1) \
-            # + 1e5 * ufl.inner(self.vel, v) * self.ds_bottom(1)\
+            # - ufl.inner(t, v) * ds(3) \
+        #     # + self.pw * ufl.inner(n, v) * ds(2)\
+        #     # + 1e5 * ufl.inner(self.vel, v) * self.ds_bottom(1)\
+            )
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
@@ -141,7 +154,7 @@ class MixedDisplacement(Momentum):
 
 
         self.F += (
-                - g*ufl.div(self.du)*q \
+                - g*ufl.div(self.du_v)*q \
                 ) * ufl.dx 
         
 

@@ -1,19 +1,12 @@
 import numpy as np
-from dolfinx import fem, default_scalar_type
-from mpi4py import MPI
+from dolfinx import fem, default_scalar_type, mesh
 import ufl
 import basix.ufl as bufl
 import numpy as np
 from kraken.momentum.base import Momentum
-from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
-from kraken.numerics import energy_splits_deviatoric as esd
-from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
-from kraken.numerics import fansplit as fs
-from petsc4py import PETSc
-
 
 class Elasticity(Momentum):
     def __init__(self, sim):
@@ -70,19 +63,44 @@ class Elasticity(Momentum):
         Iprime = 2*self.sim.damage.d
         # Iprime = 1.0
 
-        I = ufl.Identity(ufl.shape(self.ε_e)[0])
-
-        # σ0 = es.cauchy_stress(self.ε_e,self.sim.params.ν)
-        # trsp = 1.5*ufl.tr(σ0) + 3*p_crack
-        # σ = ufl.conditional(ufl.gt(trsp,0), g*σ0 - (1-g)*p_crack*I, σ0)
+        def right_boundary(x):
+            return np.isclose(x[0], 2.0)
         
-        self.F = (ufl.inner(σ - (1-g)*p_crack*I, mf.ε(v))\
+        def bottom_boundary(x):
+            return np.isclose(x[1], 0.0)
+        
+        def left_boundary(x):
+            return np.isclose(x[0], 0.0)
+
+        r_facets = mesh.locate_entities_boundary(self.sim.msh, self.sim.msh.topology.dim-1, right_boundary)
+        b_facets = mesh.locate_entities_boundary(self.sim.msh, self.sim.msh.topology.dim-1, bottom_boundary)
+        l_facets = mesh.locate_entities_boundary(self.sim.msh, self.sim.msh.topology.dim-1, left_boundary)
+        facets = np.hstack([r_facets, b_facets, l_facets])
+        values = np.hstack([np.full_like(r_facets, 1), np.full_like(b_facets, 2), np.full_like(l_facets, 3)])
+        sorted_facets = np.argsort(facets)
+        mt = mesh.meshtags(self.sim.msh, self.sim.msh.topology.dim-1, facets[sorted_facets], values[sorted_facets])
+        ds = ufl.Measure("ds", domain=self.sim.msh, subdomain_data=mt)
+
+        x = ufl.SpatialCoordinate(self.sim.msh)
+        δ = 0.1
+        σxx_ssa = δ/2 + (x[1]-1)
+        t = ufl.as_vector((σxx_ssa, 0))
+        
+        
+        self.F = (ufl.inner(σ, mf.ε(v))\
               - ufl.inner(f, v) 
             #   -p_crack*ufl.inner(ufl.Dx(g, 0), v[0]) \
             # - p_crack*ufl.inner(ufl.grad(g), v) \
             #  + p_crack* ufl.inner(Iprime*ufl.grad(d), v)\
-              ) * ufl.dx \
-            + p_w * ufl.inner(n, v) * ufl.ds 
+              ) * ufl.dx 
+        
+        self.F += (
+              + p_w * ufl.inner(n, v) * ufl.ds 
+            #   - ufl.inner(t, v) * ds(1) \
+            #   + p_w * ufl.inner(n,v)*ds(2)
+            # 
+        )
+            
         
 
         self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.W))
@@ -193,12 +211,12 @@ class ElasticDegraded(Elasticity):
 
 
         self.F = (ufl.inner(σ, mf.ε(v))\
-              - g*ufl.inner(f, v) 
+              - ufl.inner(f, v) 
             #   -p_crack*ufl.inner(ufl.Dx(g, 0), v[0]) \
-            - p_crack*ufl.inner(ufl.grad(g), v) \
+            # - p_crack*ufl.inner(ufl.grad(g), v) \
             #  + p_crack* ufl.inner(Iprime*ufl.grad(d), v)\
               ) * ufl.dx \
-            + p_w * ufl.inner(n, v) * ufl.ds 
+            # + p_w * ufl.inner(n, v) * ufl.ds 
         
 
         self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.W))

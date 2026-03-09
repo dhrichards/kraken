@@ -20,89 +20,96 @@ def right_boundary(x):
 def bottom_boundary(x):
     return np.isclose(x[1], 0)
 
+H = 300
+true_length = H*4
+lstar = 0.01
+l = H*lstar
+
+nondim_length = true_length/H
 
 
+cell_factor = 1.0
 
-true_length = 200
-true_height = 100
+cell_size = l/H/cell_factor
+nx = int(nondim_length/cell_size/2)
+nz = int(1/cell_size)
+msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                        [[0.0, 0.0],
+                        [nondim_length/2, 1]],
+                        [nx, nz],
+                        cell_type=mesh.CellType.triangle)
 
-L = true_height
-l = 5.0
-ρi = 900
-ρsw = 1000
+
+model = kr.base.Simulation(msh,split="lo_p")
 
 
-# path = '/data/hpcdata/users/dancha/outputs'
+# model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
+model.params.H.value = H
+model.params.l.value = l
+model.params.ψcrit.value = 0.5
+model.params.Gc.value = 1.0
+model.params.patm.value = 0.0
+model.params.length.value = true_length
+model.params.sea_level.value = 0.9*model.params.H.value
+
+
+δ = model.params.δ; ν = model.params.ν
+exx = lambda z: (-0.125*δ*ν + 0.25*δ + 1.0*ν - 0.5 - 1.0*z*ν + 0.5*z)/((ν + 1))
+
+
+u_x = lambda x: exx(x[1])*nondim_length/2
+
 path = './outputs'
 os.makedirs(path, exist_ok=True)
 
-
-nondim_length = true_length/L
-nondim_height = true_height/L
-
-
-refineH = (2.5,0.4)
-msh = kr.utilities.create_refined_mesh(nondim_length, nondim_height, l/L, 0.0,
-                                     aspect_ratios=(1,1), refine=refineH,
-                                     cell_factor=1, cell_type=mesh.CellType.quadrilateral)
 
 
 d_bc = lambda V: []
 
 u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary),
-                    bc.get_zero_bc(V.sub(1), bottom_boundary),
-                    bc.get_bc(V.sub(0), right_boundary, 0.01),
+                    # bc.get_zero_bc(V.sub(1), bottom_boundary),
+                    bc.get_bc_func(V.sub(0), right_boundary, u_x),
                     ]
 
 
 
-model = kr.base.Simulation(msh, [u_bc, d_bc],
-                           kr.momentum.elastic.ElasticEnergySplit,
-                           kr.damage.higherorder.HigherOrder, split="lo")
-
-
-# model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
-model.params.L.value = L
-model.params.l.value = l
-model.params.dt.value = 1*24*60*60
-model.params.ρi.value = ρi
-model.params.ρw.value = ρsw
-# model.params.ρc = model.params.ρi
-model.params.ψcrit.value = 1.0
-model.params.Gc.value = 0.5
-model.params.patm.value = 0.0
 
 
 #%%
 
-model.setup()
+model.setup(MomentumSolver=kr.momentum.elastic.Elasticity,bc_funcs = [u_bc,d_bc])
 
-load_steps = np.linspace(0.01,1.0,50)
+# load_steps = np.linspace(0.01,1.0,50)
 
-for i in range(len(load_steps)):
+# for i in range(len(load_steps)):
 
-    if MPI.COMM_WORLD.rank == 0:
-        print("Iteration: ", i)
+#     if MPI.COMM_WORLD.rank == 0:
+#         print("Iteration: ", i)
 
-    u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary),
-                           bc.get_zero_bc(V.sub(1), bottom_boundary),
-                            bc.get_bc(V.sub(0), right_boundary, load_steps[i]),
-                            ]
-    model.momentum.bc_u = u_bc(model.momentum.U)
-    model.momentum.setup()
-
-
-    model.fixed_point(min_its=3, tol=1e-5, max_its=150, solve_damage=True)
+#     u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary),
+#                            bc.get_zero_bc(V.sub(1), bottom_boundary),
+#                             bc.get_bc(V.sub(0), right_boundary, load_steps[i]),
+#                             ]
+#     model.momentum.bc_u = u_bc(model.momentum.U)
+#     model.momentum.setup()
 
 
-    kr.utilities.write_xdmf(path + "/centretest_run" + str(i) + ".xdmf",
+#     model.fixed_point(min_its=3, tol=1e-5, max_its=150, solve_damage=True)
+
+# model.momentum.solve()
+model.damage_on = True
+model.fixed_point(save=True)
+
+kr.utilities.write_xdmf(path + "/centretest_run.xdmf",
                             msh, [model.momentum.u,model.damage.d,
+                                  model.momentum.ψplus/model.params.ψcritstar,
                                     #   model.momentum.u_e, model.momentum.u_v,
                                     ],
                                     ["u","d",
+                                     "psiplus"
                                     "ue","uv"
                                     ],
-                                  t=i)
+                                  t=0)
 
     # model.damage.timestep()
 
