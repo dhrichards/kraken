@@ -78,9 +78,13 @@ def get_zero_bc(V,boundary):
 
 def get_bc_func(V,boundary,bc_expr):
     boundary_dofs_x = get_boundary_dofs(V,boundary)
-    bc_val = fem.Function(V)
+    try : # Attempt to collapse the function space
+        Vcollapse, _ = V.collapse()
+        bc_val = fem.Function(Vcollapse)
+    except RuntimeError:
+        bc_val = fem.Function(V)
     bc_val.interpolate(bc_expr)
-    return fem.dirichletbc(bc_val, boundary_dofs_x)
+    return fem.dirichletbc(bc_val, boundary_dofs_x, V)
 
 
 def marked_ds(msh, boundaries):
