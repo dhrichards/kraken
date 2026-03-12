@@ -12,7 +12,6 @@ class Params_with_uc:
 
         # Default material properties
         self.T = fem.Constant(msh,default_scalar_type(-20.0)) # Temperature in Celsius
-
         self.ρi = fem.Constant(msh,default_scalar_type(900)) # Density of ice
         self.ρw = fem.Constant(msh,default_scalar_type(1000)) # Density of water
         self.g = fem.Constant(msh,default_scalar_type(9.81)) # Gravitational acceleration
@@ -23,18 +22,16 @@ class Params_with_uc:
         self.Gc = fem.Constant(msh,default_scalar_type(1.0)) # Fracture toughness
         self.H = fem.Constant(msh,default_scalar_type(100)) # Characteristic length
         self.l = fem.Constant(msh,default_scalar_type(0.5)) # Regularisation length
-        self.σcrit = fem.Constant(msh,default_scalar_type(0.2e6)) # tensile strength
         self.ψcrit = fem.Constant(msh,default_scalar_type(1.0)) 
         self.dt = fem.Constant(msh,default_scalar_type(secperyr)) # Characteristic time in seconds
-        self.patm = fem.Constant(msh,default_scalar_type(1e5)) # Atmospheric pressure
-        self.gv_tol = fem.Constant(msh,default_scalar_type(1e-5)) # Viscous degradation tolerance
+        self.patm = fem.Constant(msh,default_scalar_type(0.0)) # Atmospheric pressure
         self.ge_tol = fem.Constant(msh,default_scalar_type(1e-12)) # Elastic degradation tolerance
-        self.cp = fem.Constant(msh,default_scalar_type(2100)) # Specific heat capacity
-        self.κ = fem.Constant(msh,default_scalar_type(2)) # Thermal conductivity
         self.crack_level_above_sea = fem.Constant(msh,default_scalar_type(0.0)) # Water level for hydrostatic pressure
         self.sea_level = fem.Constant(msh,default_scalar_type(0.9*self.H.value)) # Sea level height
         self.length = fem.Constant(msh,default_scalar_type(16e3)) # Length of domain in flow direction
         
+        self.cp = fem.Constant(msh,default_scalar_type(2100)) # Specific heat capacity
+        self.κ = fem.Constant(msh,default_scalar_type(2)) # Thermal conductivity
 
         self.friction_angle = fem.Constant(msh, default_scalar_type(np.atan(0.3))) # Friction angle in radians
         self.cohesion = fem.Constant(msh, default_scalar_type(164e3))
@@ -44,14 +41,7 @@ class Params_with_uc:
     def B(self):
         return 2*ufl.sin(self.friction_angle)/(np.sqrt(3)*(3+ufl.sin(self.friction_angle)))
 
-    # @property
-    # def q(self):
-    #     """Calculate the paramerter q for Lo et al. degradation model."""
-    #     a = 3*self.Gc*self.E / (8*self.l*self.σcrit**2)
-    #     q = 1.0
-    #     for i in range(100):
-    #         q = a/np.log((1+q)/q)
-    #     return q
+ 
     @property
     def cohesion_star(self):
         return self.cohesion / self.μ
@@ -140,13 +130,7 @@ class Params_with_uc:
     @property
     def σc(self):
         return self.μ*self.ucstar
-    
-    # @property
-    # def σcritstar(self):
-    #     """Non dimensional tensile strength."""
-    #     return self.σcrit / self.σc
-    
-
+   
     
     @property
     def patmstar(self):
@@ -199,15 +183,6 @@ class Params_with_uc:
     @property
     def length_star(self):
         return self.length / self.H
-
-    def set_Gc_AT1_lowerorder(self):
-        self.Gc.value = 8* self.σcrit.value**2 * self.l.value / (3*self.E.value)
-
-    def set_Gc_AT1_higherorder(self):
-        self.Gc.value = 2* self.σcrit.value**2 * self.l.value / self.E.value
-
-
-
 
     def set_l_from_mesh(self,msh,factor=2):
         """Set the regularisation length from the mesh."""

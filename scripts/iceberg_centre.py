@@ -20,9 +20,12 @@ def right_boundary(x):
 def bottom_boundary(x):
     return np.isclose(x[1], 0)
 
+def bottom_left(x):
+    return np.isclose(x[0], 0)*np.isclose(x[1],0)
+
 H = 300
-true_length = H*4
-lstar = 0.01
+true_length = 20e3
+lstar = 0.05
 l = H*lstar
 
 nondim_length = true_length/H
@@ -40,7 +43,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
                         cell_type=mesh.CellType.triangle)
 
 
-model = kr.base.Simulation(msh,split="lo_p")
+model = kr.base.Simulation(msh,split="none")
 
 
 # model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
@@ -54,10 +57,10 @@ model.params.sea_level.value = 0.9*model.params.H.value
 
 
 δ = model.params.δ; ν = model.params.ν
-exx = lambda z: (-0.125*δ*ν + 0.25*δ + 1.0*ν - 0.5 - 1.0*z*ν + 0.5*z)/((ν + 1))
+exx = lambda z: (-1.0*z*ν + 0.5*z - 0.125*δ*ν + 0.25*δ + 1.0*ν - 0.5)/(ν + 1)
 
 
-u_x = lambda x: exx(x[1])*nondim_length/2
+u_x = lambda x: exx(x[1])*x[0]
 
 path = './outputs'
 os.makedirs(path, exist_ok=True)
@@ -66,10 +69,11 @@ os.makedirs(path, exist_ok=True)
 
 d_bc = lambda V: []
 
-u_bc = lambda V: [bc.get_zero_bc(V.sub(0), left_boundary),
-                    # bc.get_zero_bc(V.sub(1), bottom_boundary),
-                    bc.get_bc_func(V.sub(0), right_boundary, u_x),
-                    ]
+u_bc = lambda V: [
+                    bc.get_zero_bc(V.sub(0), left_boundary),
+                    bc.get_zero_bc(V.sub(1), bottom_left),
+                    bc.get_bc(V.sub(0), right_boundary, 0.1),
+                ]
 
 
 
@@ -97,16 +101,18 @@ model.setup(MomentumSolver=kr.momentum.elastic.Elasticity,bc_funcs = [u_bc,d_bc]
 #     model.fixed_point(min_its=3, tol=1e-5, max_its=150, solve_damage=True)
 
 # model.momentum.solve()
-model.damage_on = True
+# model.damage_on = True
 model.fixed_point(save=True)
 
 kr.utilities.write_xdmf(path + "/centretest_run.xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                   model.momentum.ψplus/model.params.ψcritstar,
+                                  model.momentum.ε_e,
                                     #   model.momentum.u_e, model.momentum.u_v,
                                     ],
                                     ["u","d",
-                                     "psiplus"
+                                     "psiplus",
+                                     "eps_e"
                                     "ue","uv"
                                     ],
                                   t=0)

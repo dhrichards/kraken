@@ -1,8 +1,6 @@
 from kraken import parameters, utilities, temperature, mass, momentum, damage
 from kraken.numerics import energy_splits as es
-from kraken.numerics import hydrostaticspectraldeviatoric as hsd
 from kraken.numerics import maths_functions as mf
-from kraken.numerics import projection_tensors as pt
 from dolfinx import fem
 import ufl
 from mpi4py import MPI
@@ -33,6 +31,7 @@ class Simulation:
             I = ufl.Identity(self.msh.geometry.dim)
             self.free_energy_plus = lambda ε, ν: es.free_energy_plus_lo(ε + pw*I/(3*es.Koverμ(ν)), ν)
             self.stress_plus = lambda ε, ν: es.stress_plus_lo(ε + pw*I/(3*es.Koverμ(ν)), ν)
+            # self.stress_plus = lambda ε, ν: es.stress_plus_lo_p_cond(ε,ν,pw)
         elif split == "spectral":
             self.free_energy_plus = es.free_energy_plus_spectral
             self.stress_plus = es.stress_plus_spectral
@@ -99,7 +98,8 @@ class Simulation:
         if t == 0:
             adios4dolfinx.write_mesh(filename, self.msh,time = t)
 
-            dictofparams = { 'rhoi' : self.params.ρi.value,
+            dictofparams = { 'T': self.params.T.value,
+                            'rhoi' : self.params.ρi.value,
                              'rhow' : self.params.ρw.value,
                              'g' : self.params.g.value,
                              'E' : self.params.E.value,
@@ -107,14 +107,16 @@ class Simulation:
                              'A' : self.params.A0.value,
                              'n' : self.params.n.value,
                              'Gc' : self.params.Gc.value,
-                             'L' : self.params.H.value,
+                             'H' : self.params.H.value,
                              'l' : self.params.l.value,
-                             'sigmacrit' : self.params.σcrit.value,
                              'psicrit' : self.params.ψcrit.value,
-                                'dt' : self.params.dt.value,
-                                'patm': self.params.patm.value,
-                                'gv_tol': self.params.gv_tol.value,
-                                'T': self.params.T.value
+                            'dt' : self.params.dt.value,
+                            'patm': self.params.patm.value,
+                            'ge_tol': self.params.ge_tol.value,
+                            'crack_level_above_sea' : self.params.crack_level_above_sea.value,
+                            'sea_level': self.params.sea_level.value,
+                            'length' : self.params.length.value
+                                
                              }
             adios4dolfinx.write_attributes(filename, MPI.COMM_WORLD, 'params', dictofparams)
 
@@ -127,6 +129,7 @@ class Simulation:
 
     def read_checkpoint(self, filename, t=0):
         dictofparams = adios4dolfinx.read_attributes(filename, MPI.COMM_WORLD, 'params')
+        self.params.T.value = dictofparams['T']
         self.params.ρi.value = dictofparams['rhoi']
         self.params.ρw.value = dictofparams['rhow']
         self.params.g.value = dictofparams['g']
@@ -135,13 +138,15 @@ class Simulation:
         self.params.A0.value = dictofparams['A']
         self.params.n.value = dictofparams['n']
         self.params.Gc.value = dictofparams['Gc']
-        self.params.H.value = dictofparams['L']
+        self.params.H.value = dictofparams['H']
         self.params.l.value = dictofparams['l']
-        self.params.σcrit.value = dictofparams['sigmacrit']
         self.params.ψcrit.value = dictofparams['psicrit']
         self.params.dt.value = dictofparams['dt']
         self.params.patm.value = dictofparams['patm']
-        self.params.gv_tol.value = dictofparams['gv_tol']
+        self.params.ge_tol.value = dictofparams['ge_tol']
+        self.params.crack_level_above_sea.value = dictofparams['crack_level_above_sea']
+        self.params.sea_level.value = dictofparams['sea_level']
+        self.params.length.value = dictofparams['length']
 
         self.momentum.read_checkpoint(filename, t)
         self.damage.read_checkpoint(filename, t)

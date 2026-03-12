@@ -41,14 +41,6 @@ def free_energy(ε,ν):
     return 0.5*1.5*λoverμ(ν)*ufl.tr(ε)**2 + ufl.inner(ε,ε) 
 
 
-def free_energy_plus_ulloa(ε, p, ν):
-    K = Koverμ(ν)
-    ψp = 0.5/K*(1.5*K*ufl.tr(ε) + p)**2 + ufl.inner(ufl.dev(ε), ufl.dev(ε)) 
-
-    σ0 = cauchy_stress(ε,ν)
-    trsp = 1.5*ufl.tr(σ0) + 3*p
-    return ufl.conditional(ufl.gt(trsp, 0), ψp, 0.0)
-
 
 def free_energy_plus_dp(ε, ν, B = -0.4, eps=1e-12):
     # B = -0.4
@@ -165,6 +157,32 @@ def stress_plus_lo(ε,ν):
     return ufl.conditional(ufl.gt(λ[0],0),stress1,
             ufl.conditional(ufl.gt(λ[1] + ν*λ[0],0),stress2,
              ufl.conditional(ufl.gt((1-ν)*λ[2] + ν*(λ[0]+λ[1]),0),stress3,
+                             ufl.zero(ufl.shape(ε)))))
+
+def stress_plus_lo_p_cond(ε,ν,p):
+    E = Eoverμ(ν)
+    λ,M = eigenstate(ε)
+    λ_mid = (ε[0,0] + ε[1,1])/2
+    λ = [λ[0], λ_mid, λ[1]]
+    M = [M[0], 0, M[1]]
+
+    λ_mod = p/3/Koverμ(ν)
+
+    λ_cond = [λ[0] + λ_mod,λ[1]+λ_mod,λ[2]+λ_mod]
+
+    #M_mid is 0 in 2D
+
+    stress1 = cauchy_stress(ε,ν)
+    stress2 = cauchy_stress(ε,ν) - E*λ[0]*M[0]
+
+    # psi3 = (1+ν)*((1-ν)*λ[2]+ν*λ[1] +ν*λ[0])**2/((1-2*ν)*(1-ν**2))
+
+    stress3 = 2*(1+ν)/((1-2*ν)*(1-ν**2))*((1-ν)*λ[2]+ν*λ[1] +ν*λ[0])*(
+        (1-ν)*M[2] + ν*M[0])
+
+    return ufl.conditional(ufl.gt(λ_cond[0],0),stress1,
+            ufl.conditional(ufl.gt(λ_cond[1] + ν*λ_cond[0],0),stress2,
+             ufl.conditional(ufl.gt((1-ν)*λ_cond[2] + ν*(λ_cond[0]+λ_cond[1]),0),stress3,
                              ufl.zero(ufl.shape(ε)))))
 
 

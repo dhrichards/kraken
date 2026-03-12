@@ -14,28 +14,26 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks above sea level (m)")
 parser.add_argument("--split", type=str, default="lo_p", help="Energy split to use")
-parser.add_argument("--l", type=float, default=2, help="Regularization length scale in meters")
+parser.add_argument("--l", type=float, default=4, help="Regularization length scale in meters")
 parser.add_argument("--dt", type=float, default=3, help="Time step in days")
 parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
 parser.add_argument("--psicrit", type=float, default=1.0, help="Critical energy threshold")
 parser.add_argument("--height", type=float, default=300, help="Height of iceberg in meters")
-parser.add_argument("--Gc", type=float, default=0.5, help="Gc")
+parser.add_argument("--Gc", type=float, default=1.0, help="Gc")
 parser.add_argument("--type", type=str, default="relaxation", help="gravity loop initilisation or relaxation first")
 parser.add_argument("--damagemodel", type=str, default="AT2higher", help="damage model to use")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
 parser.add_argument("--nt", type=int, default=200, help="number of timesteps")
 parser.add_argument("--crack_x", type=float, default=0.5, help="x position of crack center from end (non dimensional)")
-parser.add_argument("--rhoi", type=float, default=900, help="ice density")
-parser.add_argument("--rhow", type=float, default=1000, help="water density")
 parser.add_argument("--aspect_ratio_z", type=float, default=1, help="aspect ratio in z direction")
-parser.add_argument("--T", type=float, default=-10, help="Temperature in Celsius")
+parser.add_argument("--T", type=float, default=-20, help="Temperature in Celsius")
 parser.add_argument("--refine_x", type=float, default=2.0, help="refinement in x direction near crack")
 parser.add_argument("--refine_z", type=float, default=0.2, help="refinement in z direction near crack")
 parser.add_argument("--length", type=float, default=16000, help="Length of iceberg in meters")
 parser.add_argument("--tol", type=float, default=5e-6, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
 parser.add_argument("--max_its", type=int, default=400, help="Maximum number of solver iterations")
-parser.add_argument("--meshtype", type=str, default="refined", help="Type of mesh to use: gmsh or refined")
+parser.add_argument("--meshtype", type=str, default="uniform", help="Type of mesh to use: gmsh or refined")
 parser.add_argument("--sealevel", type=float, default=0.9, help="Non dimensional water level for hydrostatic pressure")
 
 args = parser.parse_args()
@@ -45,7 +43,7 @@ filename = args.type + "_" + args.split + "_level" + str(args.level) + "height" 
                      +"dt" + str(args.dt) + "psicrit" + str(args.psicrit)\
                         + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)\
                             + "T" + str(abs(args.T)) +  \
-                            "_damagemodel" + args.damagemodel + "_" + args.suffix + "_"
+                            "_length" + str(args.length) + "_" + args.suffix + "_"
 
 
 
@@ -64,27 +62,27 @@ def left_boundary(x):
     return np.isclose(x[0], 0)
 
 def right_boundary(x):
-    return np.isclose(x[0], nondim_length/2)
+    return np.isclose(x[0], nondim_length)
 
 def bottom_boundary(x):
-    return np.isclose(x[1], 0)#*(x[0]<=(nondim_length/2 - nondim_height))
+    return np.isclose(x[1], 0)#*(x[0]<=(nondim_length - nondim_height))
 
 def bottom_left(x):
-    return np.isclose(x[1], 0)*(x[0]<=(nondim_length/4))
+    return np.isclose(x[1], 0)*(x[0]<=(nondim_length/2))
 
 def bottom_right(x):
-    return np.isclose(x[1], 0)*(x[0]>=(nondim_length/4))
+    return np.isclose(x[1], 0)*(x[0]>=(nondim_length/2))
 
-def crack(x,x_c):
+def crack(x,x_c,height=0.05):
     width = args.l/args.cellfactor / args.height
-    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>0.97)
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
 
 def basal_crack(x,x_c,height=0.5):
     width = args.l/args.cellfactor / args.height*0.9
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<height)
 
 def fixed(x):
-    return (x[0]<(nondim_length/2 - args.refine_x*0.98*nondim_height))# + (x[0]>(nondim_length/2 - nondim_height/2))
+    return (x[0]<(nondim_length - args.refine_x*0.98*nondim_height))# + (x[0]>(nondim_length - nondim_height/2))
 
 
 
@@ -123,11 +121,11 @@ elif args.meshtype == "refined2":
 
 elif args.meshtype == "uniform":
     cell_size = args.l/(args.cellfactor*args.height)
-    nx = int((nondim_length/2)/cell_size)
+    nx = int((nondim_length)/cell_size)
     nz = int(nondim_height/cell_size)
     msh = mesh.create_rectangle(MPI.COMM_WORLD,
                             [[0.0, 0.0],
-                            [nondim_length/2, nondim_height]],
+                            [nondim_length, nondim_height]],
                             [nx, nz],
                             cell_type=mesh.CellType.triangle)
 
@@ -147,8 +145,6 @@ model.params.A0.value = mf.rate_factor_np(args.T)
 model.params.H.value = args.height
 model.params.l.value = args.l
 model.params.dt.value = args.dt*24*60*60
-model.params.ρi.value = args.rhoi
-model.params.ρw.value = args.rhow
 model.params.ψcrit.value = args.psicrit
 model.params.patm.value = 0.0
 model.params.Gc.value = args.Gc
@@ -200,18 +196,22 @@ elif args.type == "cliff_stickslip":
 elif args.type == "ssa":
     δ = model.params.δ; ν = model.params.ν
     duedx = lambda z: (-0.125*δ*ν + 0.25*δ + 1.0*ν - 0.5 - 1.0*z*ν + 0.5*z)/((ν + 1))
-    ue_x = lambda x: duedx(x[1])*nondim_length/2
-    duvdx = model.params.dtstar*(δ/4)**3
-    uv_x = duvdx*nondim_length/2
-    u_x = lambda x: uv_x + ue_x(x)
+    ue_x = lambda x: duedx(x[1])*x[0]
+    dudx = model.params.dtstar*(δ/4)**3
+    u_x = lambda x: dudx*x[0]
+    uv_x = lambda x: u_x(x) - ue_x(x)
     u_bc = lambda V: [
                         bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_bc_func(V.sub(1).sub(0), right_boundary, uv_x),
                         bc.get_bc_func(V.sub(0).sub(0), right_boundary, u_x),
-                        bc.get_bc(V.sub(1).sub(0), right_boundary, uv_x),
+                        # bc.get_zero_bc(V.sub(0).sub(0),right_boundary),
+                        # bc.get_zero_bc(V.sub(1).sub(0),right_boundary)
                         ]
+
 else:
-    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+    u_bc = lambda V: [
+                            bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                             bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
 
                             ]
@@ -234,10 +234,9 @@ elif args.damagemodel == "AT2higher_bounded":
 model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
                            damage_model, [u_bc, d_bc])
 
+
 crack_spacing = 0.1
-crack_start = 0.2
-crack_end = args.refine_x - 0.05
-crack_x_cs = nondim_length/2 - np.arange(crack_start, crack_end, crack_spacing)
+crack_x_cs = np.arange(crack_spacing, nondim_length-crack_spacing/2, crack_spacing)
 def cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
     for x_c in crack_x_cs:
@@ -245,15 +244,12 @@ def cracks(x):
     return val
 
 
-basal_crack_spacking = 0.2
-basal_crack_start = 0.2
-basal_crack_end = args.refine_x - 0.05
-# basal_crack_x_cs = nondim_length/2 - np.arange(basal_crack_start, basal_crack_end, basal_crack_spacking)
-basal_crack_x_cs = np.arange(0, nondim_length/2, basal_crack_spacking)
+basal_crack_spacing = 0.2
+basal_crack_x_cs = np.arange(basal_crack_spacing,nondim_length, basal_crack_spacing)
 def basal_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
     for x_c in basal_crack_x_cs:
-        val += basal_crack(x,x_c,height=0.3)
+        val += basal_crack(x,x_c,height=0.4)
     return val
     
 
@@ -274,7 +270,7 @@ else:
 
 
 t = 0.0
-# model.write_checkpoint(path + "/" + filename +".bp", t)
+model.write_checkpoint(path + "/" + filename +".bp", t)
 
 
 
@@ -289,18 +285,16 @@ for i in range(1,args.nt):
     if i == i_start:
         
         model.damage_on = True
-        # model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x).astype(np.float64))
+        model.damage.w.sub(0).interpolate(lambda x: cracks(x) + basal_cracks(x).astype(np.float64))
         # model.momentum.solve()
         # model.damage.timestep()
 
     if i == 2 and args.type == "ssa":
-        u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
-
-                            ]
+        u_bc = lambda V: []
         
         model.momentum.update_bcs(u_bc)
-        
+
+
     
 
     
@@ -312,7 +306,7 @@ for i in range(1,args.nt):
     
 
     t += model.params.dt.value
-    # model.write_checkpoint(path + "/" + filename +".bp", t)
+    model.write_checkpoint(path + "/" + filename +".bp", t)
     g = es.degradation_default(model.damage.d)
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
@@ -320,6 +314,7 @@ for i in range(1,args.nt):
                                     model.momentum.ψplus/model.params.ψcritstar,
                                     ψplus,
                                     p,
+                                    model.momentum.ε_e
                                     # model.mass.ρ,
                                     ],
                                     ["u","d",
@@ -327,6 +322,7 @@ for i in range(1,args.nt):
                                     "psi_plus",
                                     "psi_plus_mod",
                                     "pressure",
+                                    "eps_e"
                                     ],
                                 t=i)
     

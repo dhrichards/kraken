@@ -75,10 +75,8 @@ class MixedDisplacement(Momentum):
 
         # g_v = ufl.conditional(self.sim.damage.d > 0.98, 0.0, 1.0)
 
-        g_v = es.degradation_default(self.sim.damage.d, self.sim.params.gv_tol)
 
-
-        η = g*η0 + (1-g)*self.sim.params.gv_tol
+        # η = g*η0 + (1-g)*self.sim.params.gv_tol
 
         
         τ0 = 2*ufl.dev(self.ε_e)
@@ -115,9 +113,10 @@ class MixedDisplacement(Momentum):
 
         x = ufl.SpatialCoordinate(self.sim.msh)
         δ = 0.1
-        σxx_ssa = δ/2 - (x[1]-1)
+        σxx_ssa = δ/2 + (x[1]-1)
         t = ufl.as_vector((σxx_ssa, 0))
         
+        I = ufl.Identity(2)
         
         self.F = (
             # 0.5*self.sim.params.C_inertia*ufl.inner(self.accel, v)  \
@@ -130,9 +129,9 @@ class MixedDisplacement(Momentum):
               
         self.F += (
             self.pw * ufl.inner(n, v) * ufl.ds\
-            # + ufl.inner(t, v) * ds(1) \
-            # - ufl.inner(t, v) * ds(3) \
-        #     # + self.pw * ufl.inner(n, v) * ds(2)\
+            # - ufl.inner(t, v) * ds(1) \
+            # + ufl.inner(t, v) * ds(3) \
+            # + self.pw * ufl.inner(n, v) * ds(2)\
         #     # + 1e5 * ufl.inner(self.vel, v) * self.ds_bottom(1)\
             )
         
@@ -154,7 +153,7 @@ class MixedDisplacement(Momentum):
 
 
         self.F += (
-                - g*ufl.div(self.du_v)*q \
+                - g*ufl.div(self.du)*q \
                 ) * ufl.dx 
         
 

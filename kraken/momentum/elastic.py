@@ -64,7 +64,7 @@ class Elasticity(Momentum):
         # Iprime = 1.0
 
         def right_boundary(x):
-            return np.isclose(x[0], 2.0)
+            return np.isclose(x[0], self.sim.params.length.value/self.sim.params.H.value/2)
         
         def bottom_boundary(x):
             return np.isclose(x[1], 0.0)
@@ -95,9 +95,10 @@ class Elasticity(Momentum):
               ) * ufl.dx 
         
         self.F += (
-              + p_w * ufl.inner(n, v) * ufl.ds 
-            #   - ufl.inner(t, v) * ds(1) \
-            #   + p_w * ufl.inner(n,v)*ds(2)
+            #   + p_w * ufl.inner(n, v) * ufl.ds 
+              - ufl.inner(t, v) * ds(1) \
+              + ufl.inner(t,v) * ds(3)\
+              + p_w * ufl.inner(n,v)*ds(2)
             # 
         )
             
