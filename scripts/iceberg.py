@@ -205,7 +205,7 @@ elif args.type == "ssa":
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                         bc.get_bc_func(V.sub(1).sub(0), right_boundary, uv_x),
                         bc.get_bc_func(V.sub(0).sub(0), right_boundary, u_x),
-                        # bc.get_zero_bc(V.sub(0).sub(0),right_boundary),
+                        # bc.get_zero_bc(V.sub(0).sub(1),bottom_boundary),
                         # bc.get_zero_bc(V.sub(1).sub(0),right_boundary)
                         ]
 
@@ -272,7 +272,10 @@ else:
 t = 0.0
 model.write_checkpoint(path + "/" + filename +".bp", t)
 
-
+if args.type == "ssa":
+    model.damage.w.sub(0).interpolate(lambda x: cracks(x) + basal_cracks(x))
+    model.momentum.solve()
+    model.damage.timestep()
 
 
 for i in range(1,args.nt):
@@ -285,16 +288,13 @@ for i in range(1,args.nt):
     if i == i_start:
         
         model.damage_on = True
-        model.damage.w.sub(0).interpolate(lambda x: cracks(x) + basal_cracks(x))
+        if args.type == "ssa":
+            u_bc = lambda V: [   bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
+            model.momentum.update_bcs(u_bc)
 
-    if i == 2 and args.type == "ssa":
-        u_bc = lambda V: []
-        model.momentum.update_bcs(u_bc)
+        
 
-
-    
-
-    
     flag = model.fixed_point(save=True)
 
     ε = model.momentum.ε_e
