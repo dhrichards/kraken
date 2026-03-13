@@ -244,7 +244,7 @@ def cracks(x):
     return val
 
 
-basal_crack_spacing = 0.2
+basal_crack_spacing = 0.4
 basal_crack_x_cs = np.arange(basal_crack_spacing,nondim_length, basal_crack_spacing)
 def basal_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
@@ -285,13 +285,10 @@ for i in range(1,args.nt):
     if i == i_start:
         
         model.damage_on = True
-        model.damage.w.sub(0).interpolate(lambda x: cracks(x) + basal_cracks(x).astype(np.float64))
-        # model.momentum.solve()
-        # model.damage.timestep()
+        model.damage.w.sub(0).interpolate(lambda x: cracks(x) + basal_cracks(x))
 
     if i == 2 and args.type == "ssa":
         u_bc = lambda V: []
-        
         model.momentum.update_bcs(u_bc)
 
 
