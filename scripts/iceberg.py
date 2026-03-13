@@ -139,7 +139,6 @@ model.max_its = args.max_its
 
 x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
-# model.params.T = -1 + (args.T - -1)*z
 model.params.T.value = args.T
 model.params.A0.value = mf.rate_factor_np(args.T)
 model.params.H.value = args.height
@@ -152,8 +151,9 @@ model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
 model.params.length.value = args.length
 
-
-# model.params.Gc = (args.Gc - 0.1)*z**2 + 0.1
+model.params.T = -2 + (args.T - -2)*z
+model.params.Gc = (10 - 1.0)*z + 1.0
+model.params.ψcrit = (20 - 1)*z + 1.0
 
 if MPI.COMM_WORLD.rank == 0:
     print(model.params.ucstar_float )
@@ -270,7 +270,7 @@ else:
 
 
 t = 0.0
-model.write_checkpoint(path + "/" + filename +".bp", t)
+# model.write_checkpoint(path + "/" + filename +".bp", t)
 
 if args.type == "ssa":
     model.damage.w.sub(0).interpolate(lambda x: cracks(x) + basal_cracks(x))
@@ -303,7 +303,7 @@ for i in range(1,args.nt):
     
 
     t += model.params.dt.value
-    model.write_checkpoint(path + "/" + filename +".bp", t)
+    # model.write_checkpoint(path + "/" + filename +".bp", t)
     g = es.degradation_default(model.damage.d)
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
