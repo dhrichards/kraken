@@ -173,8 +173,8 @@ else:
                   ]
     
 
-if args.type == "ssa":
-    d_bc = lambda V: [bc.internal_bc(V, lambda x: (x[0]<=0.09) + (x[0]>=nondim_length-0.09), 0.0)]
+# if args.type == "ssa":
+#     d_bc = lambda V: [bc.internal_bc(V, lambda x: (x[0]<=0.09) + (x[0]>=nondim_length-0.09), 0.0)]
 
 
 
@@ -279,11 +279,11 @@ t = 0.0
 
 if args.type == "ssa":
     model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x))
-    model.momentum.solve()
-    model.damage_on = True
-    model.fixed_point(save=True)
-    model.damage_on = False
-    model.damage.timestep()
+    # model.momentum.solve()
+    # model.damage_on = True
+    # model.fixed_point(save=True)
+    # model.damage_on = False
+    # model.damage.timestep()
 
     u_bc = lambda V: [   bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                             bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
