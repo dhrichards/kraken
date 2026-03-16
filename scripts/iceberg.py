@@ -73,6 +73,9 @@ def bottom_left(x):
 def bottom_right(x):
     return np.isclose(x[1], 0)*(x[0]>=(nondim_length/2))
 
+def top_boundary(x):
+    return np.isclose(x[1], 1.0)
+
 def crack(x,x_c,height=0.05):
     width = args.l/args.cellfactor / args.height
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
@@ -162,6 +165,7 @@ if MPI.COMM_WORLD.rank == 0:
 
 if args.meshtype == "uniform":
     d_bc = lambda V: []
+
 else:   
     d_bc = lambda V: [
                 bc.internal_bc(V, fixed, 0.0),
@@ -169,7 +173,8 @@ else:
                   ]
     
 
-
+if args.type == "ssa":
+    d_bc = lambda V: [bc.internal_bc(V, lambda x: (x[0]<=0.09) + (x[0]>=nondim_length-0.09), 0.0)]
 
 
 
@@ -205,8 +210,8 @@ elif args.type == "ssa":
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                         bc.get_bc_func(V.sub(1).sub(0), right_boundary, uv_x),
                         bc.get_bc_func(V.sub(0).sub(0), right_boundary, u_x),
-                        # bc.get_zero_bc(V.sub(0).sub(1),bottom_boundary),
-                        # bc.get_zero_bc(V.sub(1).sub(0),right_boundary)
+                        # bc.get_bc_func(V.sub(0).sub(1),left_boundary, lambda x: -dudx*x[1]),
+                        # bc.get_bc_func(V.sub(0).sub(1),right_boundary, lambda x: -dudx*x[1])
                         ]
 
 else:
@@ -236,7 +241,7 @@ model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
 
 
 crack_spacing = 0.1
-crack_x_cs = np.arange(crack_spacing, nondim_length-crack_spacing/2, crack_spacing)
+crack_x_cs = np.linspace(crack_spacing/2, nondim_length-crack_spacing/2, int((nondim_length-crack_spacing)//crack_spacing))
 def cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
     for x_c in crack_x_cs:
@@ -245,7 +250,7 @@ def cracks(x):
 
 
 basal_crack_spacing = 0.4
-basal_crack_x_cs = np.arange(basal_crack_spacing,nondim_length, basal_crack_spacing)
+basal_crack_x_cs = np.linspace(basal_crack_spacing/2,nondim_length-basal_crack_spacing/2, int((nondim_length-basal_crack_spacing)//basal_crack_spacing))
 def basal_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
     for x_c in basal_crack_x_cs:
@@ -273,9 +278,16 @@ t = 0.0
 # model.write_checkpoint(path + "/" + filename +".bp", t)
 
 if args.type == "ssa":
-    model.damage.w.sub(0).interpolate(lambda x: cracks(x) + basal_cracks(x))
+    model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x))
     model.momentum.solve()
+    model.damage_on = True
+    model.fixed_point(save=True)
+    model.damage_on = False
     model.damage.timestep()
+
+    u_bc = lambda V: [   bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
+    model.momentum.update_bcs(u_bc)
 
 
 for i in range(1,args.nt):
@@ -286,21 +298,11 @@ for i in range(1,args.nt):
 
 
     if i == i_start:
-        
         model.damage_on = True
-        if args.type == "ssa":
-            u_bc = lambda V: [   bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
-            model.momentum.update_bcs(u_bc)
 
         
 
     flag = model.fixed_point(save=True)
-
-    ε = model.momentum.ε_e
-    p = model.momentum.water_pressure(model.momentum.u)
-    ψplus = es.free_energy_plus_lo(ε, model.params.ν)/model.params.ψcritstar
-    
 
     t += model.params.dt.value
     # model.write_checkpoint(path + "/" + filename +".bp", t)
@@ -308,17 +310,13 @@ for i in range(1,args.nt):
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                     model.momentum.u_v, model.momentum.u_e,
-                                    model.momentum.ψplus/model.params.ψcritstar,
-                                    ψplus,
-                                    p,
+                                    model.momentum.ψplus,
                                     model.momentum.ε_e
                                     # model.mass.ρ,
                                     ],
                                     ["u","d",
                                     "uv","ue",
                                     "psi_plus",
-                                    "psi_plus_mod",
-                                    "pressure",
                                     "eps_e"
                                     ],
                                 t=i)

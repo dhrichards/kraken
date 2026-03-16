@@ -109,7 +109,7 @@ class SemiLagrangianEpsilon(Momentum):
         Iprime = 2*self.sim.damage.d
 
         def right_boundary(x):
-            return np.isclose(x[0], self.sim.params.length.value/2/self.sim.params.H.value)
+            return np.isclose(x[0], self.sim.params.length.value/self.sim.params.H.value)
         
         def bottom_boundary(x):
             return np.isclose(x[1], 0.0)

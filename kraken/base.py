@@ -179,7 +179,7 @@ class Simulation:
                 if save:
                     utilities.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, [self.momentum.u,self.damage.d,
-                                           self.momentum.ψplus/self.params.ψcritstar,
+                                           self.momentum.ψplus,
                                         # self.momentum.u_e, self.momentum.u_v
                                         ],
                                         ["u","d",
@@ -209,12 +209,12 @@ class Simulation:
                 
 
                 if i >=self.min_its and (error_L2 < self.tol) and (error_L2 <= error_prev) and (error_prev < self.tol):
-                    break
+                    return 1
                 
                 error_prev = error_L2
                 L2_old = L2
             
-            return 1
+            return -1
    
 
 
