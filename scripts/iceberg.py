@@ -77,11 +77,11 @@ def top_boundary(x):
     return np.isclose(x[1], 1.0)
 
 def crack(x,x_c,height=0.05):
-    width = args.l/args.cellfactor / args.height
+    width = args.l/args.cellfactor / args.height*0.51
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
 
 def basal_crack(x,x_c,height=0.5):
-    width = args.l/args.cellfactor / args.height*0.9
+    width = args.l/args.cellfactor / args.height*0.51
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<height)
 
 def fixed(x):
@@ -210,8 +210,8 @@ elif args.type == "ssa":
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                         bc.get_bc_func(V.sub(1).sub(0), right_boundary, uv_x),
                         bc.get_bc_func(V.sub(0).sub(0), right_boundary, u_x),
-                        # bc.get_bc_func(V.sub(0).sub(1),left_boundary, lambda x: -dudx*x[1]),
-                        # bc.get_bc_func(V.sub(0).sub(1),right_boundary, lambda x: -dudx*x[1])
+                        bc.get_bc_func(V.sub(0).sub(1),left_boundary, lambda x: -dudx*x[1]),
+                        bc.get_bc_func(V.sub(0).sub(1),right_boundary, lambda x: -dudx*x[1])
                         ]
 
 else:
@@ -240,7 +240,7 @@ model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
                            damage_model, [u_bc, d_bc])
 
 
-crack_spacing = 0.1
+crack_spacing = 0.2
 crack_x_cs = np.linspace(crack_spacing/2, nondim_length-crack_spacing/2, int((nondim_length-crack_spacing)//crack_spacing))
 def cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
@@ -249,7 +249,7 @@ def cracks(x):
     return val
 
 
-basal_crack_spacing = 0.4
+basal_crack_spacing = 0.6
 basal_crack_x_cs = np.linspace(basal_crack_spacing/2,nondim_length-basal_crack_spacing/2, int((nondim_length-basal_crack_spacing)//basal_crack_spacing))
 def basal_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
@@ -278,12 +278,14 @@ t = 0.0
 # model.write_checkpoint(path + "/" + filename +".bp", t)
 
 if args.type == "ssa":
-    model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x))
-    # model.momentum.solve()
+    model.momentum.solve()
+    model.damage.w.sub(0).interpolate(lambda x: cracks(x) + basal_cracks(x))
+    
+    model.momentum.solve()
     # model.damage_on = True
     # model.fixed_point(save=True)
     # model.damage_on = False
-    # model.damage.timestep()
+    model.damage.timestep()
 
     u_bc = lambda V: [   bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                             bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
