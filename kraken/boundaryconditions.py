@@ -70,6 +70,13 @@ def internal_bc(V,func,val):
     deactivate_dofs = fem.locate_dofs_topological(V, msh.topology.dim, deactivate_cells)
     return fem.dirichletbc(default_scalar_type(val), deactivate_dofs, V)
 
+def internal_point(V,func,val):
+    msh = V.mesh
+    msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
+    constrained_vertex = mesh.locate_entities(msh, 0, func)
+    constrained_dof = fem.locate_dofs_topological(V, 0, constrained_vertex)
+    return fem.dirichletbc(default_scalar_type(val), constrained_dof, V)
+
 
 def get_zero_bc(V,boundary):
     boundary_dofs_x = get_boundary_dofs(V,boundary)

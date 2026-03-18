@@ -76,6 +76,9 @@ def bottom_right(x):
 def top_boundary(x):
     return np.isclose(x[1], 1.0)
 
+def single_dof(x):
+    return np.isclose(x[0], nondim_length/2)*np.isclose(x[1], 0.5)
+
 def crack(x,x_c,height=0.05):
     width = args.l/args.cellfactor / args.height*0.51
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
@@ -155,8 +158,11 @@ model.params.sea_level.value = args.sealevel * args.height
 model.params.length.value = args.length
 
 model.params.T = -2 + (args.T - -2)*z
-model.params.Gc = (10 - 1.0)*z + 1.0
-model.params.ψcrit = (20 - 1)*z + 1.0
+# model.params.Gc = (10 - 1.0)*z + 1.0
+# model.params.ψcrit = (20 - 1)*z + 1.0
+model.params.set_Gc_from_Kic()
+model.params.set_psicrit_from_σc()
+
 
 if MPI.COMM_WORLD.rank == 0:
     print(model.params.ucstar_float )
@@ -287,8 +293,9 @@ if args.type == "ssa":
     # model.damage_on = False
     model.damage.timestep()
 
-    u_bc = lambda V: [   bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary)]
+    u_bc = lambda V: [bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                      bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                      bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
     model.momentum.update_bcs(u_bc)
 
 
@@ -313,13 +320,20 @@ for i in range(1,args.nt):
                             msh, [model.momentum.u,model.damage.d,
                                     model.momentum.u_v, model.momentum.u_e,
                                     model.momentum.ψplus,
-                                    model.momentum.ε_e
+                                    model.momentum.ε_e,
+                                    model.params.Gc,
+                                    model.params.T,
+                                    model.params.ψcrit,
                                     # model.mass.ρ,
                                     ],
                                     ["u","d",
                                     "uv","ue",
                                     "psi_plus",
-                                    "eps_e"
+                                    "eps_e",
+                                    "Gc",
+                                    "T",
+                                    "ψcrit",
+                                    # "ρ"
                                     ],
                                 t=i)
     
