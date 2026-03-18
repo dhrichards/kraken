@@ -29,13 +29,35 @@ class Params_with_uc:
         self.crack_level_above_sea = fem.Constant(msh,default_scalar_type(0.0)) # Water level for hydrostatic pressure
         self.sea_level = fem.Constant(msh,default_scalar_type(0.9*self.H.value)) # Sea level height
         self.length = fem.Constant(msh,default_scalar_type(16e3)) # Length of domain in flow direction
+
+        self.σt0 = fem.Constant(msh,default_scalar_type(0.2e6))
+        self.σt_deg = fem.Constant(msh,default_scalar_type(0.04e6))
+
+        self.Kic = fem.Constant(msh,default_scalar_type(100e3)) # Fracture toughness
         
         self.cp = fem.Constant(msh,default_scalar_type(2100)) # Specific heat capacity
         self.κ = fem.Constant(msh,default_scalar_type(2)) # Thermal conductivity
 
         self.friction_angle = fem.Constant(msh, default_scalar_type(np.atan(0.3))) # Friction angle in radians
         self.cohesion = fem.Constant(msh, default_scalar_type(164e3))
+
+
+    @property
+    def σc(self):
+        return self.σt0 - self.σt_deg*(self.T)
+
         
+    def set_Gc_as_Hageman(self):
+        # Gc as Hageman (2026) - assuming psicrit is 0 - check as may only be valid for fourth order AT1
+        self.Gc = 2 * self.l*self.σc**2 / self.E
+
+    def set_psicrit_from_σc(self):
+        self.ψcrit = self.σc**2 / (2*self.E)
+
+    def set_Gc_from_Kic(self):
+        self.Gc = self.Kic**2*(1-self.ν**2)/self.E
+
+
     
     @property
     def B(self):
@@ -127,9 +149,9 @@ class Params_with_uc:
     def δ(self):
         return 1-self.ρi/self.ρw
     
-    @property
-    def σc(self):
-        return self.μ*self.ucstar
+    # @property
+    # def σc(self):
+    #     return self.μ*self.ucstar
    
     
     @property
