@@ -224,8 +224,11 @@ elif args.type == "ssa":
 
 else:
     u_bc = lambda V: [
-                            bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                            bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                      bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                      bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0)
+                            # bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                            # bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
 
                             ]
 
