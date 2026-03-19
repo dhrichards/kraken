@@ -72,9 +72,16 @@ def internal_bc(V,func,val):
 
 def internal_point(V,func,val):
     msh = V.mesh
-    msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
+    msh.topology.create_connectivity(0, msh.topology.dim)
     constrained_vertex = mesh.locate_entities(msh, 0, func)
     constrained_dof = fem.locate_dofs_topological(V, 0, constrained_vertex)
+    return fem.dirichletbc(default_scalar_type(val), constrained_dof, V)
+
+def internal_line(V,func,val):
+    msh = V.mesh
+    msh.topology.create_connectivity(1, msh.topology.dim)
+    constrained_vertex = mesh.locate_entities(msh, 1, func)
+    constrained_dof = fem.locate_dofs_topological(V, 1, constrained_vertex)
     return fem.dirichletbc(default_scalar_type(val), constrained_dof, V)
 
 

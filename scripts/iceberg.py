@@ -80,11 +80,11 @@ def single_dof(x):
     return np.isclose(x[0], nondim_length/2)*np.isclose(x[1], 0.5)
 
 def crack(x,x_c,height=0.05):
-    width = args.l/args.cellfactor / args.height*0.51
+    width = args.l/args.cellfactor / args.height*0.49
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
 
 def basal_crack(x,x_c,height=0.5):
-    width = args.l/args.cellfactor / args.height*0.51
+    width = args.l/args.cellfactor / args.height*0.49
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<height)
 
 def fixed(x):
@@ -179,6 +179,7 @@ else:
                   ]
     
 
+
 # if args.type == "ssa":
 #     d_bc = lambda V: [bc.internal_bc(V, lambda x: (x[0]<=0.09) + (x[0]>=nondim_length-0.09), 0.0)]
 
@@ -216,8 +217,9 @@ elif args.type == "ssa":
                         bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
                         bc.get_bc_func(V.sub(1).sub(0), right_boundary, uv_x),
                         bc.get_bc_func(V.sub(0).sub(0), right_boundary, u_x),
-                        bc.get_bc_func(V.sub(0).sub(1),left_boundary, lambda x: -dudx*x[1]),
-                        bc.get_bc_func(V.sub(0).sub(1),right_boundary, lambda x: -dudx*x[1])
+                        # bc.get_bc_func(V.sub(0).sub(1),left_boundary, lambda x: -dudx*x[1]),
+                        # bc.get_bc_func(V.sub(0).sub(1),right_boundary, lambda x: -dudx*x[1]),
+                        # bc.get_bc(V.sub(0).sub(1), bottom_boundary, 0.0),
                         ]
 
 else:
@@ -242,8 +244,6 @@ elif args.damagemodel == "AT2higher_bounded":
 
 
 
-model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
-                           damage_model, [u_bc, d_bc])
 
 
 crack_spacing = 0.2
@@ -265,6 +265,10 @@ def basal_cracks(x):
     
 
 
+d_bc = lambda V: [bc.internal_line(V,basal_cracks,1.0)]
+
+model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
+                           damage_model, [u_bc, d_bc])
 
 
 if MPI.COMM_WORLD.rank == 0:
@@ -284,13 +288,13 @@ t = 0.0
 # model.write_checkpoint(path + "/" + filename +".bp", t)
 
 if args.type == "ssa":
-    model.momentum.solve()
-    model.damage.w.sub(0).interpolate(lambda x: cracks(x) + basal_cracks(x))
+    # model.momentum.solve()
+    # model.damage.w.sub(0).interpolate(lambda x: basal_cracks(x))
     
-    model.momentum.solve()
-    # model.damage_on = True
-    # model.fixed_point(save=True)
-    # model.damage_on = False
+    # model.momentum.solve()
+    model.damage_on = True
+    model.fixed_point(save=True)
+    model.damage_on = False
     model.damage.timestep()
 
     u_bc = lambda V: [bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
