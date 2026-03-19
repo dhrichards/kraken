@@ -45,15 +45,23 @@ class Momentum:
         # return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar, self.sim.params.sea_level_star) + self.sim.params.patmstar
     
     def crack_pressure(self, u):
-        # return mf.water_pressure(self.sim.msh, u, self.sim.params.ρwstar, self.sim.params.ucstar, level=self.sim.params.crack_level_star) + self.sim.params.patmstar
-        return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar, self.sim.params.crack_level_star) + self.sim.params.patmstar
+        return mf.water_pressure(self.sim.msh, u, self.sim.params.ρwstar, self.sim.params.ucstar, level=self.sim.params.crack_level_star) + self.sim.params.patmstar
+        # return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar, self.sim.params.crack_level_star) + self.sim.params.patmstar
         
-    def stress(self,ε):
+    def stress(self,ε,u):
+        pw = self.crack_pressure(u)
+        I = ufl.Identity(self.sim.msh.geometry.dim); ν = self.sim.params.ν
+        
+        σplus = es.stress_plus_lo(ε + pw*I/(3*es.Koverμ(ν)), ν)
         g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
         σ0 = es.cauchy_stress(ε, self.sim.params.ν)
-        σplus = self.sim.stress_plus(ε, self.sim.params.ν)
         σminus = σ0 - σplus
         return g*σplus+ σminus
+    
+    def free_energy_plus(self,ε,u):
+        pw = self.crack_pressure(u)
+        I = ufl.Identity(self.sim.msh.geometry.dim); ν = self.sim.params.ν
+        return es.free_energy_plus_lo(ε + pw*I/(3*es.Koverμ(ν)), ν)
     
     
     def setup_solver(self):

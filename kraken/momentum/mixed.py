@@ -79,8 +79,7 @@ class SemiLagrangianEpsilon(Momentum):
 
         self.ε_eD = self.ε_e - (1/3)*1.5*ufl.tr(self.ε_e)*ufl.Identity(self.sim.msh.geometry.dim)
 
-        self.ψplus = self.sim.free_energy_plus(self.ε_e,self.sim.params.ν)
-
+        self.ψplus = self.free_energy_plus(self.ε_e,self.du)
 
         
 
@@ -96,7 +95,7 @@ class SemiLagrangianEpsilon(Momentum):
         
 
         # σ0 = es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν)
-        σ = self.stress(self.ε_e)
+        σ = self.stress(self.ε_e,self.du)
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         
         A = mf.rate_factor(self.sim.params.T)/self.sim.params.A0
