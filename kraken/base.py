@@ -21,37 +21,7 @@ class Simulation:
         self.min_its = 2
         self.max_its = 300
 
-        
-
-        if split == "lo":
-            self.free_energy_plus = es.free_energy_plus_lo
-            self.stress_plus = es.stress_plus_lo
-        elif split == "lo_p":
-            pw = mf.water_pressure_static(self.msh, self.params.ρwstar, self.params.sea_level_star) + self.params.patmstar
-            I = ufl.Identity(self.msh.geometry.dim)
-            self.free_energy_plus = lambda ε, ν: es.free_energy_plus_lo(ε + pw*I/(3*es.Koverμ(ν)), ν)
-            self.stress_plus = lambda ε, ν: es.stress_plus_lo(ε + pw*I/(3*es.Koverμ(ν)), ν)
-            # self.stress_plus = lambda ε, ν: es.stress_plus_lo_p_cond(ε,ν,pw)
-        elif split == "spectral":
-            self.free_energy_plus = es.free_energy_plus_spectral
-            self.stress_plus = es.stress_plus_spectral
-        elif split == "dp":
-            self.free_energy_plus = lambda ε, ν: es.free_energy_plus_dp(ε, ν, self.params.B)
-            self.stress_plus = lambda ε, ν: es.stress_plus_dp(ε, ν, self.params.B)
-        elif split == "star":
-            self.free_energy_plus = es.free_energy_plus_star
-            self.stress_plus = es.stress_plus_star
-        elif split == "amor":
-            self.free_energy_plus = es.free_energy_plus_amor
-            self.stress_plus = es.stress_plus_amor
-        elif split == "none":
-            self.free_energy_plus = es.free_energy
-            self.stress_plus = es.cauchy_stress
-        else:
-            raise ValueError(f"Unknown energy split: {split}")
-
-
-
+    
         
 
 
