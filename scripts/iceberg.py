@@ -196,9 +196,9 @@ else:
 
 
 
-crack_spacing = 0.3
 basal_crack_spacing = 0.6
-crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, int((nondim_length-crack_spacing)//crack_spacing))
+n_cracks = int((nondim_length-basal_crack_spacing)//basal_crack_spacing)
+crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks*2 -1)
 # crack_x_cs += cell_size/2
 def surface_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
@@ -208,7 +208,7 @@ def surface_cracks(x):
 
 
 
-basal_crack_x_cs = np.linspace(basal_crack_spacing/2,nondim_length-basal_crack_spacing/2, int((nondim_length-basal_crack_spacing)//basal_crack_spacing))
+basal_crack_x_cs = np.linspace(basal_crack_spacing/2,nondim_length-basal_crack_spacing/2, n_cracks)
 # basal_crack_x_cs += cell_size/2
 def basal_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
