@@ -158,6 +158,7 @@ model.params.sea_level.value = args.sealevel * args.height
 model.params.length.value = args.length
 
 model.params.T = -2 + (args.T - -2)*z
+model.params.σt_deg.value = 0.02e6
 # model.params.Gc = (10 - 1.0)*z + 1.0
 # model.params.ψcrit = (20 - 1)*z + 1.0
 model.params.set_Gc_from_Kic()
@@ -226,7 +227,7 @@ else:
     u_bc = lambda V: [
                             bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
                       bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
-                      bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0)
+                      bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
                             # bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                             # bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
 
