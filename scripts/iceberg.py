@@ -196,7 +196,7 @@ else:
 
 
 
-basal_crack_spacing = 0.6
+basal_crack_spacing = 240/args.height
 n_cracks = int((nondim_length-basal_crack_spacing)//basal_crack_spacing)
 crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks*2 -1)
 # crack_x_cs += cell_size/2
