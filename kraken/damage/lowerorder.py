@@ -99,7 +99,7 @@ class Bounded(LowerOrder):
         c0 = 4*np.trapezoid(np.sqrt(w(s)),s)
         
 
-        H = ufl.max_value(self.sim.free_energy_plus(self.sim.momentum.ε_e, ν) - ψcrit, 0)
+        H = ufl.max_value(self.sim.momentum.ψplus - ψcrit, 0)
 
         dissipated_energy = (1/C3) * es.crack_density_function(self.d, l, w, c0) * ufl.dx
         elastic_energy = self.g * H * ufl.dx
