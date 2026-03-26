@@ -296,7 +296,6 @@ for i in range(1,args.nt):
                                     model.params.Gc,
                                     model.params.T,
                                     model.params.ψcrit,
-                                    # model.mass.ρ,
                                     ],
                                     ["u","d",
                                     "uv","ue",
@@ -305,7 +304,6 @@ for i in range(1,args.nt):
                                     "Gc",
                                     "T",
                                     "ψcrit",
-                                    # "ρ"
                                     ],
                                 t=i)
     
