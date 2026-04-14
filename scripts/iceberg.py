@@ -31,6 +31,7 @@ parser.add_argument("--strength0", type=float, default=200, help="Tensile streng
 parser.add_argument("--strength_deg", type=float, default=20, help="Tensile strength degradation per degree C")
 parser.add_argument("--basal_cracks", type=bool, default=True, help="Include basal cracks")
 parser.add_argument("--surface_cracks", type=bool, default=True, help="Include surface cracks")
+parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
 
 args = parser.parse_args()
 
@@ -127,7 +128,7 @@ model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
 model.params.length.value = args.length
 
-model.params.T = -2 + (args.T - -2)*z
+# model.params.T = -2 + (args.T - -2)*z
 model.params.σt_deg.value = args.strength_deg*1e3
 model.params.σt0.value = args.strength0*1e3
 
@@ -181,6 +182,17 @@ elif args.type == "ssa":
                         # bc.get_bc_func(V.sub(0).sub(1),right_boundary, lambda x: -dudx*x[1]),
                         # bc.get_bc(V.sub(0).sub(1), bottom_boundary, 0.0),
                         ]
+elif args.type == "icebergsymm":
+      u_bc = lambda V: [
+                            # bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                    #   bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                    #   bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                            bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+
+                            ]
+
+
 
 else:
     u_bc = lambda V: [
@@ -253,22 +265,23 @@ else:
 
 
 t = 0.0
-# model.write_checkpoint(path + "/" + filename +".bp", t)
+if args.save_bp:
+    model.write_checkpoint(path + "/" + filename +".bp", t)
 
-if args.type == "ssa":
-    model.momentum.solve()
-    model.damage.w.sub(0).interpolate(cracks)
+# if args.type == "ssa":
+#     model.momentum.solve()
+#     model.damage.w.sub(0).interpolate(cracks)
     
-    # model.momentum.solve()
-    model.damage_on = True
-    model.fixed_point(save=True)
-    model.damage_on = False
-    model.damage.timestep()
+#     # model.momentum.solve()
+#     model.damage_on = True
+#     model.fixed_point(save=True)
+#     model.damage_on = False
+#     model.damage.timestep()
 
-    u_bc = lambda V: [bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
-                      bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
-                      bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
-    model.momentum.update_bcs(u_bc)
+#     u_bc = lambda V: [bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+#                       bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),m
+#                       bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
+#     model.momentum.update_bcs(u_bc)
 
 
 for i in range(1,args.nt):
@@ -286,12 +299,13 @@ for i in range(1,args.nt):
     flag = model.fixed_point(save=True)
 
     t += model.params.dt.value
-    # model.write_checkpoint(path + "/" + filename +".bp", t)
+    if args.save_bp:
+        model.write_checkpoint(path + "/" + filename +".bp", t)
     g = es.degradation_default(model.damage.d)
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                             msh, [model.momentum.u,model.damage.d,
                                     model.momentum.u_v, model.momentum.u_e,
-                                    model.momentum.ψplus,
+                                    model.momentum.ψplus/model.params.ψcritstar,
                                     model.momentum.ε_e,
                                     model.params.Gc,
                                     model.params.T,
