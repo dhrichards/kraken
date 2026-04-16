@@ -20,7 +20,8 @@ parser.add_argument("--height", type=float, default=300, help="Height of iceberg
 parser.add_argument("--type", type=str, default="relaxation", help="gravity loop initilisation or relaxation first")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
 parser.add_argument("--nt", type=int, default=200, help="number of timesteps")
-parser.add_argument("--T", type=float, default=-20, help="Temperature in Celsius at top")
+parser.add_argument("--Ttop", type=float, default=-20, help="Temperature in Celsius at top")
+parser.add_argument("--Tbot", type=float, default=-20, help="Temperature in Celsius at bottom")
 parser.add_argument("--length", type=float, default=16000, help="Length of iceberg in meters")
 parser.add_argument("--tol", type=float, default=5e-6, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
@@ -38,8 +39,9 @@ args = parser.parse_args()
 
 filename = args.type + "_level" + str(args.level) + "height" + str(args.height) +"Kic" + str(args.Kic)\
                      +"dt" + str(args.dt) + "sigmacdeg" + str(args.strength_deg)\
+                        + "sigmac0" + str(args.strength0) \
                         + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)\
-                            + "T" + str(abs(args.T)) +  \
+                            + "Ttop" + str(abs(args.Ttop)) + "Tbot" + str(abs(args.Tbot)) + \
                             "_length" + str(args.length) + "_" + args.suffix + "_"
 
 
@@ -117,8 +119,8 @@ model.max_its = args.max_its
 
 x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
-model.params.T.value = args.T
-model.params.A0.value = mf.rate_factor_np(args.T)
+model.params.T = args.Tbot + (args.Ttop - args.Tbot)*z
+model.params.A0.value = mf.rate_factor_np(args.Ttop)
 model.params.H.value = args.height
 model.params.l.value = args.l
 model.params.dt.value = args.dt*24*60*60
@@ -128,7 +130,6 @@ model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
 model.params.length.value = args.length
 
-# model.params.T = -2 + (args.T - -2)*z
 model.params.σt_deg.value = args.strength_deg*1e3
 model.params.σt0.value = args.strength0*1e3
 
@@ -210,7 +211,7 @@ else:
 
 basal_crack_spacing = 240/args.height
 n_cracks = int((nondim_length-basal_crack_spacing)//basal_crack_spacing)
-crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks*2 -1)
+crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks*4 -1)
 # crack_x_cs += cell_size/2
 def surface_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
@@ -238,7 +239,6 @@ elif args.basal_cracks:
 else:
     cracks = lambda x: np.zeros(x.shape[1],dtype=bool)
 
-    
 if args.type == "ssa":
     d_bc = lambda V: []
 else:
@@ -263,14 +263,13 @@ else:
 
 
 
-
 t = 0.0
 if args.save_bp:
     model.write_checkpoint(path + "/" + filename +".bp", t)
 
-# if args.type == "ssa":
-#     model.momentum.solve()
-#     model.damage.w.sub(0).interpolate(cracks)
+if args.type == "ssa":
+    model.momentum.solve()
+    model.damage.w.sub(0).interpolate(cracks)
     
 #     # model.momentum.solve()
 #     model.damage_on = True
@@ -308,7 +307,7 @@ for i in range(1,args.nt):
                                     model.momentum.ψplus/model.params.ψcritstar,
                                     model.momentum.ε_e,
                                     model.params.Gc,
-                                    model.params.T,
+                                    # model.params.T,
                                     model.params.ψcrit,
                                     ],
                                     ["u","d",
@@ -316,7 +315,7 @@ for i in range(1,args.nt):
                                     "psi_plus",
                                     "eps_e",
                                     "Gc",
-                                    "T",
+                                    # "T",
                                     "ψcrit",
                                     ],
                                 t=i)

@@ -68,7 +68,7 @@ class Simulation:
         if t == 0:
             adios4dolfinx.write_mesh(filename, self.msh,time = t)
 
-            dictofparams = { 'T': self.params.T.value,
+            dictofparams = { 
                             'rhoi' : self.params.ρi.value,
                              'rhow' : self.params.ρw.value,
                              'g' : self.params.g.value,
@@ -100,7 +100,6 @@ class Simulation:
 
     def read_checkpoint(self, filename, t=0):
         dictofparams = adios4dolfinx.read_attributes(filename, MPI.COMM_WORLD, 'params')
-        self.params.T.value = dictofparams['T']
         self.params.ρi.value = dictofparams['rhoi']
         self.params.ρw.value = dictofparams['rhow']
         self.params.g.value = dictofparams['g']
