@@ -27,7 +27,9 @@ class HigherOrder(Damage):
         self.d_prev_time, self.lap_prev_time = ufl.split(self.w_prev_time)
 
         self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
+        self.w_prev_it2 = fem.Function(self.W, name="mixed function 2 iterations previous")
         self.d_prev_it, self.lap_prev_it = ufl.split(self.w_prev_it)
+        self.d_prev_it2, self.lap_prev_it2 = ufl.split(self.w_prev_it2)
 
         self.D, _ = self.W.sub(0).collapse()
 
@@ -86,6 +88,7 @@ class HigherOrder(Damage):
     def solve(self):
         self.solver.solve(None, self.w.x.petsc_vec)
         self.w.x.scatter_forward()
+        self.w_prev_it2.x.array[:] = self.w_prev_it.x.array[:]
         self.w_prev_it.x.array[:] = self.w.x.array[:]
         assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
 

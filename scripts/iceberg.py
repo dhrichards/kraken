@@ -183,7 +183,7 @@ elif args.type == "ssa":
                         # bc.get_bc_func(V.sub(0).sub(1),right_boundary, lambda x: -dudx*x[1]),
                         # bc.get_bc(V.sub(0).sub(1), bottom_boundary, 0.0),
                         ]
-elif args.type == "icebergsymm":
+elif args.type == "icebergsymm" or args.type == "relaxation":
       u_bc = lambda V: [
                             # bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
                     #   bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
@@ -256,7 +256,7 @@ if MPI.COMM_WORLD.rank == 0:
 model.damage_on = False
 if args.type == "relaxation":
     i_start = 10
-    # model.params.dt.value = 10*24*60*60
+    model.params.dt.value = 10*24*60*60
 else:
     i_start = 1
     
@@ -281,17 +281,19 @@ if args.type == "ssa":
 #                       bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),m
 #                       bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
 #     model.momentum.update_bcs(u_bc)
-
+model.momentum.solve()
+model.damage.solve()
 
 for i in range(1,args.nt):
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
-
-
+   
     if i == i_start:
         model.damage_on = True
+        # model.damage.w.sub(0).interpolate(cracks)
+        model.params.dt.value = args.dt*24*60*60
 
         
 
