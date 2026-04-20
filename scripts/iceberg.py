@@ -133,6 +133,8 @@ model.params.length.value = args.length
 model.params.σt_deg.value = args.strength_deg*1e3
 model.params.σt0.value = args.strength0*1e3
 
+
+
 model.params.set_Gc_from_Kic()
 model.params.set_psicrit_from_σc()
 
