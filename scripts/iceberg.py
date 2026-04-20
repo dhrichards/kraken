@@ -257,7 +257,7 @@ if MPI.COMM_WORLD.rank == 0:
 
 model.damage_on = False
 if args.type == "relaxation":
-    i_start = 10
+    i_start = 30
     model.params.dt.value = 25*24*60*60
 else:
     i_start = 1
