@@ -10,8 +10,11 @@ secperyr = 31556926
 class Params_with_uc:
     def __init__(self,msh):
 
+        self.msh = msh
+
         # Default material properties
-        self.T = fem.Constant(msh,default_scalar_type(-20.0)) # Temperature in Celsius
+        self.Ttop = fem.Constant(msh,default_scalar_type(-20.0)) # Temperature in Celsius
+        self.Tbot = fem.Constant(msh,default_scalar_type(-20.0)) # Temperature in Celsius
         self.ρi = fem.Constant(msh,default_scalar_type(900)) # Density of ice
         self.ρw = fem.Constant(msh,default_scalar_type(1000)) # Density of water
         self.g = fem.Constant(msh,default_scalar_type(9.81)) # Gravitational acceleration
@@ -19,10 +22,8 @@ class Params_with_uc:
         self.ν = fem.Constant(msh,default_scalar_type(0.325)) # Poisson's ratio
         self.A0 = fem.Constant(msh,default_scalar_type(1.2e-25)) # Flow law parameter
         self.n = fem.Constant(msh,default_scalar_type(3.0)) # Flow law exponent
-        self.Gc = fem.Constant(msh,default_scalar_type(1.0)) # Fracture toughness
         self.H = fem.Constant(msh,default_scalar_type(100)) # Characteristic length
         self.l = fem.Constant(msh,default_scalar_type(0.5)) # Regularisation length
-        self.ψcrit = fem.Constant(msh,default_scalar_type(1.0)) 
         self.dt = fem.Constant(msh,default_scalar_type(secperyr)) # Characteristic time in seconds
         self.patm = fem.Constant(msh,default_scalar_type(0.0)) # Atmospheric pressure
         self.ge_tol = fem.Constant(msh,default_scalar_type(1e-12)) # Elastic degradation tolerance
@@ -45,17 +46,20 @@ class Params_with_uc:
     @property
     def σc(self):
         return self.σt0 - self.σt_deg*(self.T)
+    
+    @property
+    def T(self):
+        x = ufl.SpatialCoordinate(self.msh)
+        z = x[self.msh.geometry.dim-1]
+        return self.Tbot + (self.Ttop - self.Tbot)*z
 
-        
-    def set_Gc_as_Hageman(self):
-        # Gc as Hageman (2026) - assuming psicrit is 0 - check as may only be valid for fourth order AT1
-        self.Gc = 2 * self.l*self.σc**2 / self.E
+    @property
+    def ψcrit(self):
+        return self.σc**2 / (2*self.E)
 
-    def set_psicrit_from_σc(self):
-        self.ψcrit = self.σc**2 / (2*self.E)
-
-    def set_Gc_from_Kic(self):
-        self.Gc = self.Kic**2*(1-self.ν**2)/self.E
+    @property
+    def Gc(self):
+        return self.Kic**2*(1-self.ν**2)/self.E
 
 
     

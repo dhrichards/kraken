@@ -185,6 +185,25 @@ class SemiLagrangianEpsilon(Momentum):
         self.w_prev_it.x.array[:] = self.w.x.array[:]
 
 
+    def interpolate_from_parent(self, parent):
+        super().interpolate_from_parent(parent)
+
+
+        for i in range(3):
+            self.w.sub(i).interpolate(parent.momentum.w.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+            self.w_prev_time.sub(i).interpolate(parent.momentum.w_prev_time.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+            self.w_prev_it.sub(i).interpolate(parent.momentum.w_prev_it.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+            self.w_prev_it_start.sub(i).interpolate(parent.momentum.w_prev_it_start.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+            self.w_prev_2.sub(i).interpolate(parent.momentum.w_prev_2.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+  
+        self.ε_e_prev_time.interpolate(parent.momentum.ε_e_prev_time, cells0=self.sim.parent_cells, cells1=self.sim.cells)
+
+
+   
+
+
+
+
     def timestep(self):
 
         self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))

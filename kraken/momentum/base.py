@@ -90,6 +90,9 @@ class Momentum:
         self.setup_solver()
 
 
+    def interpolate_from_parent(self, parent):
+        self.area_ratio.interpolate(parent.momentum.area_ratio, cells0=self.sim.parent_cells, cells1=self.sim.cells)
+
 
     
 

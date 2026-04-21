@@ -1,12 +1,12 @@
 from kraken import parameters, utilities, temperature, mass, momentum, damage
 from kraken.numerics import energy_splits as es
 from kraken.numerics import maths_functions as mf
-from dolfinx import fem
+from dolfinx import fem, mesh
 import ufl
 from mpi4py import MPI
 import numpy as np
 import adios4dolfinx
-
+import kraken as kr
 class Simulation:
     def __init__(self, msh,split="lo_p"):
         self.msh = msh
@@ -43,6 +43,65 @@ class Simulation:
         if self.mass_on:
             self.mass = mass.Mass(self)
             self.mass.setup()
+
+
+    def interpolate_from_parent(self, parent, parent_cells, bcs):
+
+        self.tol = parent.tol
+        self.min_its = parent.min_its
+        self.max_its = parent.max_its
+
+
+        self.params.Ttop.value = parent.params.Ttop.value
+        self.params.Tbot.value = parent.params.Tbot.value
+        self.params.ρi.value = parent.params.ρi.value
+        self.params.ρw.value = parent.params.ρw.value
+        self.params.g.value = parent.params.g.value
+        self.params.E.value = parent.params.E.value
+        self.params.ν.value = parent.params.ν.value
+        self.params.A0.value = parent.params.A0.value
+        self.params.n.value = parent.params.n.value
+        self.params.H.value = parent.params.H.value
+        self.params.l.value = parent.params.l.value
+        self.params.dt.value = parent.params.dt.value
+        self.params.patm.value = parent.params.patm.value
+        self.params.ge_tol.value = parent.params.ge_tol.value
+        self.params.crack_level_above_sea.value = parent.params.crack_level_above_sea.value
+        self.params.sea_level.value = parent.params.sea_level.value
+        self.params.length.value = parent.params.length.value
+
+        self.params.σt0.value = parent.params.σt0.value
+        self.params.σt_deg.value = parent.params.σt_deg.value
+
+        self.params.Kic.value = parent.params.Kic.value
+
+        self.params.cp.value = parent.params.cp.value
+        self.params.κ.value = parent.params.κ.value
+
+        self.params.friction_angle.value = parent.params.friction_angle.value
+        self.params.cohesion.value = parent.params.cohesion.value        
+       
+    
+
+
+        self.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
+                                kr.damage.higherorder.HigherOrder, bcs)
+        # msh_cell_imap = self.msh.topology.index_map(self.msh.topology.dim)
+        # self.cells = np.arange(msh_cell_imap.size_local + msh_cell_imap.num_ghosts)
+        # self.parent_cells = entity_map.sub_topology_to_topology(self.cells, inverse=False)
+
+        self.parent_cells = parent_cells
+        self.cells = np.arange(len(self.parent_cells))
+        
+        self.momentum.interpolate_from_parent(parent)
+        self.damage.interpolate_from_parent(parent)
+
+
+
+
+
+
+
         
 
 

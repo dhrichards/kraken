@@ -1,5 +1,5 @@
 from kraken.numerics import energy_splits as es
-from dolfinx import fem
+from dolfinx import fem, mesh
 import dolfinx.fem.petsc
 from petsc4py import PETSc
 from mpi4py import MPI
@@ -51,9 +51,13 @@ class Damage:
 
         self.history_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"})
 
+    def interpolate_from_parent(self, parent):
+        self.Hprev.interpolate(parent.damage.Hprev, cells0=self.sim.parent_cells, cells1=self.sim.cells)
+        
 
 
 
+    
     def timestep(self):
         self.H_func = es.history_function(self.sim.momentum.ψplus, self.Hprev,
                                 self.sim.params.ψcritstar)

@@ -3,6 +3,7 @@ from mpi4py import MPI
 import numpy as np
 import ufl
 import os
+import dolfinx
 from dolfinx import io, mesh
 import kraken.parameters as kp
 import kraken.boundaryconditions as bc
@@ -47,6 +48,8 @@ filename = args.type + "_level" + str(args.level) + "height" + str(args.height) 
 
 
 if MPI.COMM_WORLD.rank == 0:
+    # print dolfinx version
+    print("Dolfinx version: ", dolfinx.__version__)
     print("Level: ", args.level)
     print("Regularization length scale (m): ", args.l)
     print("Time step (days): ", args.dt)
@@ -119,7 +122,8 @@ model.max_its = args.max_its
 
 x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
-model.params.T = args.Tbot + (args.Ttop - args.Tbot)*z
+model.params.Ttop.value = args.Ttop
+model.params.Tbot.value = args.Tbot
 model.params.A0.value = mf.rate_factor_np(args.Ttop)
 model.params.H.value = args.height
 model.params.l.value = args.l
@@ -135,8 +139,8 @@ model.params.σt0.value = args.strength0*1e3
 
 
 
-model.params.set_Gc_from_Kic()
-model.params.set_psicrit_from_σc()
+# model.params.set_Gc_from_Kic()
+# model.params.set_psicrit_from_σc()
 
 
 if MPI.COMM_WORLD.rank == 0:
@@ -257,12 +261,11 @@ if MPI.COMM_WORLD.rank == 0:
 
 model.damage_on = False
 if args.type == "relaxation":
-    i_start = 30
+    i_start = 10
     model.params.dt.value = 25*24*60*60
 else:
     i_start = 1
     
-
 
 
 t = 0.0
@@ -286,6 +289,8 @@ if args.type == "ssa":
 model.momentum.solve()
 model.damage.solve()
 
+
+
 for i in range(1,args.nt):
 
     if MPI.COMM_WORLD.rank == 0:
@@ -293,9 +298,23 @@ for i in range(1,args.nt):
 
    
     if i == i_start:
-        model.damage_on = True
+        # 
+        cells_subdomain = mesh.locate_entities(model.msh, model.msh.topology.dim, lambda x: x[0]<model.params.length.value/model.params.H.value - 4)
+
+        submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
+
+        submodel = kr.base.Simulation(submesh,split="lo_p")
+        
+        submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
+
+        model = submodel
+        if MPI.COMM_WORLD.rank == 0:
+            print(model.params.ucstar_float )
+
+
         # model.damage.w.sub(0).interpolate(cracks)
         model.params.dt.value = args.dt*24*60*60
+        model.damage_on = True
 
         
 
@@ -306,12 +325,12 @@ for i in range(1,args.nt):
         model.write_checkpoint(path + "/" + filename +".bp", t)
     g = es.degradation_default(model.damage.d)
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
-                            msh, [model.momentum.u,model.damage.d,
-                                    model.momentum.u_v, model.momentum.u_e,
+                            model.msh, [model.momentum.du,model.damage.d,
+                                    model.momentum.u_prev_time, model.momentum.u_e,
                                     model.momentum.ψplus/model.params.ψcritstar,
                                     model.momentum.ε_e,
                                     model.params.Gc,
-                                    # model.params.T,
+                                    model.params.T,
                                     model.params.ψcrit,
                                     ],
                                     ["u","d",
@@ -319,7 +338,7 @@ for i in range(1,args.nt):
                                     "psi_plus",
                                     "eps_e",
                                     "Gc",
-                                    # "T",
+                                    "T",
                                     "ψcrit",
                                     ],
                                 t=i)
