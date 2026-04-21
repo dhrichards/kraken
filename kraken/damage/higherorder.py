@@ -33,8 +33,8 @@ class HigherOrder(Damage):
 
         self.D, _ = self.W.sub(0).collapse()
 
-        self.H_space = fem.functionspace(self.sim.msh, ("DG", 1))
-        self.Hprev = fem.Function(self.H_space, name="history")
+        # self.H_space = fem.functionspace(self.sim.msh, ("DG", 1))
+        # self.Hprev = fem.Function(self.H_space, name="history")
 
 
         bc_func_mod = lambda V: self.sim.bc_funcs[1](V.sub(0))
@@ -79,6 +79,21 @@ class HigherOrder(Damage):
 
         self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
 
+    def interpolate_from_parent(self, parent):
+        super().interpolate_from_parent(parent)
+
+        self.w.sub(0).interpolate(parent.damage.w.sub(0), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+        self.w.sub(1).interpolate(parent.damage.w.sub(1), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+        
+        self.w_prev_it.sub(0).interpolate(parent.damage.w_prev_it.sub(0), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+        self.w_prev_it.sub(1).interpolate(parent.damage.w_prev_it.sub(1), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+
+        self.w_prev_it2.sub(0).interpolate(parent.damage.w_prev_it2.sub(0), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+        self.w_prev_it2.sub(1).interpolate(parent.damage.w_prev_it2.sub(1), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+
+        self.w_prev_time.sub(0).interpolate(parent.damage.w_prev_time.sub(0), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+        self.w_prev_time.sub(1).interpolate(parent.damage.w_prev_time.sub(1), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+
     def timestep(self):
         super().timestep()
         self.w_prev_time.x.array[:] = self.w.x.array[:]
@@ -88,8 +103,8 @@ class HigherOrder(Damage):
     def solve(self):
         self.solver.solve(None, self.w.x.petsc_vec)
         self.w.x.scatter_forward()
-        self.w_prev_it2.x.array[:] = self.w_prev_it.x.array[:]
-        self.w_prev_it.x.array[:] = self.w.x.array[:]
+        self.w_prev_it2.x.array[:] = np.copy(self.w_prev_it.x.array[:])
+        self.w_prev_it.x.array[:] = np.copy(self.w.x.array[:])
         assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
 
     def revert(self):
