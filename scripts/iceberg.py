@@ -31,8 +31,7 @@ parser.add_argument("--sealevel", type=float, default=0.9, help="Non dimensional
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
 parser.add_argument("--strength0", type=float, default=200, help="Tensile strength at 0C")
 parser.add_argument("--strength_deg", type=float, default=20, help="Tensile strength degradation per degree C")
-parser.add_argument("--basal_cracks", type=bool, default=True, help="Include basal cracks")
-parser.add_argument("--surface_cracks", type=bool, default=True, help="Include surface cracks")
+parser.add_argument("--cracks", type=bool, default=True, help="Include cracks")
 parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
 
 args = parser.parse_args()
@@ -235,21 +234,12 @@ def basal_cracks(x):
         val += basal_crack(x,x_c,height=0.4)
     return val
 
-
-if args.basal_cracks and args.surface_cracks:
-    cracks = lambda x: surface_cracks(x) + basal_cracks(x)
-elif args.surface_cracks:
-    cracks = surface_cracks
-elif args.basal_cracks:
-    cracks = basal_cracks
+cracks = lambda x: surface_cracks(x) + basal_cracks(x)
+if args.cracks and args.type != "ssa":
+    d_bc = lambda V: [bc.internal_bc(V, cracks, 1.0)]
 else:
-    cracks = lambda x: np.zeros(x.shape[1],dtype=bool)
-
-if args.type == "ssa":
     d_bc = lambda V: []
-else:
-    d_bc = lambda V: [bc.internal_bc(V,cracks,1.0)]
-
+    
 
 
 model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
@@ -286,8 +276,8 @@ if args.type == "ssa":
 #                       bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),m
 #                       bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
 #     model.momentum.update_bcs(u_bc)
-model.momentum.solve()
-model.damage.solve()
+# model.momentum.solve()
+# model.damage.solve()
 
 
 
@@ -299,17 +289,17 @@ for i in range(1,args.nt):
    
     if i == i_start:
         # 
-        cells_subdomain = mesh.locate_entities(model.msh, model.msh.topology.dim, lambda x: x[0]<model.params.length.value/model.params.H.value - 4)
+        # cells_subdomain = mesh.locate_entities(model.msh, model.msh.topology.dim, lambda x: x[0]<model.params.length.value/model.params.H.value - 4)
 
-        submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
+        # submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
 
-        submodel = kr.base.Simulation(submesh,split="lo_p")
+        # submodel = kr.base.Simulation(submesh,split="lo_p")
         
-        submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
+        # submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
 
-        model = submodel
-        if MPI.COMM_WORLD.rank == 0:
-            print(model.params.ucstar_float )
+        # model = submodel
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print(model.params.ucstar_float )
 
 
         # model.damage.w.sub(0).interpolate(cracks)
