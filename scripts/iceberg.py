@@ -214,9 +214,9 @@ else:
 
 
 
-basal_crack_spacing = 240/args.height
+basal_crack_spacing = 40/args.height
 n_cracks = int((nondim_length-basal_crack_spacing)//basal_crack_spacing)
-crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks*4 -3)
+crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks)
 # crack_x_cs += cell_size/2
 def surface_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
@@ -235,6 +235,7 @@ def basal_cracks(x):
     return val
 
 cracks = lambda x: surface_cracks(x) + basal_cracks(x)
+
 if args.cracks and args.type != "ssa":
     d_bc = lambda V: [bc.internal_bc(V, cracks, 1.0)]
 else:
@@ -302,7 +303,7 @@ for i in range(1,args.nt):
         #     print(model.params.ucstar_float )
 
 
-        # model.damage.w.sub(0).interpolate(cracks)
+        model.damage.w.sub(0).interpolate(cracks)
         model.params.dt.value = args.dt*24*60*60
         model.damage_on = True
 
