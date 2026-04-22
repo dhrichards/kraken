@@ -276,7 +276,7 @@ if args.type == "ssa":
 #     u_bc = lambda V: [bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
 #                       bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),m
 #                       bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
-#     model.momentum.update_bcs(u_bc)
+#     model.momentum.update_bcs(u_bc)model.momentum.solve()
 # model.momentum.solve()
 # model.damage.solve()
 
@@ -302,8 +302,8 @@ for i in range(1,args.nt):
         # if MPI.COMM_WORLD.rank == 0:
         #     print(model.params.ucstar_float )
 
-
-        model.damage.w.sub(0).interpolate(cracks)
+        # model.momentum.solve()
+        # model.damage.w.sub(0).interpolate(cracks)
         model.params.dt.value = args.dt*24*60*60
         model.damage_on = True
 
