@@ -214,9 +214,9 @@ else:
 
 
 
-basal_crack_spacing = 40/args.height
+basal_crack_spacing = 0.8
 n_cracks = int((nondim_length-basal_crack_spacing)//basal_crack_spacing)
-crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks)
+crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks*4 -3)
 # crack_x_cs += cell_size/2
 def surface_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
@@ -277,8 +277,8 @@ if args.type == "ssa":
 #                       bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),m
 #                       bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
 #     model.momentum.update_bcs(u_bc)model.momentum.solve()
-# model.momentum.solve()
-# model.damage.solve()
+model.momentum.solve()
+model.damage.solve()
 
 
 
