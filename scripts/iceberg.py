@@ -290,15 +290,15 @@ for i in range(1,args.nt):
    
     if i == i_start:
         # 
-        # cells_subdomain = mesh.locate_entities(model.msh, model.msh.topology.dim, lambda x: x[0]<model.params.length.value/model.params.H.value - 4)
+        cells_subdomain = mesh.locate_entities(model.msh, model.msh.topology.dim, lambda x: x[0]<basal_crack_x_cs[-6])
 
-        # submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
+        submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
 
-        # submodel = kr.base.Simulation(submesh,split="lo_p")
+        submodel = kr.base.Simulation(submesh,split="lo_p")
         
-        # submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
+        submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
 
-        # model = submodel
+        model = submodel
         # if MPI.COMM_WORLD.rank == 0:
         #     print(model.params.ucstar_float )
 
