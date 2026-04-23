@@ -46,15 +46,15 @@ os.makedirs(path, exist_ok=True)
 params = kp.Params_with_uc()
 
 # material = Material_with_uc()
-params.L = 300.00
+params.H = 300.00
 params.l = 100
 params.dt = 60*60*24
 params.ψcrit = 0.5
 params.Gc = 1.0
 params.patm = 0.0
 
-nondim_length = true_length/params.L
-nondim_height = true_height/params.L
+nondim_length = true_length/params.H
+nondim_height = true_height/params.H
 Hw = params.ρistar*nondim_height
 
 

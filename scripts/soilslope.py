@@ -96,7 +96,7 @@ model = kr.base.Simulation(msh,
                            [u_bc, d_bc],split='dp')
 
 
-model.params.L.value = 1.0
+model.params.H.value = 1.0
 model.params.E.value = 10e6
 model.params.ν.value = 0.4
 model.params.l.value = l

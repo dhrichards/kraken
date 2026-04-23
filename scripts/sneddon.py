@@ -58,7 +58,7 @@ def crack_boundary(x):
 
 material = Params_with_uc()
 
-material.L = 1.0
+material.H = 1.0
 material.uc = 1.0
 material.ρi = 0.0
 material.ρw = 1.0

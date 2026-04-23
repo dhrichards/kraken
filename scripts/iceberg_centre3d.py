@@ -85,7 +85,7 @@ model = kr.base.Simulation(msh, [u_bc, d_bc],
 
 
 # model.T = mf.temperature(msh,ρi/ρsw,-30,-2)
-model.params.L.value = L
+model.params.H.value = L
 model.params.l.value = l
 model.params.dt.value = 1*24*60*60
 model.params.ρi.value = ρi
