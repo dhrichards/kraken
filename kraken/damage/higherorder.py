@@ -101,10 +101,11 @@ class HigherOrder(Damage):
 
 
     def solve(self):
+        self.w_prev_it2.x.array[:] = self.w_prev_it.x.array[:]
+        self.w_prev_it.x.array[:] = self.w.x.array[:]
         self.solver.solve(None, self.w.x.petsc_vec)
         self.w.x.scatter_forward()
-        self.w_prev_it2.x.array[:] = np.copy(self.w_prev_it.x.array[:])
-        self.w_prev_it.x.array[:] = np.copy(self.w.x.array[:])
+        
         assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
 
     def revert(self):
