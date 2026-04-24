@@ -28,8 +28,10 @@ class HigherOrder(Damage):
 
         self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
         self.w_prev_it2 = fem.Function(self.W, name="mixed function 2 iterations previous")
+        self.w_prev_it3 = fem.Function(self.W, name="mixed function 3 iterations previous")
         self.d_prev_it, self.lap_prev_it = ufl.split(self.w_prev_it)
         self.d_prev_it2, self.lap_prev_it2 = ufl.split(self.w_prev_it2)
+        self.d_prev_it3, self.lap_prev_it3 = ufl.split(self.w_prev_it3)
 
         self.D, _ = self.W.sub(0).collapse()
 
@@ -91,6 +93,11 @@ class HigherOrder(Damage):
         self.w_prev_it2.sub(0).interpolate(parent.damage.w_prev_it2.sub(0), cells0=self.sim.parent_cells, cells1=self.sim.cells)
         self.w_prev_it2.sub(1).interpolate(parent.damage.w_prev_it2.sub(1), cells0=self.sim.parent_cells, cells1=self.sim.cells)
 
+        self.w_prev_it3.sub(0).interpolate(parent.damage.w_prev_it3.sub(0), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+        self.w_prev_it3.sub(1).interpolate(parent.damage.w_prev_it3.sub(1), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+
+        
+
         self.w_prev_time.sub(0).interpolate(parent.damage.w_prev_time.sub(0), cells0=self.sim.parent_cells, cells1=self.sim.cells)
         self.w_prev_time.sub(1).interpolate(parent.damage.w_prev_time.sub(1), cells0=self.sim.parent_cells, cells1=self.sim.cells)
 
@@ -101,6 +108,7 @@ class HigherOrder(Damage):
 
 
     def solve(self):
+        self.w_prev_it3.x.array[:] = self.w_prev_it2.x.array[:]
         self.w_prev_it2.x.array[:] = self.w_prev_it.x.array[:]
         self.w_prev_it.x.array[:] = self.w.x.array[:]
         self.solver.solve(None, self.w.x.petsc_vec)
