@@ -76,7 +76,7 @@ def top_boundary(x):
 def single_dof(x):
     return np.isclose(x[0], nondim_length/2)*np.isclose(x[1], 0.5)
 
-def crack(x,x_c,height=0.05):
+def crack(x,x_c,height=0.06):
     width = args.l/args.cellfactor / args.height*1
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
 
@@ -132,6 +132,7 @@ model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
 model.params.length.value = args.length
+# model.params.ge_tol.value = 1e-3
 
 model.params.σt_deg.value = args.strength_deg*1e3
 model.params.σt0.value = args.strength0*1e3
@@ -289,16 +290,18 @@ for i in range(1,args.nt):
 
    
     if i == i_start:
+
+        if args.type == "relaxation":
         # 
-        cells_subdomain = mesh.locate_entities(model.msh, model.msh.topology.dim, lambda x: x[0]<basal_crack_x_cs[-6])
+            cells_subdomain = mesh.locate_entities(model.msh, model.msh.topology.dim, lambda x: x[0]<basal_crack_x_cs[-6])
 
-        submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
+            submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
 
-        submodel = kr.base.Simulation(submesh,split="lo_p")
-        
-        submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
+            submodel = kr.base.Simulation(submesh,split="lo_p")
+            
+            submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
 
-        model = submodel
+            model = submodel
         # if MPI.COMM_WORLD.rank == 0:
         #     print(model.params.ucstar_float )
 
