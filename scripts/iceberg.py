@@ -319,7 +319,7 @@ for i in range(1,args.nt):
         model.write_checkpoint(path + "/" + filename +".bp", t)
     g = es.degradation_default(model.damage.d)
     kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
-                            model.msh, [model.momentum.du,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,
+                            model.msh, [model.momentum.du,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
                                     model.momentum.u_v, model.momentum.u_e,
                                     model.momentum.ψplus/model.params.ψcritstar,
                                     model.momentum.ε_e,
@@ -327,7 +327,7 @@ for i in range(1,args.nt):
                                     model.params.T,
                                     model.params.ψcrit,
                                     ],
-                                    ["u","d","dprev2","dprev",
+                                    ["u","d","dprev2","dprev","dprev3",
                                     "uv","ue",
                                     "psi_plus",
                                     "eps_e",
