@@ -37,11 +37,11 @@ parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
 args = parser.parse_args()
 
 
-filename = args.type + "_level" + str(args.level) + "height" + str(args.height) +"Kic" + str(args.Kic)\
-                     +"dt" + str(args.dt) + "sigmacdeg" + str(args.strength_deg)\
-                        + "sigmac0" + str(args.strength0) \
-                        + "l" + str(args.l) + "cellfactor" + str(args.cellfactor)\
-                            + "Ttop" + str(abs(args.Ttop)) + "Tbot" + str(abs(args.Tbot)) + \
+filename = args.type + "_level" + str(args.level) + "_height" + str(args.height) +"_Kic" + str(args.Kic)\
+                     +"_dt" + str(args.dt) + "_sigmacdeg" + str(args.strength_deg)\
+                        + "_sigmac0" + str(args.strength0) \
+                        + "_l" + str(args.l) + "_cellfactor" + str(args.cellfactor)\
+                            + "_Ttop" + str(abs(args.Ttop)) + "_Tbot" + str(abs(args.Tbot)) + \
                             "_length" + str(args.length) + "_" + args.suffix + "_"
 
 
