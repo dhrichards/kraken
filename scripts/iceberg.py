@@ -50,7 +50,7 @@ if MPI.COMM_WORLD.rank == 0:
     # print dolfinx version
     print("Dolfinx version: ", dolfinx.__version__)
     print("Level: ", args.level)
-    print("Regularization length scale (m): ", args.l)
+    print("Regularization length scale star: ", args.lstar)
     print("Time step (days): ", args.dt)
     print("Mesh cell size factor: ", args.cellfactor)
     print("Height (m): ", args.height)
@@ -77,11 +77,11 @@ def single_dof(x):
     return np.isclose(x[0], nondim_length/2)*np.isclose(x[1], 0.5)
 
 def crack(x,x_c,height=0.06):
-    width = args.l/args.cellfactor / args.height*1
+    width = args.lstar/args.cellfactor*1
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
 
 def basal_crack(x,x_c,height=0.5):
-    width = args.l/args.cellfactor / args.height*1
+    width = args.lstar/args.cellfactor*1
     return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<height)
 
 def fixed(x):
@@ -98,7 +98,7 @@ nondim_height = 1.0
 
 
 
-cell_size = args.l/(args.cellfactor*args.height)
+cell_size = args.lstar/args.cellfactor
 nx = int((nondim_length)/cell_size)
 if np.mod(nx,2) == 0:
     nx = nx + 1
