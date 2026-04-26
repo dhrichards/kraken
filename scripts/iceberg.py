@@ -96,7 +96,6 @@ os.makedirs(path, exist_ok=True)
 nondim_length = args.length/args.height
 nondim_height = 1.0
 
-aspect_ratio_x = int(300/args.l)
 
 
 cell_size = args.l/(args.cellfactor*args.height)
