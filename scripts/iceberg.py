@@ -14,7 +14,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks above sea level (m)")
-parser.add_argument("--l", type=float, default=4, help="Regularization length scale in meters")
+parser.add_argument("--lstar", type=float, default=0.06, help="Regularization length scale in meters")
 parser.add_argument("--dt", type=float, default=3, help="Time step in days")
 parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
 parser.add_argument("--height", type=float, default=300, help="Height of iceberg in meters")
@@ -40,7 +40,7 @@ args = parser.parse_args()
 filename = args.type + "_level" + str(args.level) + "_height" + str(args.height) +"_Kic" + str(args.Kic)\
                      +"_dt" + str(args.dt) + "_sigmacdeg" + str(args.strength_deg)\
                         + "_sigmac0" + str(args.strength0) \
-                        + "_l" + str(args.l) + "_cellfactor" + str(args.cellfactor)\
+                        + "_lstar" + str(args.lstar) + "_cellfactor" + str(args.cellfactor)\
                             + "_Ttop" + str(abs(args.Ttop)) + "_Tbot" + str(abs(args.Tbot)) + \
                             "_length" + str(args.length) + "_" + args.suffix + "_"
 
@@ -125,7 +125,7 @@ model.params.Ttop.value = args.Ttop
 model.params.Tbot.value = args.Tbot
 model.params.A0.value = mf.rate_factor_np(args.Ttop)
 model.params.H.value = args.height
-model.params.l.value = args.l
+model.params.l.value = args.lstar*args.height
 model.params.dt.value = args.dt*24*60*60
 model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
