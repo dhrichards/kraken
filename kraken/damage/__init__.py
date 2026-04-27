@@ -1,1 +1,1 @@
-from . import base, lowerorder, higherorder, withgamma
+from . import base, lowerorder, higherorder
