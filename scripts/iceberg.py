@@ -23,7 +23,7 @@ parser.add_argument("--suffix", type=str, default="", help="suffix for filename"
 parser.add_argument("--nt", type=int, default=200, help="number of timesteps")
 parser.add_argument("--Ttop", type=float, default=-20, help="Temperature in Celsius at top")
 parser.add_argument("--Tbot", type=float, default=-20, help="Temperature in Celsius at bottom")
-parser.add_argument("--length", type=float, default=16000, help="Length of iceberg in meters")
+parser.add_argument("--nondim_length", type=float, default=20, help="Length of iceberg")
 parser.add_argument("--tol", type=float, default=5e-6, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
 parser.add_argument("--max_its", type=int, default=400, help="Maximum number of solver iterations")
@@ -42,7 +42,7 @@ filename = args.type + "_level" + str(args.level) + "_height" + str(args.height)
                         + "_sigmac0" + str(args.strength0) \
                         + "_lstar" + str(args.lstar) + "_cellfactor" + str(args.cellfactor)\
                             + "_Ttop" + str(abs(args.Ttop)) + "_Tbot" + str(abs(args.Tbot)) + \
-                            "_length" + str(args.length) + "_" + args.suffix + "_"
+                            "_nondimlength" + str(args.nondim_length) + "_" + args.suffix + "_"
 
 
 
@@ -93,7 +93,7 @@ path = './outputs'
 os.makedirs(path, exist_ok=True)
 
 
-nondim_length = args.length/args.height
+nondim_length = args.nondim_length
 nondim_height = 1.0
 
 
@@ -130,7 +130,7 @@ model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
-model.params.length.value = args.length
+model.params.length.value = args.nondim_length * args.height
 # model.params.ge_tol.value = 1e-3
 
 model.params.σt_deg.value = args.strength_deg*1e3
