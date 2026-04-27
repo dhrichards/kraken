@@ -278,9 +278,11 @@ if args.type == "ssa":
 #                       bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
 #     model.momentum.update_bcs(u_bc)model.momentum.solve()
 
-
-# model.momentum.solve()
-# model.damage.solve()
+if args.no_cracks:
+    pass
+else:
+    model.momentum.solve()
+    model.damage.solve()
 
 
 
