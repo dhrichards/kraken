@@ -31,7 +31,7 @@ parser.add_argument("--sealevel", type=float, default=0.9, help="Non dimensional
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
 parser.add_argument("--strength0", type=float, default=200, help="Tensile strength at 0C")
 parser.add_argument("--strength_deg", type=float, default=20, help="Tensile strength degradation per degree C")
-parser.add_argument("--cracks", type=bool, default=True, help="Include cracks")
+parser.add_argument("--no-cracks", type=bool, default=False, help="Don't include initial cracks")
 parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
 
 args = parser.parse_args()
@@ -236,11 +236,11 @@ def basal_cracks(x):
 
 cracks = lambda x: surface_cracks(x) + basal_cracks(x)
 
-if args.cracks and args.type != "ssa":
-    d_bc = lambda V: [bc.internal_bc(V, cracks, 1.0)]
-else:
+if args.no_cracks or args.type == "ssa":
     d_bc = lambda V: []
-    
+else:
+    d_bc = lambda V: [bc.internal_bc(V, cracks, 1.0)]
+
 
 
 model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
