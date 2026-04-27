@@ -243,7 +243,7 @@ class Simulation:
                 error_prev = error_L2
                 L2_old = L2
             
-            return -1
+            return 2
    
 
 
