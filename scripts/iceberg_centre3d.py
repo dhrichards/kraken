@@ -81,7 +81,7 @@ u_bc = lambda V: [
 
 model = kr.base.Simulation(msh, [u_bc, d_bc],
                            kr.momentum.elastic.ElasticEnergySplit,
-                           kr.damage.higherorder.HigherOrder, split="lo_3d")
+                           kr.damage.higherorder.AT2, split="lo_3d")
 
 
 # model.T = mf.temperature(msh,ρi/ρsw,-30,-2)

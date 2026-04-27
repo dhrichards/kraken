@@ -115,7 +115,7 @@ elif args.type == "energy":
 
 model = kr.base.Simulation(msh, 
                            elast,
-                           kr.damage.higherorder.HigherOrder,
+                           kr.damage.higherorder.AT2,
                             [u_bc, bc_d])
 
 model.params.H.value = L

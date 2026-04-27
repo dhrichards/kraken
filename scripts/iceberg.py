@@ -244,7 +244,7 @@ else:
 
 
 model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
-                           kr.damage.higherorder.HigherOrder, [u_bc, d_bc])
+                           kr.damage.higherorder.AT2, [u_bc, d_bc])
 
 
 if MPI.COMM_WORLD.rank == 0:

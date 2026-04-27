@@ -26,7 +26,7 @@ class Simulation:
 
 
     def setup(self,MomentumSolver=momentum.mixed.SemiLagrangianEpsilon,
-                    DamageSolver=damage.higherorder.HigherOrder,
+                    DamageSolver=damage.higherorder.AT2,
                     bc_funcs=[lambda V: [], lambda V: []]):
 
 
@@ -85,7 +85,7 @@ class Simulation:
 
 
         self.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
-                                kr.damage.higherorder.HigherOrder, bcs)
+                                kr.damage.higherorder.AT2, bcs)
         # msh_cell_imap = self.msh.topology.index_map(self.msh.topology.dim)
         # self.cells = np.arange(msh_cell_imap.size_local + msh_cell_imap.num_ghosts)
         # self.parent_cells = entity_map.sub_topology_to_topology(self.cells, inverse=False)
