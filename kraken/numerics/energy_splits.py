@@ -159,32 +159,6 @@ def stress_plus_lo(ε,ν):
              ufl.conditional(ufl.gt((1-ν)*λ[2] + ν*(λ[0]+λ[1]),0),stress3,
                              ufl.zero(ufl.shape(ε)))))
 
-def stress_plus_lo_p_cond(ε,ν,p):
-    E = Eoverμ(ν)
-    λ,M = eigenstate(ε)
-    λ_mid = (ε[0,0] + ε[1,1])/2
-    λ = [λ[0], λ_mid, λ[1]]
-    M = [M[0], 0, M[1]]
-
-    λ_mod = p/3/Koverμ(ν)
-
-    λ_cond = [λ[0] + λ_mod,λ[1]+λ_mod,λ[2]+λ_mod]
-
-    #M_mid is 0 in 2D
-
-    stress1 = cauchy_stress(ε,ν)
-    stress2 = cauchy_stress(ε,ν) - E*λ[0]*M[0]
-
-    # psi3 = (1+ν)*((1-ν)*λ[2]+ν*λ[1] +ν*λ[0])**2/((1-2*ν)*(1-ν**2))
-
-    stress3 = 2*(1+ν)/((1-2*ν)*(1-ν**2))*((1-ν)*λ[2]+ν*λ[1] +ν*λ[0])*(
-        (1-ν)*M[2] + ν*M[0])
-
-    return ufl.conditional(ufl.gt(λ_cond[0],0),stress1,
-            ufl.conditional(ufl.gt(λ_cond[1] + ν*λ_cond[0],0),stress2,
-             ufl.conditional(ufl.gt((1-ν)*λ_cond[2] + ν*(λ_cond[0]+λ_cond[1]),0),stress3,
-                             ufl.zero(ufl.shape(ε)))))
-
 
 def stress_plus_lo_3d(ε,ν):
     E = 2*(1+ν)
@@ -211,17 +185,6 @@ def stress_plus_lo_3d(ε,ν):
 
 
 
-def clayton_driving_function(σ, σ_crit,pw=0.0):
-    λ,_ = eigenstate(σ)
-    Dd = 0.0
-    for σa in λ:
-        Dd += (positive_part(σa+pw)/σ_crit)**2 - 1.0
-
-    return positive_part(Dd)
-
-
-
-
 def degradation_default(d,k=1e-5):
     return (1-k)*(1-d)**2 + k
 
@@ -237,7 +200,6 @@ def degradation_Lo2023(d,q=1.0,k=1e-5):
 
 def crack_density_function(d,l,w=lambda d: d**2,cw=2):
     return  (w(d)/l + l * ufl.inner(ufl.grad(d), ufl.grad(d)))/cw
-
 
 
 def history_function(ψplus,Hprev,ψcrit):
