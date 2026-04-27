@@ -112,7 +112,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 
 
 
-model = kr.base.Simulation(msh,split="lo_p")
+model = kr.base.Simulation(msh)
 
 model.tol = args.tol
 model.min_its = args.min_its
@@ -298,7 +298,7 @@ for i in range(1,args.nt):
 
                 submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
 
-                submodel = kr.base.Simulation(submesh,split="lo_p")
+                submodel = kr.base.Simulation(submesh)
                 
                 submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
 

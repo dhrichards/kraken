@@ -1,4 +1,4 @@
-from kraken import parameters, utilities, temperature, mass, momentum, damage
+from kraken import parameters, utilities, momentum, damage
 from kraken.numerics import energy_splits as es
 from kraken.numerics import maths_functions as mf
 from dolfinx import fem, mesh
@@ -8,7 +8,7 @@ import numpy as np
 import adios4dolfinx
 import kraken as kr
 class Simulation:
-    def __init__(self, msh,split="lo_p"):
+    def __init__(self, msh):
         self.msh = msh
         self.params = parameters.Params_with_uc(self.msh)
         
@@ -37,13 +37,6 @@ class Simulation:
         self.momentum.setup()
         self.damage.setup()
         
-        if self.temperature_on:
-            self.temperature = temperature.Temperature(self)
-            self.temperature.setup()
-        if self.mass_on:
-            self.mass = mass.Mass(self)
-            self.mass.setup()
-
 
     def interpolate_from_parent(self, parent, parent_cells, bcs):
 
@@ -106,11 +99,6 @@ class Simulation:
 
 
     def timestep(self):
-        if self.temperature_on:
-            self.temperature.timestep()
-        if self.mass_on:
-            self.mass.solve()
-            self.mass.timestep()
         if self.damage_on:
             self.damage.timestep()
         self.momentum.timestep()
