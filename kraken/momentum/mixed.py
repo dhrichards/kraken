@@ -9,7 +9,6 @@ import numpy as np
 from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
-from kraken.numerics import projection_tensors as pt
 from kraken.numerics import solvers
 from petsc4py import PETSc
 from kraken.numerics.invariants import matrix_function
