@@ -68,58 +68,6 @@ def eigenstate3_legacy(A):
     #
     return [λ0, λ1, λ2], [E0, E1, E2]
 
-
-def eigenstate3_split(trA, devA_2D):
-    """Eigenvalues and eigenprojectors of the 3x3 (real-valued) tensor A.
-    Provides the spectral decomposition A = sum_{a=0}^{2} λ_a * E_a
-    with eigenvalues λ_a and their associated eigenprojectors E_a = n_a^R x n_a^L
-    ordered by magnitude.
-    The eigenprojectors of eigenvalues with multiplicity n are returned as 1/n-fold projector.
-
-    Note: Tensor A must not have complex eigenvalues!
-    """
-    
-    eps = 1.0e-10
-    #
-    
-    #
-    # --- determine eigenvalues λ0, λ1, λ2
-    #
-    # additively decompose: A = tr(A) / 3 * I + dev(A) = q * I + B
-    q = trA / 3
-    B = ufl.as_matrix([[devA_2D[0,0], devA_2D[0,1], 0],
-                       [devA_2D[1,0], devA_2D[1,1], 0],
-                       [0,            0,           -devA_2D[0,0]-devA_2D[1,1]]])
-    
-    A = B + q * ufl.Identity(3)
-    A = ufl.variable(A)
-    # observe: det(λI - A) = 0  with shift  λ = q + ω --> det(ωI - B) = 0 = ω**3 - j * ω - b
-    j = ufl.tr(B * B) / 2  # == -I2(B) for trace-free B, j < 0 indicates A has complex eigenvalues
-    b = ufl.tr(B * B * B) / 3  # == I3(B) for trace-free B
-    # solve: 0 = ω**3 - j * ω - b  by substitution  ω = p * cos(phi)
-    #        0 = p**3 * cos**3(phi) - j * p * cos(phi) - b  | * 4 / p**3
-    #        0 = 4 * cos**3(phi) - 3 * cos(phi) - 4 * b / p**3  | --> p := sqrt(j * 4 / 3)
-    #        0 = cos(3 * phi) - 4 * b / p**3
-    #        0 = cos(3 * phi) - r                  with  -1 <= r <= +1
-    #    phi_k = [acos(r) + (k + 1) * 2 * pi] / 3  for  k = 0, 1, 2
-    p = 2 / ufl.sqrt(3) * ufl.sqrt(j + eps**2)  # eps: MMM
-    r = 4 * b / p**3
-    r = ufl.max_value(ufl.min_value(r, +1 - eps), -1 + eps)  # eps: LMM, MMH
-    phi = ufl.acos(r) / 3
-    # sorted eigenvalues: λ0 <= λ1 <= λ2
-    λ0 = q + p * ufl.cos(phi + 2 / 3 * ufl.pi)  # low
-    λ1 = q + p * ufl.cos(phi + 4 / 3 * ufl.pi)  # middle
-    λ2 = q + p * ufl.cos(phi)  # high
-    #
-    # --- determine eigenprojectors E0, E1, E2
-    #
-    E0 = ufl.diff(λ0, A).T
-    E1 = ufl.diff(λ1, A).T
-    E2 = ufl.diff(λ2, A).T
-    #
-    return [λ0, λ1, λ2], [E0, E1, E2]
-
-
 def eigenstate3(A):
     """Eigenvalues and eigenprojectors of the 3x3 (real-valued) tensor A.
     Provides the spectral decomposition A = sum_{a=0}^{2} λ_a * E_a
@@ -397,20 +345,6 @@ def eigenstate2(A):
     return λ, E
 
 
-def eignestate(trA, devA):
-    # eigenstate assuming devA is 2d and traceless
-
-    A2 = ufl.as_matrix([[A[0, 0], A[0, 1]],
-                          [A[1, 0], A[1, 1]]])
-    λ,E = eigenstate2(A2)
-    λ3 = A[2,2]
-    E3 = ufl.as_matrix([[0,0,0],
-                         [0,0,0],
-                         [0,0,1]])
-
-
-
-
 
 
 def eigenstate(A):
@@ -454,21 +388,3 @@ def matrix_function(A, fn=lambda A: A):
 
     return fn_A
 
-
-def eigenvals_deviatoric(AD,trA):
-    """Eigenvalues of A, AD is 2x2, symettric and traceless, but trA of the 3x3 matrix is not zero
-    """
-    eps = 3.0e-16  # slightly above 2**-(53 - 1), see https://en.wikipedia.org/wiki/IEEE_754
-    #
-    #
-    #
-    #     {trε/3 - sqrt(εD_xx**2 + εD_xy*εD_yx): 1,
-    #  trε/3 + sqrt(εD_xx**2 + εD_xy*εD_yx): 1,
-    #  trε/3: 1}
-        
-    Δ = AD[0, 0]**2 + AD[0, 1] * AD[1, 0]  
-    Δ += eps**2
-    # sorted eigenvalues:
-    λ = (trA/3 - ufl.sqrt(Δ)), trA/3, (trA/3 + ufl.sqrt(Δ))
-
-    return λ
