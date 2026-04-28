@@ -285,6 +285,9 @@ if args.type == "chop":
     submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
 
     model = submodel
+    model.tol = args.tol
+    model.min_its = args.min_its
+    model.max_its = args.max_its
 
 
 model.damage_on = True
