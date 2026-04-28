@@ -1,7 +1,7 @@
 import ufl
 from math import sqrt
 from .invariants import eigenstate, matrix_function
-from .maths_functions import dev3, largest_eigenvalue, positive_part, negative_part, tensor_2d_to_3d
+from .maths_functions import dev3, largest_eigenvalue, positive_part, negative_part
 
 def λoverμ(ν):
     return 2*ν/(1-2*ν)
@@ -201,6 +201,3 @@ def degradation_Lo2023(d,q=1.0,k=1e-5):
 def crack_density_function(d,l,w=lambda d: d**2,cw=2):
     return  (w(d)/l + l * ufl.inner(ufl.grad(d), ufl.grad(d)))/cw
 
-
-def history_function(ψplus,Hprev,ψcrit):
-    return ufl.max_value(ψplus - ψcrit,Hprev)
