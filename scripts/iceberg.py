@@ -31,7 +31,7 @@ parser.add_argument("--sealevel", type=float, default=0.9, help="Non dimensional
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
 parser.add_argument("--strength0", type=float, default=200, help="Tensile strength at 0C")
 parser.add_argument("--strength_deg", type=float, default=20, help="Tensile strength degradation per degree C")
-parser.add_argument("--no-cracks", type=bool, default=False, help="Don't include initial cracks")
+parser.add_argument("--cracks", type=int, default=3, help="Cracks: 0 for no cracks, 1 for surface cracks, 2 for basal cracks, 3 for both")
 parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
 
 args = parser.parse_args()
@@ -46,14 +46,7 @@ filename = args.type + "_level" + str(args.level) + "_height" + str(args.height)
 
 
 
-if MPI.COMM_WORLD.rank == 0:
-    # print dolfinx version
-    print("Dolfinx version: ", dolfinx.__version__)
-    print("Level: ", args.level)
-    print("Regularization length scale star: ", args.lstar)
-    print("Time step (days): ", args.dt)
-    print("Mesh cell size factor: ", args.cellfactor)
-    print("Height (m): ", args.height)
+
 
 def left_boundary(x):
     return np.isclose(x[0], 0)
@@ -135,21 +128,6 @@ model.params.length.value = args.nondim_length * args.height
 
 model.params.σt_deg.value = args.strength_deg*1e3
 model.params.σt0.value = args.strength0*1e3
-
-
-
-# model.params.set_Gc_from_Kic()
-# model.params.set_psicrit_from_σc()
-
-
-if MPI.COMM_WORLD.rank == 0:
-    print(model.params.ucstar_float )
-
-
-
-# if args.type == "ssa":
-#     d_bc = lambda V: [bc.internal_bc(V, lambda x: (x[0]<=0.09) + (x[0]>=nondim_length-0.09), 0.0)]
-
 
 
 if args.type == "cliff_frozen":
@@ -234,9 +212,14 @@ def basal_cracks(x):
         val += basal_crack(x,x_c,height=0.4)
     return val
 
-cracks = lambda x: surface_cracks(x) + basal_cracks(x)
+if args.cracks == 0:
+    cracks = surface_cracks
+elif args.cracks == 2:
+    cracks = basal_cracks
+elif args.cracks == 3:
+    cracks = lambda x: surface_cracks(x) + basal_cracks(x)
 
-if args.no_cracks or args.type == "ssa":
+if args.cracks == 0 or args.type == "ssa":
     d_bc = lambda V: []
 else:
     d_bc = lambda V: [bc.internal_bc(V, cracks, 1.0)]
@@ -247,16 +230,28 @@ model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
                            kr.damage.higherorder.AT2, [u_bc, d_bc])
 
 
-if MPI.COMM_WORLD.rank == 0:
-    print(path + "/" + filename)
+
 
 model.damage_on = False
+
+
+if args.cracks > 0:
+    model.momentum.solve()
+    model.damage.solve()
+
+
 if args.type == ("relaxation" or "chop"):
-    i_start = 10
     model.params.dt.value = 25*24*60*60
-else:
-    i_start = 1
-    
+    for i in range(10):
+        if MPI.COMM_WORLD.rank == 0:
+            print("Relaxation iteration: ", i)
+        flag = model.fixed_point(save=True)
+        if flag == -1:
+            break
+        model.timestep()
+
+    model.params.dt.value = args.dt*24*60*60
+
 
 
 t = 0.0
@@ -278,42 +273,28 @@ if args.type == "ssa":
 #                       bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
 #     model.momentum.update_bcs(u_bc)model.momentum.solve()
 
-if args.no_cracks:
-    pass
-else:
-    model.momentum.solve()
-    model.damage.solve()
+
+if args.type == "chop":
+
+    cells_subdomain = mesh.locate_entities(model.msh, model.msh.topology.dim, lambda x: x[0]<basal_crack_x_cs[-6])
+
+    submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
+
+    submodel = kr.base.Simulation(submesh)
+    
+    submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
+
+    model = submodel
 
 
-
+model.damage_on = True
+# model.momentum.solve()
+# model.damage.w.sub(0).interpolate(surface_cracks)
 for i in range(1,args.nt):
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
 
-   
-    if i == i_start:
-
-        if args.type == "chop":
-        
-                cells_subdomain = mesh.locate_entities(model.msh, model.msh.topology.dim, lambda x: x[0]<basal_crack_x_cs[-6])
-
-                submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
-
-                submodel = kr.base.Simulation(submesh)
-                
-                submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
-
-                model = submodel
-        # if MPI.COMM_WORLD.rank == 0:
-        #     print(model.params.ucstar_float )
-
-        # model.momentum.solve()
-        # model.damage.w.sub(0).interpolate(cracks)
-        model.params.dt.value = args.dt*24*60*60
-        model.damage_on = True
-
-        
 
     flag = model.fixed_point(save=True)
 
@@ -347,8 +328,16 @@ for i in range(1,args.nt):
 
     
     model.timestep()
-    
 
-    
+
+
+if MPI.COMM_WORLD.rank == 0:
+    print("Level: ", args.level)
+    print("Regularization length scale star: ", args.lstar)
+    print("Time step (days): ", args.dt)
+    print("Mesh cell size factor: ", args.cellfactor)
+    print("Height (m): ", args.height)
+    print("ucstar: ", model.params.ucstar_float )
+    print(path + "/" + filename)
 
    
