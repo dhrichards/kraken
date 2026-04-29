@@ -166,7 +166,7 @@ elif args.type == "ssa":
                         # bc.get_bc_func(V.sub(0).sub(1),right_boundary, lambda x: -dudx*x[1]),
                         # bc.get_bc(V.sub(0).sub(1), bottom_boundary, 0.0),
                         ]
-elif args.type == "icebergsymm" or args.type == "relaxation":
+elif args.type == "icebergsymm" or args.type == "relaxationsymm":
       u_bc = lambda V: [
                             # bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
                     #   bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
@@ -212,6 +212,7 @@ def basal_cracks(x):
         val += basal_crack(x,x_c,height=0.4)
     return val
 
+
 if args.cracks == 0:
     cracks = surface_cracks
 elif args.cracks == 2:
@@ -240,7 +241,7 @@ if args.cracks > 0:
     model.damage.solve()
 
 
-if args.type == ("relaxation" or "chop"):
+if args.type == "relaxation" or args.type == "relaxationsymm" or args.type == "chop":
     model.params.dt.value = 25*24*60*60
     for i in range(10):
         if MPI.COMM_WORLD.rank == 0:
@@ -258,6 +259,8 @@ t = 0.0
 if args.save_bp:
     model.write_checkpoint(path + "/" + filename +".bp", t)
 
+
+
 if args.type == "ssa":
     model.momentum.solve()
     model.damage.w.sub(0).interpolate(cracks)
@@ -272,6 +275,8 @@ if args.type == "ssa":
 #                       bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),m
 #                       bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
 #     model.momentum.update_bcs(u_bc)model.momentum.solve()
+
+
 
 
 if args.type == "chop":
@@ -289,10 +294,14 @@ if args.type == "chop":
     model.min_its = args.min_its
     model.max_its = args.max_its
 
+if MPI.COMM_WORLD.rank == 0:
+    print(path + "/" + filename)
+
+
 
 model.damage_on = True
 # model.momentum.solve()
-# model.damage.w.sub(0).interpolate(surface_cracks)
+# model.damage.w.sub(0).interpolate(many_surface_cracks)
 for i in range(1,args.nt):
 
     if MPI.COMM_WORLD.rank == 0:
@@ -309,7 +318,7 @@ for i in range(1,args.nt):
                             model.msh, [model.momentum.du,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
                                     model.momentum.u_v, model.momentum.u_e,
                                     model.momentum.ψplus/model.params.ψcritstar,
-                                    ψpold/model.params.ψcritstar,
+                                    (model.momentum.ψplus-ψpold)/model.params.ψcritstar,
                                     model.momentum.ε_e,
                                     model.params.Gc,
                                     model.params.T,
@@ -318,7 +327,7 @@ for i in range(1,args.nt):
                                     ["u","d","dprev2","dprev","dprev3",
                                     "uv","ue",
                                     "psi_plus",
-                                    "psi_plus_old",
+                                    "psi_plus_delta",
                                     "eps_e",
                                     "Gc",
                                     "T",
@@ -331,6 +340,7 @@ for i in range(1,args.nt):
 
     
     model.timestep()
+    # model.momentum.timestep()
 
 
 

@@ -209,7 +209,7 @@ class Simulation:
                 if save:
                     utilities.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, [self.momentum.u,self.damage.d,
-                                           self.momentum.ψplus,
+                                           self.momentum.ψplus/self.params.ψcritstar,
                                         # self.momentum.u_e, self.momentum.u_v
                                         ],
                                         ["u","d",

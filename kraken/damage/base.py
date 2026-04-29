@@ -41,8 +41,7 @@ class Damage:
 
 
     def setup_history(self):
-        self.H_func = es.history_function(self.sim.momentum.ψplus, self.Hprev,
-                                self.sim.params.ψcritstar)
+        self.H_func = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
         h = ufl.TrialFunction(self.H_space)
         v = ufl.TestFunction(self.H_space)
 
@@ -59,8 +58,7 @@ class Damage:
 
     
     def timestep(self):
-        self.H_func = es.history_function(self.sim.momentum.ψplus, self.Hprev,
-                                self.sim.params.ψcritstar)
+        self.H_func = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
         self.Hprev.interpolate(fem.Expression(self.H_func, self.H_space.element.interpolation_points()))
 
     def write_checkpoint(self, filename, t=0):
