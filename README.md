@@ -1,4 +1,4 @@
-# kraken3
+# kraken
 Phase field visco-elastic solver in Fenicsx
 
 
