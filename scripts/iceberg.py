@@ -86,6 +86,8 @@ path = './outputs'
 os.makedirs(path, exist_ok=True)
 
 
+
+
 nondim_length = args.nondim_length
 nondim_height = 1.0
 
@@ -104,7 +106,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
                         cell_type=mesh.CellType.triangle)
 
 
-
+msh = kr.meshes.create_refined_mesh(args.nondim_length, cell_size, (100,1), cell_factor=args.cellfactor)
 model = kr.base.Simulation(msh)
 
 model.tol = args.tol
@@ -128,6 +130,16 @@ model.params.length.value = args.nondim_length * args.height
 
 model.params.σt_deg.value = args.strength_deg*1e3
 model.params.σt0.value = args.strength0*1e3
+
+
+if MPI.COMM_WORLD.rank == 0:
+    print("Level: ", args.level)
+    print("Regularization length scale star: ", args.lstar)
+    print("Time step (days): ", args.dt)
+    print("Mesh cell size factor: ", args.cellfactor)
+    print("Height (m): ", args.height)
+    print("ucstar: ", model.params.ucstar_float )
+    print(path + "/" + filename)
 
 
 if args.type == "cliff_frozen":
@@ -191,29 +203,29 @@ else:
 
 
 
-
-basal_crack_spacing = 0.8
-n_cracks = int((nondim_length-basal_crack_spacing)//basal_crack_spacing)
-crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks*4 -3)
-# crack_x_cs += cell_size/2
-def surface_cracks(x):
-    val = np.zeros(x.shape[1],dtype=bool)
-    for x_c in crack_x_cs:
-        val += crack(x,x_c)
-    return val
-
-
-
-basal_crack_x_cs = np.linspace(basal_crack_spacing/2,nondim_length-basal_crack_spacing/2, n_cracks)
-# basal_crack_x_cs += cell_size/2
-def basal_cracks(x):
-    val = np.zeros(x.shape[1],dtype=bool)
-    for x_c in basal_crack_x_cs:
-        val += basal_crack(x,x_c,height=0.4)
-    return val
+if args.cracks > 0:
+    basal_crack_spacing = 0.8
+    n_cracks = int((nondim_length-basal_crack_spacing)//basal_crack_spacing)
+    crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks*4 -3)
+    # crack_x_cs += cell_size/2
+    def surface_cracks(x):
+        val = np.zeros(x.shape[1],dtype=bool)
+        for x_c in crack_x_cs:
+            val += crack(x,x_c)
+        return val
 
 
-if args.cracks == 0:
+
+    basal_crack_x_cs = np.linspace(basal_crack_spacing/2,nondim_length-basal_crack_spacing/2, n_cracks)
+    # basal_crack_x_cs += cell_size/2
+    def basal_cracks(x):
+        val = np.zeros(x.shape[1],dtype=bool)
+        for x_c in basal_crack_x_cs:
+            val += basal_crack(x,x_c,height=0.4)
+        return val
+
+
+if args.cracks == 1:
     cracks = surface_cracks
 elif args.cracks == 2:
     cracks = basal_cracks
@@ -261,9 +273,9 @@ if args.save_bp:
 
 
 
-if args.type == "ssa":
-    model.momentum.solve()
-    model.damage.w.sub(0).interpolate(cracks)
+# if args.type == "ssa":
+#     model.momentum.solve()
+#     model.damage.w.sub(0).interpolate(cracks)
     
 #     # model.momentum.solve()
 #     model.damage_on = True
@@ -294,8 +306,6 @@ if args.type == "chop":
     model.min_its = args.min_its
     model.max_its = args.max_its
 
-if MPI.COMM_WORLD.rank == 0:
-    print(path + "/" + filename)
 
 
 
@@ -345,12 +355,7 @@ for i in range(1,args.nt):
 
 
 if MPI.COMM_WORLD.rank == 0:
-    print("Level: ", args.level)
-    print("Regularization length scale star: ", args.lstar)
-    print("Time step (days): ", args.dt)
-    print("Mesh cell size factor: ", args.cellfactor)
-    print("Height (m): ", args.height)
-    print("ucstar: ", model.params.ucstar_float )
     print(path + "/" + filename)
+
 
    

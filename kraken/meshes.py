@@ -7,19 +7,17 @@ import numpy as np
 
 
 
-def create_refined_mesh(nondim_length, nondim_height, 
-                        lstar,
+def create_refined_mesh(nondim_length, cell_size, 
                         aspect_ratios=(100,100), refine = (2.2,0.3),
-                        cell_factor=2.1, refine_right=True, cell_type = mesh.CellType.triangle):
+                        refine_right=True, cell_type = mesh.CellType.triangle):
     
    
 
-    cell_size = lstar/cell_factor
 
     aspect_ratio_x = aspect_ratios[0]
     aspect_ratio_z = aspect_ratios[1]
 
-
+    nondim_height = 1.0
 
     x_change = nondim_length/2 - refine[0]
     z_change = nondim_height - refine[1]
