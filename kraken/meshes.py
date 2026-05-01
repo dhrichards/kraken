@@ -19,13 +19,13 @@ def create_refined_mesh(nondim_length, cell_size,
 
     nondim_height = 1.0
 
-    x_change = nondim_length/2 - refine[0]
+    x_change = nondim_length - refine[0]
     z_change = nondim_height - refine[1]
 
     if refine_right:
-        new_length = x_change/aspect_ratio_x + (nondim_length/2 - x_change)
+        new_length = x_change/aspect_ratio_x + (nondim_length - x_change)
     else:
-        new_length = x_change + (nondim_length/2 - x_change)/aspect_ratio_x
+        new_length = x_change + (nondim_length - x_change)/aspect_ratio_x
 
     new_height = z_change/aspect_ratio_z + (nondim_height - z_change)
 
