@@ -106,7 +106,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
                         cell_type=mesh.CellType.triangle)
 
 
-msh = kr.meshes.create_refined_mesh(args.nondim_length, cell_size, (10,1))
+msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, cell_size)
 model = kr.base.Simulation(msh)
 
 model.tol = args.tol

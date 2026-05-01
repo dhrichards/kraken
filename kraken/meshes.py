@@ -376,7 +376,7 @@ def with_foot(small_size,L=8e3/300,foot_length=0.5,foot_height=0.5):
 
     
 
-def fenicsx_refined_mesh(small_size,L=8e3/300,
+def fenicsx_refined_mesh(L,small_size,
                         full_thickness_fine_length=0.2, 
                                         top_fine_length=2.0, 
                                         htop=0.125,
