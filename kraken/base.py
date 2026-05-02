@@ -229,8 +229,12 @@ class Simulation:
                     print(f"iteration {i}, error {error_L2}, L2 {L2}, mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")
 
                 errors.append(error_L2)
+                
 
                 if self.momentum.solver.getConvergedReason() == -3: 
+                    return -1
+                
+                if error_L2/error_prev > 100 and L2 < L2_old: # so big change and total damage is decreaing
                     return -1
 
                 i += 1
