@@ -226,7 +226,7 @@ class Simulation:
 
                 error_L2 = np.abs(L2 - L2_old)/area
                 if MPI.COMM_WORLD.rank == 0:
-                    print(f"iteration {i}, error {error_L2}, mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")
+                    print(f"iteration {i}, error {error_L2}, L2 {L2}, mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")
 
                 errors.append(error_L2)
 
