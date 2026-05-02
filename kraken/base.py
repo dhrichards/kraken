@@ -234,7 +234,7 @@ class Simulation:
                 if self.momentum.solver.getConvergedReason() == -3: 
                     return -1
                 
-                if error_L2/error_prev > 100 and L2 < L2_old: # so big change and total damage is decreaing
+                if error_L2/error_prev > 30 and L2 < L2_old: # so big change and total damage is decreaing
                     return -1
 
                 i += 1
