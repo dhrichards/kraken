@@ -381,7 +381,7 @@ def fenicsx_refined_mesh(L,small_size,
                                         top_fine_length=2.0, 
                                         htop=0.125,
                         large_size=0.32,
-                        cell_type = mesh.CellType.triangle):
+                        cell_type = mesh.CellType.triangle, htop2 = 0.125):
     
     
     H=1
@@ -412,9 +412,43 @@ def fenicsx_refined_mesh(L,small_size,
             msh.topology, should_refine, msh.topology.dim, 1)
         msh, _, _ = mesh.refine(msh, local_edges)
 
+    
+    def cell_criterion2(x):
+        return (x[0] > L-full_thickness_fine_length)*(x[1]<1-htop2)
+    
+    for i in range(1):
+        cells_local = np.arange(msh.topology.index_map(
+                msh.topology.dim).size_local, dtype=np.int32)
+        midpoints = mesh.compute_midpoints(
+            msh, msh.topology.dim, cells_local).T
+        
+        should_refine = np.flatnonzero(cell_criterion2(midpoints)).astype(np.int32)
+        msh.topology.create_entities(1)
+        local_edges = mesh.compute_incident_entities(
+            msh.topology, should_refine, msh.topology.dim, 1)
+        msh, _, _ = mesh.refine(msh, local_edges)
+
 
 
     return msh
 
     
 
+def refine_by_area(msh, small_size, large_size, cell_criterion):
+    n_div = int(np.log2(large_size/small_size))
+
+    for i in range(n_div):
+        # Compute midpoints for all cells on process
+        cells_local = np.arange(msh.topology.index_map(
+            msh.topology.dim).size_local, dtype=np.int32)
+        midpoints = mesh.compute_midpoints(
+            msh, msh.topology.dim, cells_local).T
+
+        # Check midpoint criterion and find edges connected to cells
+        should_refine = np.flatnonzero(cell_criterion(midpoints)).astype(np.int32)
+        msh.topology.create_entities(1)
+        local_edges = mesh.compute_incident_entities(
+            msh.topology, should_refine, msh.topology.dim, 1)
+        msh, _, _ = mesh.refine(msh, local_edges)
+
+    return msh
