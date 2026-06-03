@@ -18,7 +18,7 @@ parser.add_argument("--lstar", type=float, default=0.06, help="Regularization le
 parser.add_argument("--dt", type=float, default=3, help="Time step in days")
 parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
 parser.add_argument("--height", type=float, default=300, help="Height of iceberg in meters")
-parser.add_argument("--type", type=str, default="relaxation", help="gravity loop initilisation or relaxation first")
+parser.add_argument("--type", type=str, default="iceberg", help="iceberg, icebergsymm, chop, ssa, cliff_frozen, cliff_sliding, cliff_stickslip")
 parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
 parser.add_argument("--nt", type=int, default=200, help="number of timesteps")
 parser.add_argument("--Ttop", type=float, default=-20, help="Temperature in Celsius at top")
@@ -33,16 +33,22 @@ parser.add_argument("--strength0", type=float, default=200, help="Tensile streng
 parser.add_argument("--strength_deg", type=float, default=20, help="Tensile strength degradation per degree C")
 parser.add_argument("--cracks", type=int, default=3, help="Cracks: 0 for no cracks, 1 for surface cracks, 2 for basal cracks, 3 for both")
 parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
+parser.add_argument("--relax_time", type=float, default=0, help="Total relaxation time days")
+parser.add_argument("--lfactor", type=float, default=1.0, help="Multiply l by in lower part of domain")
+parser.add_argument("--smoothc", type=float, default=0.0, help="Smoothing constant for mesh movement")
 
 args = parser.parse_args()
 
 
-filename = args.type + "_level" + str(args.level) + "_height" + str(args.height) +"_Kic" + str(args.Kic)\
-                     +"_dt" + str(args.dt) + "_sigmacdeg" + str(args.strength_deg)\
-                        + "_sigmac0" + str(args.strength0) \
-                        + "_lstar" + str(args.lstar) + "_cellfactor" + str(args.cellfactor)\
-                            + "_Ttop" + str(abs(args.Ttop)) + "_Tbot" + str(abs(args.Tbot)) + \
-                            "_nondimlength" + str(args.nondim_length) + "_" + args.suffix + "_"
+filename = args.type + "_L" + str(args.nondim_length) + "_H" + str(args.height) \
+                        + "_l" + str(args.lstar) \
+                        +"_dt" + str(args.dt) + "_relaxt" + str(args.relax_time) \
+                        + "_sigmacdeg" + str(args.strength_deg)+ "_sigmac0" + str(args.strength0) \
+                    + "_level" + str(args.level) + "_Kic" + str(args.Kic)\
+                    + "_cellfactor" + str(args.cellfactor)\
+                            + "_Ttop" + str(abs(args.Ttop)) + "_Tbot" + str(abs(args.Tbot)) \
+                            + "_lfactor" + str(args.lfactor) + "_smoothc" + str(args.smoothc) \
+                            + "_" + args.suffix + "_"
 
 
 
@@ -92,7 +98,7 @@ nondim_length = args.nondim_length
 nondim_height = 1.0
 
 
-
+# cell_size = 0.2 # large size
 cell_size = args.lstar/args.cellfactor
 nx = int((nondim_length)/cell_size)
 if np.mod(nx,2) == 0:
@@ -106,7 +112,19 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
                         cell_type=mesh.CellType.triangle)
 
 
-msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, cell_size, 0.4)
+# def cell_criterion(x):
+#         return (x[0] > nondim_length-0.3)\
+#             |((x[1]>(1-0.125))*(x[0]>(nondim_length-2.5)))
+
+
+# msh = kr.meshes.refine_by_area(msh, args.lstar/args.cellfactor, cell_size, cell_criterion)
+
+# def cell_criterion2(x):
+#         return (x[0] > nondim_length-0.3)*(x[1]<(1-0.125))
+
+# msh = kr.meshes.refine_by_area(msh, args.lstar/args.cellfactor/2, cell_size, cell_criterion2)
+
+msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, cell_size, 0.3, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
 model = kr.base.Simulation(msh)
 
 model.tol = args.tol
@@ -126,11 +144,21 @@ model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
 model.params.length.value = args.nondim_length * args.height
-# model.params.ge_tol.value = 1e-3
+model.params.smoothing_constant.value = args.smoothc
+
 
 model.params.σt_deg.value = args.strength_deg*1e3
 model.params.σt0.value = args.strength0*1e3
 
+
+def smoothstep(x, x_c, width):
+    return 0.5*(1 + ufl.tanh((x-x_c)/width))
+
+def smoothtransition(a, b, x, x_c, width):
+    return a + (b-a)*smoothstep(x, x_c, width)
+
+
+model.params.l = smoothtransition(args.lstar*args.height*args.lfactor, args.lstar*args.height, x[1], 1 - 0.125, 0.05)
 
 if MPI.COMM_WORLD.rank == 0:
     print("Level: ", args.level)
@@ -178,7 +206,7 @@ elif args.type == "ssa":
                         # bc.get_bc_func(V.sub(0).sub(1),right_boundary, lambda x: -dudx*x[1]),
                         # bc.get_bc(V.sub(0).sub(1), bottom_boundary, 0.0),
                         ]
-elif args.type == "icebergsymm" or args.type == "relaxationsymm":
+elif args.type == "icebergsymm":
       u_bc = lambda V: [
                             # bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
                     #   bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
@@ -221,7 +249,7 @@ if args.cracks > 0:
     def basal_cracks(x):
         val = np.zeros(x.shape[1],dtype=bool)
         for x_c in basal_crack_x_cs:
-            val += basal_crack(x,x_c,height=0.4)
+            val += basal_crack(x,x_c,height=0.45)
         return val
 
 
@@ -238,6 +266,11 @@ else:
     d_bc = lambda V: [bc.internal_bc(V, cracks, 1.0)]
 
 
+def fixed(x):
+    return (x[0]<(nondim_length -0.3))*(x[1]<0.9) | (x[0]<(nondim_length - 2.0))
+
+d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
+
 
 model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
                            kr.damage.higherorder.AT2, [u_bc, d_bc])
@@ -253,15 +286,16 @@ if args.cracks > 0:
     model.damage.solve()
 
 
-if args.type == "relaxation" or args.type == "relaxationsymm" or args.type == "chop":
-    model.params.dt.value = 25*24*60*60
-    for i in range(10):
+if args.relax_time > 0:
+    nt = 10
+    model.params.dt.value = args.relax_time*24*60*60 / nt
+    for i in range(nt):
         if MPI.COMM_WORLD.rank == 0:
             print("Relaxation iteration: ", i)
-        flag = model.fixed_point(save=True)
+        flag,nits = model.fixed_point(save=True)
         if flag == -1:
             break
-        model.timestep()
+        model.momentum.timestep()
 
     model.params.dt.value = args.dt*24*60*60
 
@@ -318,32 +352,39 @@ for i in range(1,args.nt):
         print("Iteration: ", i)
 
 
-    flag = model.fixed_point(save=True)
+    flag,nits = model.fixed_point(save=False)
 
     t += model.params.dt.value
     if args.save_bp:
         model.write_checkpoint(path + "/" + filename +".bp", t)
     ψpold = es.free_energy_plus_lo(model.momentum.ε_e, model.params.ν)
-    kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
-                            model.msh, [model.momentum.du,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
-                                    model.momentum.u_v, model.momentum.u_e,
-                                    model.momentum.ψplus/model.params.ψcritstar,
-                                    (model.momentum.ψplus-ψpold)/model.params.ψcritstar,
-                                    model.momentum.ε_e,
-                                    model.params.Gc,
-                                    model.params.T,
-                                    model.params.ψcrit,
-                                    ],
-                                    ["u","d","dprev2","dprev","dprev3",
-                                    "uv","ue",
-                                    "psi_plus",
-                                    "psi_plus_delta",
-                                    "eps_e",
-                                    "Gc",
-                                    "T",
-                                    "ψcrit",
-                                    ],
-                                t=i)
+    if i ==1 or i % 10 == 0 or flag == -1 or nits > 6:
+        kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
+                                model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
+                                        model.momentum.u_v, model.momentum.u_e,
+                                        model.momentum.ψplus/model.params.ψcritstar,
+                                        (model.momentum.ψplus-ψpold)/model.params.ψcritstar,
+                                        model.momentum.ε_e,
+                                        model.params.Gc,
+                                        model.params.T,
+                                        model.params.ψcrit,
+                                        model.momentum.du,
+                                        model.momentum.du_smooth,
+                                        model.momentum.du_smooth-model.momentum.du,
+                                        ],
+                                        ["u","d","dprev2","dprev","dprev3",
+                                        "uv","ue",
+                                        "psi_plus",
+                                        "psi_plus_delta",
+                                        "eps_e",
+                                        "Gc",
+                                        "T",
+                                        "ψcrit",
+                                        "du",
+                                        "du_smooth",
+                                        "du_smooth_minus_du",
+                                        ],
+                                    t=i)
     
     if flag == -1:
         break
