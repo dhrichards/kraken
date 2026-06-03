@@ -86,6 +86,8 @@ class SemiLagrangianEpsilon(Momentum):
 
 
     def setup_momentum(self):
+
+        self.setup_smoother()
         w_test = ufl.TestFunction(self.W)
         v, v_v, q = ufl.split(w_test)
         n = ufl.FacetNormal(self.sim.msh)
@@ -201,14 +203,29 @@ class SemiLagrangianEpsilon(Momentum):
    
 
 
+    def setup_smoother(self):
 
+        self.du_1 = fem.Function(self.V, name="du 1")
+
+        self.du_smooth = fem.Function(self.V, name="du smooth")
+        du = ufl.TrialFunction(self.V)
+        v = ufl.TestFunction(self.V)
+
+        a = ufl.inner(du, v) * ufl.dx + self.sim.params.smoothing_constant*self.sim.params.lstar*ufl.inner(ufl.grad(du), ufl.grad(v)) * ufl.dx
+        L = ufl.inner(self.du_1, v) * ufl.dx
+
+        self.smooth_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"})
+    
 
     def timestep(self):
 
         self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
 
-        du = fem.Function(self.V)
-        du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+        # du = fem.Function(self.V)
+        # du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+        self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+        du = self.smooth_problem.solve()
+        self.du_smooth.x.array[:] = du.x.array[:]
         self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
         
         self.w_prev_2.x.array[:] = self.w_prev_time.x.array[:]

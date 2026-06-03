@@ -210,10 +210,12 @@ class Simulation:
                     utilities.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, [self.momentum.u,self.damage.d,
                                            self.momentum.ψplus/self.params.ψcritstar,
+                                           self.params.l
                                         # self.momentum.u_e, self.momentum.u_v
                                         ],
                                         ["u","d",
                                             "psi_plus",
+                                            "l"
                                         # "ue","uv",
                                         ],
                                     t=i)
@@ -232,10 +234,10 @@ class Simulation:
                 
 
                 if self.momentum.solver.getConvergedReason() == -3: 
-                    return -1
+                    return -1,i
                 
-                if error_L2/error_prev > 30 and L2 < L2_old: # so big change and total damage is decreaing
-                    return -1
+                # if error_L2/error_prev > 30 and L2 < L2_old: # so big change and total damage is decreaing
+                #     return -1
 
                 i += 1
     
@@ -243,12 +245,12 @@ class Simulation:
                 
 
                 if i >=self.min_its and (error_L2 < self.tol) and (error_L2 <= error_prev) and (error_prev < self.tol):
-                    return 1
+                    return 1,i
                 
                 error_prev = error_L2
                 L2_old = L2
             
-            return 2
+            return 2,i
    
 
 

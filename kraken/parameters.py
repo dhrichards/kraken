@@ -30,6 +30,7 @@ class Params_with_uc:
         self.crack_level_above_sea = fem.Constant(msh,default_scalar_type(0.0)) # Water level for hydrostatic pressure
         self.sea_level = fem.Constant(msh,default_scalar_type(0.9*self.H.value)) # Sea level height
         self.length = fem.Constant(msh,default_scalar_type(16e3)) # Length of domain in flow direction
+        self.smoothing_constant = fem.Constant(msh,default_scalar_type(1.0)) 
 
         self.σt0 = fem.Constant(msh,default_scalar_type(0.2e6))
         self.σt_deg = fem.Constant(msh,default_scalar_type(0.04e6))
