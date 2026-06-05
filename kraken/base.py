@@ -114,36 +114,6 @@ class Simulation:
     def write_checkpoint(self, filename, t=0):
         if t == 0:
             adios4dolfinx.write_mesh(filename, self.msh,time = t)
-
-            dictofparams = { 
-                            'Ttop' : self.params.Ttop.value,
-                            'Tbot' : self.params.Tbot.value,
-                            'rhoi' : self.params.ρi.value,
-                             'rhow' : self.params.ρw.value,
-                             'g' : self.params.g.value,
-                             'E' : self.params.E.value,
-                             'nu' : self.params.ν.value,
-                             'A0' : self.params.A0.value,
-                             'n' : self.params.n.value,
-                             'H' : self.params.H.value,
-                             'l' : self.params.l.value,
-                             'dt' : self.params.dt.value,
-                            'patm': self.params.patm.value,
-                            'ge_tol': self.params.ge_tol.value,
-                            'crack_level_above_sea' : self.params.crack_level_above_sea.value,
-                            'sea_level': self.params.sea_level.value,
-                            'length' : self.params.length.value,
-                             'sigma_t0' : self.params.σt0.value,
-                             'sigma_tdeg' : self.params.σt_deg.value,
-                            'Kic' : self.params.Kic.value,
-                            'cp' : self.params.cp.value,
-                            'kappa' : self.params.κ.value,
-                            'friction_angle' : self.params.friction_angle.value,
-                            'cohesion' : self.params.cohesion.value,
-                                
-                             }
-            adios4dolfinx.write_attributes(filename, MPI.COMM_WORLD, 'params', dictofparams)
-
         else:
             adios4dolfinx.write_mesh(filename, self.msh, time = t,
                                      mode = adios4dolfinx.adios2_helpers.adios2.Mode.Append)
@@ -152,32 +122,6 @@ class Simulation:
         self.damage.write_checkpoint(filename, t)
 
     def read_checkpoint(self, filename, t=0):
-        dictofparams = adios4dolfinx.read_attributes(filename, MPI.COMM_WORLD, 'params')
-        self.params.Ttop.value = dictofparams['Ttop']
-        self.params.Tbot.value = dictofparams['Tbot']
-        self.params.ρi.value = dictofparams['rhoi']
-        self.params.ρw.value = dictofparams['rhow']
-        self.params.g.value = dictofparams['g']
-        self.params.E.value = dictofparams['E']
-        self.params.ν.value = dictofparams['nu']
-        self.params.A0.value = dictofparams['A0']
-        self.params.n.value = dictofparams['n']
-        self.params.H.value = dictofparams['H']
-        self.params.l.value = dictofparams['l']
-        self.params.dt.value = dictofparams['dt']
-        self.params.patm.value = dictofparams['patm']
-        self.params.ge_tol.value = dictofparams['ge_tol']
-        self.params.crack_level_above_sea.value = dictofparams['crack_level_above_sea']
-        self.params.sea_level.value = dictofparams['sea_level']
-        self.params.length.value = dictofparams['length']
-        self.params.σt0.value = dictofparams['sigma_t0']
-        self.params.σt_deg.value = dictofparams['sigma_tdeg']
-        self.params.Kic.value = dictofparams['Kic']
-        self.params.cp.value = dictofparams['cp']
-        self.params.κ.value = dictofparams['kappa']
-        self.params.friction_angle.value = dictofparams['friction_angle']
-        self.params.cohesion.value = dictofparams['cohesion']
-
         self.momentum.read_checkpoint(filename, t)
         self.damage.read_checkpoint(filename, t)
 

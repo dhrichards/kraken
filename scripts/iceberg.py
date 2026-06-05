@@ -133,11 +133,10 @@ model.max_its = args.max_its
 
 x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
-model.params.Ttop.value = args.Ttop
-model.params.Tbot.value = args.Tbot
+model.params.T = args.Tbot + (args.Ttop - args.Tbot)*z
 model.params.A0.value = mf.rate_factor_np(args.Ttop)
 model.params.H.value = args.height
-model.params.l.value = args.lstar*args.height
+# model.params.l.value = args.lstar*args.height
 model.params.dt.value = args.dt*24*60*60
 model.params.Kic.value = args.Kic*1e3
 model.params.patm.value = 0.0
@@ -146,9 +145,7 @@ model.params.sea_level.value = args.sealevel * args.height
 model.params.length.value = args.nondim_length * args.height
 model.params.smoothing_constant.value = args.smoothc
 
-
-model.params.σt_deg.value = args.strength_deg*1e3
-model.params.σt0.value = args.strength0*1e3
+model.params.σc = args.strength0*1e3 - args.strength_deg*1e3*(model.params.T)
 
 
 def smoothstep(x, x_c, width):
@@ -156,7 +153,6 @@ def smoothstep(x, x_c, width):
 
 def smoothtransition(a, b, x, x_c, width):
     return a + (b-a)*smoothstep(x, x_c, width)
-
 
 model.params.l = smoothtransition(args.lstar*args.height*args.lfactor, args.lstar*args.height, x[1], 1 - 0.125, 0.05)
 
@@ -366,7 +362,6 @@ for i in range(1,args.nt):
                                         (model.momentum.ψplus-ψpold)/model.params.ψcritstar,
                                         model.momentum.ε_e,
                                         model.params.Gc,
-                                        model.params.T,
                                         model.params.ψcrit,
                                         model.momentum.du,
                                         model.momentum.du_smooth,
@@ -378,7 +373,6 @@ for i in range(1,args.nt):
                                         "psi_plus_delta",
                                         "eps_e",
                                         "Gc",
-                                        "T",
                                         "ψcrit",
                                         "du",
                                         "du_smooth",

@@ -13,8 +13,7 @@ class Params_with_uc:
         self.msh = msh
 
         # Default material properties
-        self.Ttop = fem.Constant(msh,default_scalar_type(-20.0)) # Temperature in Celsius
-        self.Tbot = fem.Constant(msh,default_scalar_type(-20.0)) # Temperature in Celsius
+        self.T = fem.Constant(msh,default_scalar_type(-20.0)) # Temperature in Celsius
         self.ρi = fem.Constant(msh,default_scalar_type(900)) # Density of ice
         self.ρw = fem.Constant(msh,default_scalar_type(1000)) # Density of water
         self.g = fem.Constant(msh,default_scalar_type(9.81)) # Gravitational acceleration
@@ -32,27 +31,8 @@ class Params_with_uc:
         self.length = fem.Constant(msh,default_scalar_type(16e3)) # Length of domain in flow direction
         self.smoothing_constant = fem.Constant(msh,default_scalar_type(1.0)) 
 
-        self.σt0 = fem.Constant(msh,default_scalar_type(0.2e6))
-        self.σt_deg = fem.Constant(msh,default_scalar_type(0.04e6))
-
+        self.σc = fem.Constant(msh,default_scalar_type(0.2e6)) # Tensile strength
         self.Kic = fem.Constant(msh,default_scalar_type(100e3)) # Fracture toughness
-        
-        self.cp = fem.Constant(msh,default_scalar_type(2100)) # Specific heat capacity
-        self.κ = fem.Constant(msh,default_scalar_type(2)) # Thermal conductivity
-
-        self.friction_angle = fem.Constant(msh, default_scalar_type(np.atan(0.3))) # Friction angle in radians
-        self.cohesion = fem.Constant(msh, default_scalar_type(164e3))
-
-
-    @property
-    def σc(self):
-        return self.σt0 - self.σt_deg*(self.T)
-    
-    @property
-    def T(self):
-        x = ufl.SpatialCoordinate(self.msh)
-        z = x[self.msh.geometry.dim-1]
-        return self.Tbot + (self.Ttop - self.Tbot)*z
 
     @property
     def ψcrit(self):
@@ -62,16 +42,6 @@ class Params_with_uc:
     def Gc(self):
         return self.Kic**2*(1-self.ν**2)/self.E
 
-
-    
-    @property
-    def B(self):
-        return 2*ufl.sin(self.friction_angle)/(np.sqrt(3)*(3+ufl.sin(self.friction_angle)))
-
- 
-    @property
-    def cohesion_star(self):
-        return self.cohesion / self.μ
 
     @property
     def uc(self):
@@ -199,13 +169,6 @@ class Params_with_uc:
     def C_inertia(self):
         return self.ρc * self.H**2 / (self.μ * self.τ**2)
     
-    @property
-    def C_temperature(self):
-        return self.ηc*(self.ucstar/self.τ)**2*self.τ/(self.ρc*self.cp)
-    
-    @property
-    def κstar(self):
-        return self.κ*self.τ/(self.ρc*self.cp*self.H**2)
 
     @property
     def length_star(self):
