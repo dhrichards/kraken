@@ -62,6 +62,13 @@ def get_bc(V,boundary,bc_val):
     boundary_dofs_x = get_boundary_dofs(V,boundary)
     return fem.dirichletbc(get_vec(V,bc_val), boundary_dofs_x, V)
 
+def internal_bc_func(V,func,val):
+    msh = V.mesh
+    msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
+    deactivate_cells = mesh.locate_entities(msh, msh.topology.dim, func)
+    deactivate_dofs = fem.locate_dofs_topological(V, msh.topology.dim, deactivate_cells)
+    return fem.dirichletbc(val, deactivate_dofs, V)
+
 
 def internal_bc(V,func,val):
     msh = V.mesh

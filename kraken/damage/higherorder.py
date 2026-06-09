@@ -43,6 +43,13 @@ class AT2(Damage):
         self.bc_d = bc_func_mod(self.W)
 
 
+    def update_bcs(self,new_bcs):
+        bc_func_mod = lambda V: new_bcs(V.sub(0))
+        self.bc_d = bc_func_mod(self.W)
+        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
+        self.setup_solver()
+
+
     def setup_weak_form(self):
         C3 = self.sim.params.C3; l = self.sim.params.lstar
         

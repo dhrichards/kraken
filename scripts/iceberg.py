@@ -265,7 +265,20 @@ else:
 def fixed(x):
     return (x[0]<(nondim_length -0.3))*(x[1]<0.9) | (x[0]<(nondim_length - 2.0))
 
-d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0)]
+
+end_crack_x_cs = np.linspace(nondim_length-2, nondim_length-0.25, 20)
+height = 0.08
+def end_cracks(x):
+    val = np.zeros(x.shape[1],dtype=bool)
+    for x_c in end_crack_x_cs:
+        val += crack(x,x_c,height)
+    return val
+
+
+
+d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
+                  bc.internal_bc(V, end_cracks, 1.0),
+                  bc.internal_bc(V, lambda x: (x[1]>(1-height))*(1-end_cracks(x)), 0.0)]
 
 
 model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
@@ -341,11 +354,24 @@ if args.type == "chop":
 
 model.damage_on = True
 # model.momentum.solve()
-# model.damage.w.sub(0).interpolate(many_surface_cracks)
+
+
+
+# model.damage.w.sub(0).interpolate(end_cracks)
+from dolfinx import fem
 for i in range(1,args.nt):
 
     if MPI.COMM_WORLD.rank == 0:
         print("Iteration: ", i)
+
+    # if i==2:
+    #     d = fem.Function(model.damage.D)
+    #     d.interpolate(fem.Expression(model.damage.d, model.damage.D.element.interpolation_points()))
+
+
+    #     d_bc = lambda V: [bc.internal_bc_func(V, lambda x: x[1]>0.9, d),
+    #                       bc.internal_bc(V, fixed, 0.0)]
+    #     model.damage.update_bcs(d_bc)
 
 
     flag,nits = model.fixed_point(save=False)
