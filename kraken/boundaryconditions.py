@@ -66,7 +66,7 @@ def internal_bc_func(V,func,val):
     msh = V.mesh
     msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
     deactivate_cells = mesh.locate_entities(msh, msh.topology.dim, func)
-    deactivate_dofs = fem.locate_dofs_topological(V, msh.topology.dim, deactivate_cells)
+    deactivate_dofs = fem.locate_dofs_topological((V,val.function_space), msh.topology.dim, deactivate_cells)
     return fem.dirichletbc(val, deactivate_dofs, V)
 
 
