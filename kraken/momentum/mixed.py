@@ -101,7 +101,7 @@ class SemiLagrangianEpsilon(Momentum):
         
         A = mf.rate_factor(self.sim.params.T)/self.sim.params.A0
 
-        η0 = mf.viscosity(ufl.dev(mf.ε(self.vel_prev_it)), self.sim.params.n, 1e-13, A=A)
+        η0 = mf.viscosity(ufl.dev(mf.ε(self.vel_prev_it)), self.sim.params.n, self.sim.params.viscosity_tol, A=A)
 
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
@@ -204,6 +204,7 @@ class SemiLagrangianEpsilon(Momentum):
 
 
     def setup_smoother(self):
+        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
 
         self.du_1 = fem.Function(self.V, name="du 1")
 
@@ -211,8 +212,8 @@ class SemiLagrangianEpsilon(Momentum):
         du = ufl.TrialFunction(self.V)
         v = ufl.TestFunction(self.V)
 
-        a = ufl.inner(du, v) * ufl.dx + self.sim.params.smoothing_constant*self.sim.params.lstar*ufl.inner(ufl.grad(du), ufl.grad(v)) * ufl.dx
-        L = ufl.inner(self.du_1, v) * ufl.dx
+        a = g*ufl.inner(du, v) * ufl.dx + self.sim.params.lstar**2*ufl.inner(ufl.grad(du), ufl.grad(v)) * ufl.dx
+        L = g*ufl.inner(self.du_1, v) * ufl.dx
 
         self.smooth_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"})
     

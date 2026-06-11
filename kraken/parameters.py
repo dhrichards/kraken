@@ -29,7 +29,7 @@ class Params_with_uc:
         self.crack_level_above_sea = fem.Constant(msh,default_scalar_type(0.0)) # Water level for hydrostatic pressure
         self.sea_level = fem.Constant(msh,default_scalar_type(0.9*self.H.value)) # Sea level height
         self.length = fem.Constant(msh,default_scalar_type(16e3)) # Length of domain in flow direction
-        self.smoothing_constant = fem.Constant(msh,default_scalar_type(1.0)) 
+        self.viscosity_tol = fem.Constant(msh,default_scalar_type(1e-19)) # Viscosity regularisation
 
         self.σc = fem.Constant(msh,default_scalar_type(0.2e6)) # Tensile strength
         self.Kic = fem.Constant(msh,default_scalar_type(100e3)) # Fracture toughness

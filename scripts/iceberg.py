@@ -35,7 +35,6 @@ parser.add_argument("--cracks", type=int, default=3, help="Cracks: 0 for no crac
 parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
 parser.add_argument("--relax_time", type=float, default=0, help="Total relaxation time days")
 parser.add_argument("--lfactor", type=float, default=1.0, help="Multiply l by in lower part of domain")
-parser.add_argument("--smoothc", type=float, default=0.0, help="Smoothing constant for mesh movement")
 
 args = parser.parse_args()
 
@@ -47,7 +46,7 @@ filename = args.type + "_L" + str(args.nondim_length) + "_H" + str(args.height) 
                     + "_level" + str(args.level) + "_Kic" + str(args.Kic)\
                     + "_cellfactor" + str(args.cellfactor)\
                             + "_Ttop" + str(abs(args.Ttop)) + "_Tbot" + str(abs(args.Tbot)) \
-                            + "_lfactor" + str(args.lfactor) + "_smoothc" + str(args.smoothc) \
+                            + "_lfactor" + str(args.lfactor) \
                             + "_" + args.suffix + "_"
 
 
@@ -143,7 +142,6 @@ model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
 model.params.length.value = args.nondim_length * args.height
-model.params.smoothing_constant.value = args.smoothc
 
 model.params.σc = args.strength0*1e3 - args.strength_deg*1e3*(model.params.T)
 
@@ -155,6 +153,8 @@ def smoothtransition(a, b, x, x_c, width):
     return a + (b-a)*smoothstep(x, x_c, width)
 
 model.params.l = smoothtransition(args.lstar*args.height*args.lfactor, args.lstar*args.height, x[1], 1 - 0.125, 0.05)
+# else:
+# model.params.l.value = args.lstar*args.height
 
 if MPI.COMM_WORLD.rank == 0:
     print("Level: ", args.level)
@@ -266,7 +266,7 @@ def fixed(x):
     return (x[0]<(nondim_length -0.3))*(x[1]<0.9) | (x[0]<(nondim_length - 2.0))
 
 
-end_crack_x_cs = np.linspace(nondim_length-2, nondim_length-0.25, 20)
+end_crack_x_cs = np.linspace(nondim_length-2, nondim_length-0.15, 20)
 height = 0.08
 def end_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
@@ -277,8 +277,9 @@ def end_cracks(x):
 
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
-                  bc.internal_bc(V, end_cracks, 1.0),
-                  bc.internal_bc(V, lambda x: (x[1]>(1-height))*(1-end_cracks(x)), 0.0)]
+                #   bc.internal_bc(V, end_cracks, 1.0),
+                #   bc.internal_bc(V, lambda x: (x[1]>(1-height))*(1-end_cracks(x)), 0.0),
+                ]
 
 
 model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
@@ -357,7 +358,7 @@ model.damage_on = True
 
 
 
-# model.damage.w.sub(0).interpolate(end_cracks)
+model.damage.w.sub(0).interpolate(end_cracks)
 from dolfinx import fem
 for i in range(1,args.nt):
 
