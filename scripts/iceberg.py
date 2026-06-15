@@ -26,12 +26,12 @@ parser.add_argument("--Tbot", type=float, default=-20, help="Temperature in Cels
 parser.add_argument("--nondim_length", type=float, default=20, help="Length of iceberg")
 parser.add_argument("--tol", type=float, default=5e-6, help="Solver tolerance")
 parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
-parser.add_argument("--max_its", type=int, default=400, help="Maximum number of solver iterations")
+parser.add_argument("--max_its", type=int, default=800, help="Maximum number of solver iterations")
 parser.add_argument("--sealevel", type=float, default=0.9, help="Non dimensional water level for hydrostatic pressure")
 parser.add_argument("--Kic", type=float, default=100, help="Kic")
 parser.add_argument("--strength0", type=float, default=200, help="Tensile strength at 0C")
 parser.add_argument("--strength_deg", type=float, default=20, help="Tensile strength degradation per degree C")
-parser.add_argument("--cracks", type=int, default=3, help="Cracks: 0 for no cracks, 1 for surface cracks, 2 for basal cracks, 3 for both")
+parser.add_argument("--cracks", type=int, default=0, help="Cracks: 0 for no cracks, 1 for surface cracks, 2 for basal cracks, 3 for both")
 parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
 parser.add_argument("--relax_time", type=float, default=0, help="Total relaxation time days")
 parser.add_argument("--lfactor", type=float, default=1.0, help="Multiply l by in lower part of domain")
@@ -123,7 +123,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 
 # msh = kr.meshes.refine_by_area(msh, args.lstar/args.cellfactor/2, cell_size, cell_criterion2)
 
-msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, cell_size, 0.3, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
+# msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, cell_size, 0.3, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
 model = kr.base.Simulation(msh)
 
 model.tol = args.tol
@@ -145,16 +145,17 @@ model.params.length.value = args.nondim_length * args.height
 
 model.params.σc = args.strength0*1e3 - args.strength_deg*1e3*(model.params.T)
 
-
+model.filename = filename
 def smoothstep(x, x_c, width):
     return 0.5*(1 + ufl.tanh((x-x_c)/width))
 
 def smoothtransition(a, b, x, x_c, width):
     return a + (b-a)*smoothstep(x, x_c, width)
 
-model.params.l = smoothtransition(args.lstar*args.height*args.lfactor, args.lstar*args.height, x[1], 1 - 0.125, 0.05)
-# else:
-# model.params.l.value = args.lstar*args.height
+if args.lfactor>1.0:
+    model.params.l = smoothtransition(args.lstar*args.height*args.lfactor, args.lstar*args.height, x[1], 1 - 0.125, 0.05)
+else:
+    model.params.l.value = args.lstar*args.height
 
 if MPI.COMM_WORLD.rank == 0:
     print("Level: ", args.level)
@@ -266,7 +267,7 @@ def fixed(x):
     return (x[0]<(nondim_length -0.3))*(x[1]<0.9) | (x[0]<(nondim_length - 2.0))
 
 
-end_crack_x_cs = np.linspace(nondim_length-2, nondim_length-0.15, 20)
+end_crack_x_cs = np.linspace(nondim_length-2, nondim_length-0.1, 20)
 height = 0.08
 def end_cracks(x):
     val = np.zeros(x.shape[1],dtype=bool)
@@ -357,8 +358,13 @@ model.damage_on = True
 # model.momentum.solve()
 
 
+if args.type == "icebergsymm":
+    model.damage.w.sub(0).interpolate(end_cracks)
+    stop_bottom = True
+else:
+    stop_bottom = False
 
-model.damage.w.sub(0).interpolate(end_cracks)
+
 from dolfinx import fem
 for i in range(1,args.nt):
 
@@ -375,7 +381,7 @@ for i in range(1,args.nt):
     #     model.damage.update_bcs(d_bc)
 
 
-    flag,nits = model.fixed_point(save=False)
+    flag,nits = model.fixed_point(save=False, stop_bottom=stop_bottom)
 
     t += model.params.dt.value
     if args.save_bp:

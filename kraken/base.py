@@ -21,6 +21,12 @@ class Simulation:
         self.min_its = 2
         self.max_its = 300
 
+
+        b_facets = mesh.locate_entities_boundary(self.msh, self.msh.topology.dim-1, lambda x: np.isclose(x[1], 0.0))
+        mesh_tags = mesh.meshtags(self.msh, self.msh.topology.dim - 1, b_facets, 1)
+        ds = ufl.Measure("ds", domain=self.msh, subdomain_data=mesh_tags)
+        self.ds_bottom = ds(1)
+
     
         
 
@@ -126,7 +132,7 @@ class Simulation:
         self.damage.read_checkpoint(filename, t)
 
         
-    def fixed_point(self, save=False):
+    def fixed_point(self, save=False, stop_bottom=False):
             L2_old = 0.0
 
             one = fem.Function(self.damage.D)
@@ -170,18 +176,40 @@ class Simulation:
                 L2_rank = fem.assemble_scalar(fem.form(L2_))
                 L2 = np.sqrt(MPI.COMM_WORLD.allreduce(L2_rank, op=MPI.SUM))
 
+
+
+                L2_bottom_ = ufl.inner(self.damage.d,self.damage.d)*self.ds_bottom
+                L2_bottom_rank = fem.assemble_scalar(fem.form(L2_bottom_))
+                L2_bottom = np.sqrt(MPI.COMM_WORLD.allreduce(L2_bottom_rank, op=MPI.SUM))
+
                 error_L2 = np.abs(L2 - L2_old)/area
                 if MPI.COMM_WORLD.rank == 0:
-                    print(f"iteration {i}, error {error_L2}, L2 {L2}, mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")
+                    print(f"iteration {i}, error {error_L2}, L2 {L2}, L2_bottom {L2_bottom}, mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")
 
                 errors.append(error_L2)
+
+                # if (L2 < L2_old) and i > 30:
+                #     utilities.write_xdmf("./outputs/" + self.filename + "run" + str(it) + "_decrease" + str(i) + ".xdmf",
+                #                 self.msh, [self.momentum.u,self.damage.d,
+                #                            self.damage.d_prev_it,self.damage.d_prev_it2,self.damage.d_prev_it3,
+                #                            self.momentum.ψplus/self.params.ψcritstar,
+                #                            self.params.l
+                #                         # self.momentum.u_e, self.momentum.u_v
+                #                         ],
+                #                         ["u","d",
+                #                             "d_prev_it","d_prev_it2","d_prev_it3",
+                #                             "psi_plus",
+                #                             "l"
+                #                         # "ue","uv",
+                #                         ],
+                #                     t=i)
                 
 
                 if self.momentum.solver.getConvergedReason() == -3: 
                     return -1,i
                 
-                # if error_L2/error_prev > 30 and L2 < L2_old: # so big change and total damage is decreaing
-                #     return -1
+                if stop_bottom and L2_bottom > 0.12:
+                    return -1,i
 
                 i += 1
     
