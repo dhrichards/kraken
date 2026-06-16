@@ -1,0 +1,429 @@
+#%%
+from mpi4py import MPI
+import numpy as np
+import ufl
+import os
+import dolfinx
+from dolfinx import io, mesh
+import kraken.parameters as kp
+import kraken.boundaryconditions as bc
+import kraken.numerics.maths_functions as mf
+import kraken.numerics.energy_splits as es
+import kraken as kr
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--level", type=float, default=0.00, help="Water level in cracks above sea level (m)")
+parser.add_argument("--lstar", type=float, default=0.06, help="Regularization length scale in meters")
+parser.add_argument("--dt", type=float, default=3, help="Time step in days")
+parser.add_argument("--cellfactor", type=float, default=1, help="Mesh cell size factor")
+parser.add_argument("--height", type=float, default=300, help="Height of iceberg in meters")
+parser.add_argument("--type", type=str, default="iceberg", help="iceberg, icebergsymm, chop, ssa, cliff_frozen, cliff_sliding, cliff_stickslip")
+parser.add_argument("--suffix", type=str, default="", help="suffix for filename")
+parser.add_argument("--nt", type=int, default=200, help="number of timesteps")
+parser.add_argument("--Ttop", type=float, default=-20, help="Temperature in Celsius at top")
+parser.add_argument("--Tbot", type=float, default=-20, help="Temperature in Celsius at bottom")
+parser.add_argument("--nondim_length", type=float, default=20, help="Length of iceberg")
+parser.add_argument("--tol", type=float, default=5e-6, help="Solver tolerance")
+parser.add_argument("--min_its", type=int, default=1, help="Minimum number of solver iterations")
+parser.add_argument("--max_its", type=int, default=800, help="Maximum number of solver iterations")
+parser.add_argument("--sealevel", type=float, default=0.9, help="Non dimensional water level for hydrostatic pressure")
+parser.add_argument("--Kic", type=float, default=100, help="Kic")
+parser.add_argument("--strength0", type=float, default=200, help="Tensile strength at 0C")
+parser.add_argument("--strength_deg", type=float, default=20, help="Tensile strength degradation per degree C")
+parser.add_argument("--cracks", type=int, default=0, help="Cracks: 0 for no cracks, 1 for surface cracks, 2 for basal cracks, 3 for both")
+parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
+parser.add_argument("--relax_time", type=float, default=0, help="Total relaxation time days")
+parser.add_argument("--lfactor", type=float, default=1.0, help="Multiply l by in lower part of domain")
+
+args = parser.parse_args()
+
+
+filename = args.type + "_L" + str(args.nondim_length) + "_H" + str(args.height) \
+                        + "_l" + str(args.lstar) \
+                        +"_dt" + str(args.dt) + "_relaxt" + str(args.relax_time) \
+                        + "_sigmacdeg" + str(args.strength_deg)+ "_sigmac0" + str(args.strength0) \
+                    + "_level" + str(args.level) + "_Kic" + str(args.Kic)\
+                    + "_cellfactor" + str(args.cellfactor)\
+                            + "_Ttop" + str(abs(args.Ttop)) + "_Tbot" + str(abs(args.Tbot)) \
+                            + "_lfactor" + str(args.lfactor) \
+                            + "_" + args.suffix + "_"
+
+
+
+
+
+def left_boundary(x):
+    return np.isclose(x[0], 0)
+
+def right_boundary(x):
+    return np.isclose(x[0], nondim_length)
+
+def bottom_boundary(x):
+    return np.isclose(x[1], 0)#*(x[0]<=(nondim_length - nondim_height))
+
+def bottom_left(x):
+    return np.isclose(x[1], 0)*(x[0]<=(nondim_length/2))
+
+def bottom_right(x):
+    return np.isclose(x[1], 0)*(x[0]>=(nondim_length/2))
+
+def top_boundary(x):
+    return np.isclose(x[1], 1.0)
+
+def single_dof(x):
+    return np.isclose(x[0], nondim_length/2)*np.isclose(x[1], 0.5)
+
+def crack(x,x_c,height=0.06):
+    width = args.lstar/args.cellfactor*1
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
+
+def basal_crack(x,x_c,height=0.5):
+    width = args.lstar/args.cellfactor*1
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]<height)
+
+def fixed(x):
+    return (x[0]<(nondim_length - args.refine_x*0.98*nondim_height))# + (x[0]>(nondim_length - nondim_height/2))
+
+
+
+path = './outputs'
+os.makedirs(path, exist_ok=True)
+
+
+
+
+nondim_length = args.nondim_length
+nondim_height = 1.0
+
+
+# cell_size = 0.2 # large size
+cell_size = args.lstar/args.cellfactor
+nx = int((nondim_length)/cell_size)
+if np.mod(nx,2) == 0:
+    nx = nx + 1
+
+nz = int(nondim_height/cell_size)
+msh = mesh.create_rectangle(MPI.COMM_WORLD,
+                        [[0.0, 0.0],
+                        [nondim_length, nondim_height]],
+                        [nx, nz],
+                        cell_type=mesh.CellType.triangle)
+
+
+# def cell_criterion(x):
+#         return (x[0] > nondim_length-0.3)\
+#             |((x[1]>(1-0.125))*(x[0]>(nondim_length-2.5)))
+
+
+# msh = kr.meshes.refine_by_area(msh, args.lstar/args.cellfactor, cell_size, cell_criterion)
+
+# def cell_criterion2(x):
+#         return (x[0] > nondim_length-0.3)*(x[1]<(1-0.125))
+
+# msh = kr.meshes.refine_by_area(msh, args.lstar/args.cellfactor/2, cell_size, cell_criterion2)
+
+# msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, cell_size, 0.3, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
+model = kr.base.Simulation(msh)
+
+model.tol = args.tol
+model.min_its = args.min_its
+model.max_its = args.max_its
+
+x = ufl.SpatialCoordinate(msh)
+z = x[msh.geometry.dim-1]
+model.params.T = args.Tbot + (args.Ttop - args.Tbot)*z
+model.params.A0.value = mf.rate_factor_np(args.Ttop)
+model.params.H.value = args.height
+# model.params.l.value = args.lstar*args.height
+model.params.dt.value = args.dt*24*60*60
+model.params.Kic.value = args.Kic*1e3
+model.params.patm.value = 0.0
+model.params.crack_level_above_sea.value = args.level
+model.params.sea_level.value = args.sealevel * args.height
+model.params.length.value = args.nondim_length * args.height
+
+model.params.σc = args.strength0*1e3 - args.strength_deg*1e3*(model.params.T)
+
+model.filename = filename
+def smoothstep(x, x_c, width):
+    return 0.5*(1 + ufl.tanh((x-x_c)/width))
+
+def smoothtransition(a, b, x, x_c, width):
+    return a + (b-a)*smoothstep(x, x_c, width)
+
+if args.lfactor>1.0:
+    model.params.l = smoothtransition(args.lstar*args.height*args.lfactor, args.lstar*args.height, x[1], 1 - 0.125, 0.05)
+else:
+    model.params.l.value = args.lstar*args.height
+
+if MPI.COMM_WORLD.rank == 0:
+    print("Level: ", args.level)
+    print("Regularization length scale star: ", args.lstar)
+    print("Time step (days): ", args.dt)
+    print("Mesh cell size factor: ", args.cellfactor)
+    print("Height (m): ", args.height)
+    print("ucstar: ", model.params.ucstar_float )
+    print(path + "/" + filename)
+
+
+if args.type == "cliff_frozen":
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(0), bottom_boundary),
+                        bc.get_zero_bc(V.sub(1), bottom_boundary),
+            ]
+elif args.type == "cliff_sliding":
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(0).sub(1), bottom_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(1), bottom_boundary),
+                        ]
+elif args.type == "cliff_stickslip":
+    u_bc = lambda V: [bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(0), bottom_left),
+                        bc.get_zero_bc(V.sub(1), bottom_left),
+                        bc.get_zero_bc(V.sub(0).sub(1), bottom_right),
+                        bc.get_zero_bc(V.sub(1).sub(1), bottom_right),
+                        ]
+elif args.type == "ssa":
+    δ = model.params.δ; ν = model.params.ν
+    duedx = lambda z: (-0.125*δ*ν + 0.25*δ + 1.0*ν - 0.5 - 1.0*z*ν + 0.5*z)/((ν + 1))
+    ue_x = lambda x: duedx(x[1])*x[0]
+    dudx = model.params.dtstar*(δ/4)**3
+    u_x = lambda x: dudx*x[0]
+    uv_x = lambda x: u_x(x) - ue_x(x)
+    u_bc = lambda V: [
+                        bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                        bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                        bc.get_bc_func(V.sub(1).sub(0), right_boundary, uv_x),
+                        bc.get_bc_func(V.sub(0).sub(0), right_boundary, u_x),
+                        # bc.get_bc_func(V.sub(0).sub(1),left_boundary, lambda x: -dudx*x[1]),
+                        # bc.get_bc_func(V.sub(0).sub(1),right_boundary, lambda x: -dudx*x[1]),
+                        # bc.get_bc(V.sub(0).sub(1), bottom_boundary, 0.0),
+                        ]
+elif args.type == "icebergsymm":
+      u_bc = lambda V: [
+                            # bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                    #   bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                    #   bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                            bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+
+                            ]
+
+
+
+else:
+    u_bc = lambda V: [
+                            bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                      bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                      bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+                            # bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
+                            # bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+
+                            ]
+
+
+
+
+if args.cracks > 0:
+    basal_crack_spacing = 0.8
+    n_cracks = int((nondim_length-basal_crack_spacing)//basal_crack_spacing)
+    crack_x_cs = np.linspace(basal_crack_spacing/2, nondim_length-basal_crack_spacing/2, n_cracks*4 -3)
+    # crack_x_cs += cell_size/2
+    def surface_cracks(x):
+        val = np.zeros(x.shape[1],dtype=bool)
+        for x_c in crack_x_cs:
+            val += crack(x,x_c)
+        return val
+
+
+
+    basal_crack_x_cs = np.linspace(basal_crack_spacing/2,nondim_length-basal_crack_spacing/2, n_cracks)
+    # basal_crack_x_cs += cell_size/2
+    def basal_cracks(x):
+        val = np.zeros(x.shape[1],dtype=bool)
+        for x_c in basal_crack_x_cs:
+            val += basal_crack(x,x_c,height=0.45)
+        return val
+
+
+if args.cracks == 1:
+    cracks = surface_cracks
+elif args.cracks == 2:
+    cracks = basal_cracks
+elif args.cracks == 3:
+    cracks = lambda x: surface_cracks(x) + basal_cracks(x)
+
+if args.cracks == 0 or args.type == "ssa":
+    d_bc = lambda V: []
+else:
+    d_bc = lambda V: [bc.internal_bc(V, cracks, 1.0)]
+
+
+def fixed(x):
+    return (x[0]<(nondim_length -0.3))*(x[1]<0.9) | (x[0]<(nondim_length - 2.0))
+
+
+end_crack_x_cs = np.linspace(nondim_length-2, nondim_length-0.1, 20)
+height = 0.08
+def end_cracks(x):
+    val = np.zeros(x.shape[1],dtype=bool)
+    for x_c in end_crack_x_cs:
+        val += crack(x,x_c,height)
+    return val
+
+
+
+d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),
+                #   bc.internal_bc(V, end_cracks, 1.0),
+                #   bc.internal_bc(V, lambda x: (x[1]>(1-height))*(1-end_cracks(x)), 0.0),
+                ]
+
+
+model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
+                           kr.damage.higherorder.AT2, [u_bc, d_bc])
+
+
+
+
+model.damage_on = False
+
+
+if args.cracks > 0:
+    model.momentum.solve()
+    model.damage.solve()
+
+
+if args.relax_time > 0:
+    nt = 10
+    model.params.dt.value = args.relax_time*24*60*60 / nt
+    for i in range(nt):
+        if MPI.COMM_WORLD.rank == 0:
+            print("Relaxation iteration: ", i)
+        flag,nits = model.fixed_point(save=True)
+        if flag == -1:
+            break
+        model.momentum.timestep()
+
+    model.params.dt.value = args.dt*24*60*60
+
+
+
+t = 0.0
+if args.save_bp:
+    model.write_checkpoint(path + "/" + filename +".bp", t)
+
+
+
+# if args.type == "ssa":
+#     model.momentum.solve()
+#     model.damage.w.sub(0).interpolate(cracks)
+    
+#     # model.momentum.solve()
+#     model.damage_on = True
+#     model.fixed_point(save=True)
+#     model.damage_on = False
+#     model.damage.timestep()
+
+#     u_bc = lambda V: [bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
+#                       bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),m
+#                       bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),]
+#     model.momentum.update_bcs(u_bc)model.momentum.solve()
+
+
+
+
+if args.type == "chop":
+
+    cells_subdomain = mesh.locate_entities(model.msh, model.msh.topology.dim, lambda x: x[0]<basal_crack_x_cs[-6])
+
+    submesh,parent_cells,_,_ = mesh.create_submesh(model.msh, model.msh.topology.dim, cells_subdomain)
+
+    submodel = kr.base.Simulation(submesh)
+    
+    submodel.interpolate_from_parent(model,parent_cells, [u_bc, d_bc])
+
+    model = submodel
+    model.tol = args.tol
+    model.min_its = args.min_its
+    model.max_its = args.max_its
+
+
+
+
+model.damage_on = True
+# model.momentum.solve()
+
+
+if args.type == "icebergsymm":
+    model.damage.w.sub(0).interpolate(end_cracks)
+    stop_bottom = True
+else:
+    stop_bottom = False
+
+
+from dolfinx import fem
+for i in range(1,args.nt):
+
+    if MPI.COMM_WORLD.rank == 0:
+        print("Iteration: ", i)
+
+    # if i==2:
+    #     d = fem.Function(model.damage.D)
+    #     d.interpolate(fem.Expression(model.damage.d, model.damage.D.element.interpolation_points()))
+
+
+    #     d_bc = lambda V: [bc.internal_bc_func(V, lambda x: x[1]>0.9, d),
+    #                       bc.internal_bc(V, fixed, 0.0)]
+    #     model.damage.update_bcs(d_bc)
+
+
+    flag,nits = model.fixed_point(save=False, stop_bottom=stop_bottom)
+
+    t += model.params.dt.value
+    if args.save_bp:
+        model.write_checkpoint(path + "/" + filename +".bp", t)
+    ψpold = es.free_energy_plus_lo(model.momentum.ε_e, model.params.ν)
+    if i ==1 or i % 10 == 0 or flag == -1 or nits > 6:
+        kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
+                                model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
+                                        model.momentum.u_v, model.momentum.u_e,
+                                        model.momentum.ψplus/model.params.ψcritstar,
+                                        (model.momentum.ψplus-ψpold)/model.params.ψcritstar,
+                                        model.momentum.ε_e,
+                                        model.params.Gc,
+                                        model.params.ψcrit,
+                                        model.momentum.du,
+                                        model.momentum.du_smooth,
+                                        model.momentum.du_smooth-model.momentum.du,
+                                        ],
+                                        ["u","d","dprev2","dprev","dprev3",
+                                        "uv","ue",
+                                        "psi_plus",
+                                        "psi_plus_delta",
+                                        "eps_e",
+                                        "Gc",
+                                        "ψcrit",
+                                        "du",
+                                        "du_smooth",
+                                        "du_smooth_minus_du",
+                                        ],
+                                    t=i)
+    
+    if flag == -1:
+        break
+
+    
+    model.timestep()
+    # model.momentum.timestep()
+
+
+
+if MPI.COMM_WORLD.rank == 0:
+    print(path + "/" + filename)
+
+
+   
