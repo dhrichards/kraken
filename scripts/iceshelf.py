@@ -52,37 +52,8 @@ path = './outputs'
 os.makedirs(path, exist_ok=True)
 
 
-nondim_length = args.nondim_length
-nondim_height = 1.0
 
-
-# cell_size = 0.2 # large size
-cell_size = args.lstar/args.cellfactor
-nx = int((nondim_length)/cell_size)
-if np.mod(nx,2) == 0:
-    nx = nx + 1
-
-nz = int(nondim_height/cell_size)
-msh = mesh.create_rectangle(MPI.COMM_WORLD,
-                        [[0.0, 0.0],
-                        [nondim_length, nondim_height]],
-                        [nx, nz],
-                        cell_type=mesh.CellType.triangle)
-
-
-# def cell_criterion(x):
-#         return (x[0] > nondim_length-0.3)\
-#             |((x[1]>(1-0.125))*(x[0]>(nondim_length-2.5)))
-
-
-# msh = kr.meshes.refine_by_area(msh, args.lstar/args.cellfactor, cell_size, cell_criterion)
-
-# def cell_criterion2(x):
-#         return (x[0] > nondim_length-0.3)*(x[1]<(1-0.125))
-
-# msh = kr.meshes.refine_by_area(msh, args.lstar/args.cellfactor/2, cell_size, cell_criterion2)
-
-msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, cell_size, 0.3, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
+msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, args.lstar/args.cellfactor, 0.3, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
 model = kr.base.Simulation(msh)
 
 model.tol = args.tol
@@ -127,31 +98,14 @@ def left_boundary(x):
 
 
 u_bc = lambda V: [
-                            # bc.internal_point(V.sub(0).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
-                    #   bc.internal_point(V.sub(1).sub(0), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
-                    #   bc.internal_point(V.sub(1).sub(1), lambda x: left_boundary(x)*bottom_boundary(x), 0.0),
                             bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
                             bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
-
                             ]
 
 
 def fixed(x):
-    return (x[0]<(nondim_length -0.3))*(x[1]<0.9) | (x[0]<(nondim_length - 2.0))
+    return (x[0]<(args.nondim_length -0.3))*(x[1]<0.9) | (x[0]<(args.nondim_length - 2.0))
 
-
-
-def crack(x,x_c,height=0.06):
-    width = args.lstar/args.cellfactor*1
-    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
-
-end_crack_x_cs = np.linspace(nondim_length-2, nondim_length-0.1, 20)
-height = 0.08
-def end_cracks(x):
-    val = np.zeros(x.shape[1],dtype=bool)
-    for x_c in end_crack_x_cs:
-        val += crack(x,x_c,height)
-    return val
 
 
 
@@ -194,7 +148,21 @@ if args.save_bp:
 
 
 model.damage_on = True
-# model.momentum.solve()
+
+
+
+def crack(x,x_c,height=0.06):
+    width = args.lstar/args.cellfactor*1
+    return (x[0]>(x_c-width))*(x[0]<(x_c+width))*(x[1]>(1-height))
+
+end_crack_x_cs = np.linspace(args.nondim_length-2, args.nondim_length-0.1, 20)
+height = 0.08
+def end_cracks(x):
+    val = np.zeros(x.shape[1],dtype=bool)
+    for x_c in end_crack_x_cs:
+        val += crack(x,x_c,height)
+    return val
+
 
 model.damage.w.sub(0).interpolate(end_cracks)
 
@@ -210,6 +178,11 @@ for i in range(1,args.nt):
     if args.save_bp:
         model.write_checkpoint(path + "/" + filename +".bp", t)
 
+    A = mf.rate_factor(model.params.T)/model.params.A0
+
+    η0 = mf.viscosity(ufl.dev(mf.ε(model.momentum.vel_prev_it)), 3.0, model.params.viscosity_tol, A=A)
+
+
     if i ==1 or i % 10 == 0 or flag == -1 or nits > 6:
         kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                                 model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
@@ -217,6 +190,7 @@ for i in range(1,args.nt):
                                         model.momentum.ψplus/model.params.ψcritstar,
                                         model.momentum.ε_e,
                                         model.params.Gc,
+                                        η0,
                                         model.params.ψcrit,
                                         model.momentum.du,
                                         model.momentum.du_smooth,
@@ -227,6 +201,7 @@ for i in range(1,args.nt):
                                         "psi_plus",
                                         "eps_e",
                                         "Gc",
+                                        "eta",
                                         "ψcrit",
                                         "du",
                                         "du_smooth",

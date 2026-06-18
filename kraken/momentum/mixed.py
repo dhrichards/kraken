@@ -101,7 +101,9 @@ class SemiLagrangianEpsilon(Momentum):
         
         A = mf.rate_factor(self.sim.params.T)/self.sim.params.A0
 
-        η0 = mf.viscosity(ufl.dev(mf.ε(self.vel_prev_it)), self.sim.params.n, self.sim.params.viscosity_tol, A=A)
+        η0 = mf.viscosity(ufl.dev(mf.ε(self.vel_prev_it)), self.sim.params.n, 1e-19, A=A)
+        # η0 = 7000.0
+        η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
 
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
@@ -152,7 +154,7 @@ class SemiLagrangianEpsilon(Momentum):
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
-                2*g*η0*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
+                2*η*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
                 - g*ufl.inner(self.p, ufl.div(v_v))  \
             -    g*ufl.inner(σ0, mf.ε(v_v))
              ) * ufl.dx
@@ -222,11 +224,11 @@ class SemiLagrangianEpsilon(Momentum):
 
         self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
 
-        # du = fem.Function(self.V)
-        # du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
-        self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
-        du = self.smooth_problem.solve()
-        self.du_smooth.x.array[:] = du.x.array[:]
+        du = fem.Function(self.V)
+        du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+        # self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+        # du = self.smooth_problem.solve()
+        self.du_smooth.x.array[:] = du.x.array[:] # for saving
         self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
         
         self.w_prev_2.x.array[:] = self.w_prev_time.x.array[:]
