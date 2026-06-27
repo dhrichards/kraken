@@ -15,7 +15,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--lstar", type=float, default=0.005, help="Regularization length scale in meters")
 parser.add_argument("--cellfactor", type=float, default=2, help="Mesh cell size factor")
-parser.add_argument("--save_bp", type=bool, default=False, help="Save bp files")
+parser.add_argument("--save_bp", type=bool, default=True, help="Save bp files")
 
 args = parser.parse_args()
 
@@ -25,9 +25,9 @@ filename = "degradationtest_l" + str(args.lstar) + "_cellfactor" + str(args.cell
 path = './outputs'
 os.makedirs(path, exist_ok=True)
 
+nondim_length = 5.0
 
-
-msh = kr.meshes.fenicsx_refined_mesh(args.nondim_length, args.lstar/args.cellfactor, 0.3, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
+msh = kr.meshes.fenicsx_refined_mesh(nondim_length, args.lstar/args.cellfactor, 0.1, htop=0.2, large_size=0.2, top_fine_length=2.5, htop2 =1.1)
 model = kr.base.Simulation(msh)
 
 model.tol = 5e-6
@@ -38,14 +38,14 @@ x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
 model.params.T.value = -5.0
 model.params.A0.value = mf.rate_factor_np(model.params.T.value)
-model.params.H.value = 300
+model.params.H.value = 400
 model.params.l.value = args.lstar*model.params.H.value
 model.params.dt.value = 2.5*24*60*60
 model.params.Kic.value = 100*1e3
 model.params.patm.value = 0.0
 model.params.crack_level_above_sea.value = -0.9*model.params.H.value
-model.params.sea_level.value = 0.9 * args.height
-model.params.length.value = 5 * model.params.H.value
+model.params.sea_level.value = 0.9 * model.params.H.value
+model.params.length.value = nondim_length * model.params.H.value
 
 model.params.σc = 200e3
 
@@ -68,7 +68,7 @@ u_bc = lambda V: [
 
 
 def fixed(x):
-    return (x[0]<(args.nondim_length -0.3))*(x[1]<0.9) | (x[0]<(args.nondim_length - 2.0))
+    return (x[0]<(nondim_length -0.3))*(x[1]<0.8) | (x[0]<(nondim_length - 2.0))
 
 
 d_bc = lambda V: [bc.internal_bc(V, fixed, 0.0),

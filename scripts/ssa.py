@@ -62,8 +62,8 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 model = kr.base.Simulation(msh)
 
 model.tol = 5e-6
-model.min_its = 3
-model.max_its = 500
+model.min_its = 990
+model.max_its = 1000
 
 x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
@@ -127,7 +127,7 @@ t += model.params.dt.value
 if args.save_bp:
     model.write_checkpoint(path + "/" + filename +".bp", t)
     
-kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
+kr.utilities.write_xdmf(path + "/" + filename +".xdmf",
                                 model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
                                         model.momentum.u_v, model.momentum.u_e,
                                         model.momentum.ψplus/model.params.ψcritstar,
