@@ -42,42 +42,36 @@ def free_energy(ε,ν):
 
 
 
-def free_energy_plus_dp(ε, ν, B = -0.4, eps=1e-12):
-    # B = -0.4
+def free_energy_plus_dp(ε, ν, γ=sqrt(2), eps=1e-14):
     K = Koverμ(ν)
-    I1 = 1.5*ufl.tr(ε)
-    εD = ufl.dev(ε)
-    J2 = 0.5*ufl.inner(εD, εD) + eps
+    trε = 1.5*ufl.tr(ε)
+    εD2 = ufl.inner(ufl.dev(ε), ufl.dev(ε)) + eps
     
-    ψ1 = 0.5*K*I1**2 + 2*J2
-    ψ2 = (-3*B*K*I1 + 2*ufl.sqrt(J2))**2 / (18*B**2*K + 2)
+    
+    
+    ψ1 = 0.5*K*trε**2 + εD2
+    ψ2 = (K*γ*trε + 2*ufl.sqrt(εD2))**2 / (2*(K*γ**2 + 2))
 
-    ψ = ufl.conditional(ufl.lt(-6*B*ufl.sqrt(J2), I1), ψ1,
-                        ufl.conditional(ufl.lt(2*ufl.sqrt(J2), 3*B*K*I1), 0.0, 
+    return ufl.conditional(ufl.lt(ufl.sqrt(εD2), trε/γ), ψ1,
+                        ufl.conditional(ufl.lt(ufl.sqrt(εD2), -γ*K/2*trε), 0.0, 
                                          ψ2))
-    return ψ
+  
 
 
 
 
-
-def stress_plus_dp(ε, ν, B = -0.4, eps=1e-12):
-    #-0.3 is good
-    # B = -0.4
-    εD = ufl.dev(ε)
+def stress_plus_dp(ε, ν, γ=sqrt(2), eps=1e-14):
     K = Koverμ(ν)
-    I1 = 1.5*ufl.tr(ε)
-    J2 = 0.5*ufl.inner(εD, εD)
-    δ = ufl.Identity(ufl.shape(ε)[0])
+    trε = 1.5*ufl.tr(ε)
+    εD2 = ufl.inner(ufl.dev(ε), ufl.dev(ε)) + eps
+    δ = ufl.Identity(2)
     
 
-    σ1 = K*I1*δ + 2*εD
-    σ2 = ((18*B**2*K**2*I1 - 12*B*K*ufl.sqrt(J2+eps))*δ \
-          +(4 - 6*B*K*I1/ufl.sqrt(J2+eps))*εD
-          )/(18*B**2*K + 2)
+    σ1 = K*trε*δ + 2*ufl.dev(ε)
+    σ2 = (K*γ*δ + ufl.dev(ε)/ufl.sqrt(εD2))/(K*γ**2 + 2)
 
-    return ufl.conditional(ufl.lt(-6*B*ufl.sqrt(J2+eps), I1), σ1,
-                        ufl.conditional(ufl.lt(2*ufl.sqrt(J2+eps), 3*B*K*I1), 0.0*δ, 
+    return ufl.conditional(ufl.lt(ufl.sqrt(εD2), trε/γ), σ1,
+                        ufl.conditional(ufl.lt(ufl.sqrt(εD2), -γ*K/2*trε), 0.0*δ, 
                                          σ2))
 
 
