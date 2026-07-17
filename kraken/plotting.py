@@ -69,6 +69,8 @@ def get_outline(msh):
     for ii, e in enumerate(boundary_edges):
         X[3*ii:3*ii+2] = x[e]
         Y[3*ii:3*ii+2] = y[e]
-    return X, Y
+
+
+    return X,Y
 
 
