@@ -44,6 +44,7 @@ class Damage:
 
 
     def interpolate_from_parent(self, parent):
+        '''Interpolate history from parent simulation'''
         self.Hprev.interpolate(parent.damage.Hprev, cells0=self.sim.parent_cells, cells1=self.sim.cells)
         
 

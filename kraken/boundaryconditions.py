@@ -4,6 +4,7 @@ import ufl
 
 
 def get_boundary_dofs(V,boundary):
+    '''Get the degrees of freedom on a given boundary of a function space V.'''
     msh = V.mesh
     fdim = msh.topology.dim - 1
     boundary_facets = mesh.locate_entities_boundary(msh, fdim, boundary)
@@ -43,61 +44,51 @@ def get_zero_vec(V,dtype=default_scalar_type):
         else:
             return dtype(np.array([0]*V.value_size))
         
-def get_vec(V,val,dtype=default_scalar_type):
-    try :
-        Vcollapse, _ = V.collapse()
-        f = fem.Function(Vcollapse)
-        f.x.array[:] = val
-        return f
-    except RuntimeError:
-        if V.value_size == 1:
-            return dtype(val)
-        else:
-            return dtype(val)
-        
-
 
 
 def get_bc(V,boundary,bc_val):
+    '''Get a boundary condition on a function space V, given a boundary and a value.'''
     boundary_dofs_x = get_boundary_dofs(V,boundary)
     return fem.dirichletbc(get_vec(V,bc_val), boundary_dofs_x, V)
 
-def internal_bc_func(V,func,val):
+def internal_bc_func(V,boundary_function,function):
+    '''Define an internal boundary condition on a function space V, given a boundary function (describing the boundary)
+    and a function to apply on that boundary.'''
     msh = V.mesh
     msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-    deactivate_cells = mesh.locate_entities(msh, msh.topology.dim, func)
-    deactivate_dofs = fem.locate_dofs_topological((V,val.function_space), msh.topology.dim, deactivate_cells)
-    return fem.dirichletbc(val, deactivate_dofs, V)
+    deactivate_cells = mesh.locate_entities(msh, msh.topology.dim, boundary_function)
+    deactivate_dofs = fem.locate_dofs_topological((V,function.function_space), msh.topology.dim, deactivate_cells)
+    return fem.dirichletbc(function, deactivate_dofs, V)
 
 
-def internal_bc(V,func,val):
+def internal_bc(V,boundary_function,val,topology_dim=None):
+    '''Define an internal boundary condition.
+     Inputs are:
+      V: function space V upon which the boundary condition is applied
+      boundary_function: a function that returns True for points on the boundary and False for points not on the boundary
+      val: the value to apply on the boundary
+      topology_dim: the topology dimension of the boundary (e.g. 0 for a point bc. default is None, which will use the
+        mesh dimension)'''
+    if topology_dim is None:
+        topology_dim = V.mesh.topology.dim
+
     msh = V.mesh
     msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-    deactivate_cells = mesh.locate_entities(msh, msh.topology.dim, func)
+    deactivate_cells = mesh.locate_entities(msh, msh.topology.dim, boundary_function)
     deactivate_dofs = fem.locate_dofs_topological(V, msh.topology.dim, deactivate_cells)
     return fem.dirichletbc(default_scalar_type(val), deactivate_dofs, V)
 
-def internal_point(V,func,val):
-    msh = V.mesh
-    msh.topology.create_connectivity(0, msh.topology.dim)
-    constrained_vertex = mesh.locate_entities(msh, 0, func)
-    constrained_dof = fem.locate_dofs_topological(V, 0, constrained_vertex)
-    return fem.dirichletbc(default_scalar_type(val), constrained_dof, V)
-
-def internal_line(V,func,val):
-    msh = V.mesh
-    msh.topology.create_connectivity(1, msh.topology.dim)
-    constrained_vertex = mesh.locate_entities(msh, 1, func)
-    constrained_dof = fem.locate_dofs_topological(V, 1, constrained_vertex)
-    return fem.dirichletbc(default_scalar_type(val), constrained_dof, V)
-
 
 def get_zero_bc(V,boundary):
+    '''
+    Get a zero boundary condition on a function space V, given a boundary.
+    '''
     boundary_dofs_x = get_boundary_dofs(V,boundary)
     return fem.dirichletbc(get_zero_vec(V), boundary_dofs_x, V)
 
 
 def get_bc_func(V,boundary,bc_expr):
+    '''Define a boundary condition on a function space V, given a boundary and a function expression.'''
     boundary_dofs_x = get_boundary_dofs(V,boundary)
     try : # Attempt to collapse the function space
         Vcollapse, _ = V.collapse()
@@ -109,6 +100,7 @@ def get_bc_func(V,boundary,bc_expr):
 
 
 def marked_ds(msh, boundaries):
+    '''Create a measure ds with subdomain data for the given boundaries.'''
 
     facets = []
     for boundary in boundaries:

@@ -31,12 +31,12 @@ class Params_with_uc:
         self.length = fem.Constant(msh,default_scalar_type(16e3)) # Length of domain in flow direction
         self.viscosity_tol = fem.Constant(msh,default_scalar_type(0.1)) # Viscosity regularisation
 
-        self.σc = fem.Constant(msh,default_scalar_type(0.2e6)) # Tensile strength
+        self.σt = fem.Constant(msh,default_scalar_type(0.2e6)) # Tensile strength
         self.Kic = fem.Constant(msh,default_scalar_type(100e3)) # Fracture toughness
 
     @property
     def ψcrit(self):
-        return self.σc**2 / (2*self.E)
+        return self.σt**2 / (2*self.E)
 
     @property
     def Gc(self):
@@ -124,10 +124,6 @@ class Params_with_uc:
     def δ(self):
         return 1-self.ρi/self.ρw
     
-    # @property
-    # def σc(self):
-    #     return self.μ*self.ucstar
-   
     
     @property
     def patmstar(self):
@@ -165,10 +161,6 @@ class Params_with_uc:
         elastic and fracture stresses."""
         return self.μ * self.uc**2 / (self.Gc * self.H)
 
-    @property
-    def C_inertia(self):
-        return self.ρc * self.H**2 / (self.μ * self.τ**2)
-    
 
     @property
     def length_star(self):

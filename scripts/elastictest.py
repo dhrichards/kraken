@@ -92,7 +92,7 @@ model.params.length.value = true_length
 model.params.sea_level.value = model.params.H.value*0.9
 # model.params.ge_tol.value = 1e-3
 
-model.params.σc.value  = 200e3
+model.params.σt.value  = 200e3
 
 model.setup(kr.momentum.elastic.Elasticity,kr.damage.higherorder.AT2,[u_bc, d_bc])
 

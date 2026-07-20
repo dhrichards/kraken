@@ -47,7 +47,7 @@ model.params.crack_level_above_sea.value = -0.9*model.params.H.value
 model.params.sea_level.value = 0.9 * model.params.H.value
 model.params.length.value = nondim_length * model.params.H.value
 
-model.params.σc = 200e3
+model.params.σt = 200e3
 
 
 if MPI.COMM_WORLD.rank == 0:

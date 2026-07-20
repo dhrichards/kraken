@@ -8,6 +8,7 @@ import numpy as np
 import adios4dolfinx
 import kraken as kr
 class Simulation:
+    '''Base class for the simulation. Contains the mesh, parameters, and solvers for momentum and damage.'''
     def __init__(self, msh):
         self.msh = msh
         self.params = parameters.Params_with_uc(self.msh)
@@ -34,6 +35,7 @@ class Simulation:
     def setup(self,MomentumSolver=momentum.mixed.SemiLagrangianEpsilon,
                     DamageSolver=damage.higherorder.AT2,
                     bc_funcs=[lambda V: [], lambda V: []]):
+        '''Setup the simulation with the given momentum and damage solvers, and boundary condition functions.'''
 
 
         self.bc_funcs = bc_funcs
@@ -45,14 +47,15 @@ class Simulation:
         
 
     def interpolate_from_parent(self, parent, parent_cells, bcs):
+        '''Interpolate a state from a parent simulation (on a different mesh)
+        to a child simulation (on a subset of the parent mesh).'''
 
         self.tol = parent.tol
         self.min_its = parent.min_its
         self.max_its = parent.max_its
 
 
-        self.params.Ttop.value = parent.params.Ttop.value
-        self.params.Tbot.value = parent.params.Tbot.value
+        self.params.Ttop.value = parent.params.T.value
         self.params.ρi.value = parent.params.ρi.value
         self.params.ρw.value = parent.params.ρw.value
         self.params.g.value = parent.params.g.value
@@ -68,19 +71,10 @@ class Simulation:
         self.params.crack_level_above_sea.value = parent.params.crack_level_above_sea.value
         self.params.sea_level.value = parent.params.sea_level.value
         self.params.length.value = parent.params.length.value
+        self.params.viscosity_tol.value = parent.params.viscosity_tol.value
 
-        self.params.σt0.value = parent.params.σt0.value
-        self.params.σt_deg.value = parent.params.σt_deg.value
-
+        self.params.σt.value = parent.params.σt.value
         self.params.Kic.value = parent.params.Kic.value
-
-        self.params.cp.value = parent.params.cp.value
-        self.params.κ.value = parent.params.κ.value
-
-        self.params.friction_angle.value = parent.params.friction_angle.value
-        self.params.cohesion.value = parent.params.cohesion.value        
-       
-    
 
 
         self.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
@@ -105,12 +99,14 @@ class Simulation:
 
 
     def timestep(self):
+        '''Perform a timestep of the simulation.'''
         if self.damage_on:
             self.damage.timestep()
         self.momentum.timestep()
       
 
     def revert(self):
+        ''' Revert the simulation to the start of the timestep in the picard iteration loop'''
         self.damage.revert()
         self.momentum.revert()
 
@@ -133,6 +129,17 @@ class Simulation:
 
         
     def fixed_point(self, save=False, stop_bottom=False):
+            '''Logic for performing fixed point iteration between
+            the momentum and damage solvers.
+            Returns a tuple of (flag, nits) where flag indicates the convergence status and nits is the number of iterations performed.
+            flag = 1: converged
+            flag = 2: max iterations reached
+            flag = -1: error occurred (e.g., solver did not converge)
+            
+            Takes in as input a boolean save which if True will save the state of the simulation at each iteration to an xdmf file.
+            Takes in as input a boolean stop_bottom which if True will stop the iteration if the L2 norm of the damage field on the bottom boundary exceeds 0.12.
+            
+            '''
             L2_old = 0.0
 
             one = fem.Function(self.damage.D)
@@ -152,8 +159,7 @@ class Simulation:
                 if self.damage_on:
                     self.damage.solve()
                 
-                # if solve_mass:
-                #     self.mass.solve()
+             
                
 
                 if save:
@@ -188,21 +194,6 @@ class Simulation:
 
                 errors.append(error_L2)
 
-                # if (L2 < L2_old) and i > 30:
-                #     utilities.write_xdmf("./outputs/" + self.filename + "run" + str(it) + "_decrease" + str(i) + ".xdmf",
-                #                 self.msh, [self.momentum.u,self.damage.d,
-                #                            self.damage.d_prev_it,self.damage.d_prev_it2,self.damage.d_prev_it3,
-                #                            self.momentum.ψplus/self.params.ψcritstar,
-                #                            self.params.l
-                #                         # self.momentum.u_e, self.momentum.u_v
-                #                         ],
-                #                         ["u","d",
-                #                             "d_prev_it","d_prev_it2","d_prev_it3",
-                #                             "psi_plus",
-                #                             "l"
-                #                         # "ue","uv",
-                #                         ],
-                #                     t=i)
                 
 
                 if self.momentum.solver.getConvergedReason() == -3: 
