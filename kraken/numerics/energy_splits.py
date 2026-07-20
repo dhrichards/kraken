@@ -76,7 +76,7 @@ def stress_plus_dp(ε, ν, γ=sqrt(3), eps=1e-14):
 
 
 
-def free_energy_plus_lo(ε,ν):
+def free_energy_plus_nt(ε,ν):
 
     λ,M = eigenstate(ε)
     λ_mid = (ε[0,0] + ε[1,1])/2
@@ -91,7 +91,7 @@ def free_energy_plus_lo(ε,ν):
              ufl.conditional(ufl.gt((1-ν)*λ[2] + ν*(λ[0]+λ[1]),0),psi3,
                              0)))
 
-def free_energy_plus_lo_3d(ε,ν):
+def free_energy_plus_nt_3d(ε,ν):
     Eoverμ = 2*(1+ν)
     λ,M = eigenstate(ε)
 
@@ -105,7 +105,7 @@ def free_energy_plus_lo_3d(ε,ν):
                              0)))
 
 
-def stress_plus_lo(ε,ν):
+def stress_plus_nt(ε,ν):
     E = Eoverμ(ν)
     λ,M = eigenstate(ε)
     λ_mid = (ε[0,0] + ε[1,1])/2
@@ -128,7 +128,7 @@ def stress_plus_lo(ε,ν):
                              ufl.zero(ufl.shape(ε)))))
 
 
-def stress_plus_lo_3d(ε,ν):
+def stress_plus_nt_3d(ε,ν):
     E = 2*(1+ν)
 
     λ,M = eigenstate(ε)

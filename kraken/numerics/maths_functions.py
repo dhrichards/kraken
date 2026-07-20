@@ -26,23 +26,15 @@ def viscous_energy(ε, n, eps = 1e-12, A=1.0):
 def ε(u):
     return ufl.sym(ufl.grad(u))
 
-def dev3(A):
-    δ = ufl.Identity(ufl.shape(A)[0])
-    return A - ufl.tr(A)/3*δ
-
-def εD3(u):
-    return dev3(ε(u))
-
-
 def largest_eigenvalue(A):
     λ, M = eigenstate(A)
     return λ[-1]
 
-def positive_part(x,eps=1e-8):
+def positive_part(x):
     return ufl.max_value(0.0,x)
 
 
-def negative_part(x,eps=1e-6):
+def negative_part(x):
     return 0.5*(x-abs(x))
 
 
