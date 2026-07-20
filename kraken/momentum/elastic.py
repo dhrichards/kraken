@@ -9,6 +9,7 @@ from kraken.numerics import energy_splits as es
 from kraken.numerics import solvers
 
 class Elasticity(Momentum):
+    '''Elasticity class for solving the momentum equation in a linear elastic material.'''
     def __init__(self, sim):
         super().__init__(sim)
 
@@ -19,7 +20,7 @@ class Elasticity(Momentum):
         self.ε_e = mf.ε(self.u)
         self.ψplus = self.free_energy_plus(self.ε_e,self.u)
         self.p_crack = self.crack_pressure(self.u)
-        self.ψplus  = es.free_energy_plus_lo(self.ε_e + self.p_crack*ufl.Identity(self.sim.msh.geometry.dim)/(3*es.Koverμ(self.sim.params.ν)), self.sim.params.ν)
+        self.ψplus  = es.free_energy_plus_nt(self.ε_e + self.p_crack*ufl.Identity(self.sim.msh.geometry.dim)/(3*es.Koverμ(self.sim.params.ν)), self.sim.params.ν)
 
         self.u_prev_it = fem.Function(self.W, name="displacement previous iteration")
         self.u_prev_time = fem.Function(self.W, name="displacement previous time")

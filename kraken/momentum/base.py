@@ -13,6 +13,7 @@ import adios4dolfinx
 
 
 class Momentum:
+    '''Base class for solving the momentum equation.'''
     def __init__(self, sim):
         self.sim = sim
         
@@ -49,7 +50,7 @@ class Momentum:
         pw = self.crack_pressure(u)
         I = ufl.Identity(self.sim.msh.geometry.dim); ν = self.sim.params.ν
         
-        σplus = es.stress_plus_lo(ε + pw*I/(3*es.Koverμ(ν)), ν)
+        σplus = es.stress_plus_nt(ε + pw*I/(3*es.Koverμ(ν)), ν)
         g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
         σ0 = es.cauchy_stress(ε, self.sim.params.ν)
         σminus = σ0 - σplus
@@ -58,7 +59,7 @@ class Momentum:
     def free_energy_plus(self,ε,u):
         pw = self.crack_pressure(u)
         I = ufl.Identity(self.sim.msh.geometry.dim); ν = self.sim.params.ν
-        return es.free_energy_plus_lo(ε + pw*I/(3*es.Koverμ(ν)), ν)
+        return es.free_energy_plus_nt(ε + pw*I/(3*es.Koverμ(ν)), ν)
     
     
     def setup_solver(self):

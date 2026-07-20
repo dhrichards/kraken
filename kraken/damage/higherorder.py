@@ -14,6 +14,11 @@ import numpy as np
 
 
 class AT2(Damage):
+    '''
+    Higher order AT2 phase-field damage model.
+    This is solved using a mixed formulation, where the damage field and its Laplacian are solved for simultaneously.
+    Irreversibility is enforced using a history variable, which is updated at each timestep.
+    '''
     def __init__(self, sim):
         super().__init__(sim)
 
@@ -66,13 +71,6 @@ class AT2(Damage):
                 - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx
         
 
-    
-
-        C_new = 1e-2/(self.sim.params.Gc*self.sim.params.τ)
-
-        d_dot = (self.d - self.d_prev_time)/self.sim.params.dtstar
-
-        # self.F += C_new*l*d_dot*v*ufl.dx
         self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
 
 

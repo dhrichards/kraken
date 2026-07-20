@@ -8,6 +8,7 @@ import basix.ufl as bufl
 import adios4dolfinx
 
 class Damage:
+    '''Base class for damage models.'''
     def __init__(self, sim):
         self.sim = sim
 
@@ -27,6 +28,7 @@ class Damage:
         raise NotImplementedError("This method should be implemented in subclasses.")
     
     def setup_solver(self):
+        '''Set up the nonlinear solver for the damage problem.'''
 
         self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
         self.solver.setFunction(self.problem.F, dolfinx.fem.petsc.create_vector(fem.form(self.F)))
@@ -40,15 +42,6 @@ class Damage:
         self.solver.getKSP().getPC().setType("lu")
 
 
-    def setup_history(self):
-        self.H_func = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
-        h = ufl.TrialFunction(self.H_space)
-        v = ufl.TestFunction(self.H_space)
-
-        a = ufl.inner(h, v) * ufl.dx
-        L = ufl.inner(self.H_func, v) * ufl.dx
-
-        self.history_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"})
 
     def interpolate_from_parent(self, parent):
         self.Hprev.interpolate(parent.damage.Hprev, cells0=self.sim.parent_cells, cells1=self.sim.cells)
@@ -58,6 +51,7 @@ class Damage:
 
     
     def timestep(self):
+        '''Update the history variable for the damage model.'''
         self.H_func = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
         self.Hprev.interpolate(fem.Expression(self.H_func, self.H_space.element.interpolation_points()))
 

@@ -16,9 +16,23 @@ from kraken.boundaryconditions import marked_ds
 
 
 class SemiLagrangianEpsilon(Momentum):
+    '''
+    Class for solving the momentum equation for a Maxwell viscoelastic material
+
+    Time evolution is handled using a semi-Lagrangian approach, such that it solves for the change
+    in displacements at each timestep and the mesh is then moved. 
+
+    Solves for the change in total displacement, change in viscous displacement, and pressure as a mixed function.
+    The elastic displacement is then calculated as the difference between the total and viscous displacements.
+    The elastic strain is then calculated from the elastic displacement and the previous timestep's elastic strain.
+
+    The viscosity can be non-newtonian, for some power law
+    '''
 
     def __init__(self, sim):
         super().__init__(sim)
+
+        self.mesh_smoothing = True
 
         self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), 2, shape=(self.sim.msh.geometry.dim,))
         self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
@@ -67,7 +81,6 @@ class SemiLagrangianEpsilon(Momentum):
         self.pw = self.water_pressure(self.du)
         self.p_crack = self.crack_pressure(self.du)
 
-        self.accel = (self.u - 2*self.u_prev_time + self.u_prev_2)/(self.sim.params.dtstar**2)
 
         self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(self.sim.msh.geometry.dim, self.sim.msh.geometry.dim))
         self.E = fem.functionspace(self.sim.msh, self.ε_el)
@@ -75,8 +88,6 @@ class SemiLagrangianEpsilon(Momentum):
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
         self.ε_e = mf.ε(self.du_e) + self.ε_e_prev_time
         self.ε_e_prev_it = mf.ε(self.du_e_prev_it) + self.ε_e_prev_time
-
-        self.ε_eD = self.ε_e - (1/3)*1.5*ufl.tr(self.ε_e)*ufl.Identity(self.sim.msh.geometry.dim)
 
         self.ψplus = self.free_energy_plus(self.ε_e,self.du)
 
@@ -87,7 +98,8 @@ class SemiLagrangianEpsilon(Momentum):
 
     def setup_momentum(self):
 
-        self.setup_smoother()
+        if self.mesh_smoothing:
+            self.setup_smoother()
         w_test = ufl.TestFunction(self.W)
         v, v_v, q = ufl.split(w_test)
         n = ufl.FacetNormal(self.sim.msh)
@@ -102,54 +114,18 @@ class SemiLagrangianEpsilon(Momentum):
         A = mf.rate_factor(self.sim.params.T)/self.sim.params.A0
 
         η0 = mf.viscosity(ufl.dev(mf.ε(self.vel_prev_it)), self.sim.params.n, 1e-19, A=A)
-        # η0 = 7000.0
         η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
 
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
 
-        Iprime = 2*self.sim.damage.d
 
-        def right_boundary(x):
-            return np.isclose(x[0], self.sim.params.length.value/self.sim.params.H.value)
-        
-        def bottom_boundary(x):
-            return np.isclose(x[1], 0.0)
-        
-        def left_boundary(x):
-            return np.isclose(x[0], 0.0)
-        
-        
-        r_facets = mesh.locate_entities_boundary(self.sim.msh, self.sim.msh.topology.dim-1, right_boundary)
-        b_facets = mesh.locate_entities_boundary(self.sim.msh, self.sim.msh.topology.dim-1, bottom_boundary)
-        l_facets = mesh.locate_entities_boundary(self.sim.msh, self.sim.msh.topology.dim-1, left_boundary)
-        facets = np.hstack([r_facets, b_facets, l_facets])
-        values = np.hstack([np.full_like(r_facets, 1), np.full_like(b_facets, 2), np.full_like(l_facets, 3)])
-        sorted_facets = np.argsort(facets)
-        mt = mesh.meshtags(self.sim.msh, self.sim.msh.topology.dim-1, facets[sorted_facets], values[sorted_facets])
-        ds = ufl.Measure("ds", domain=self.sim.msh, subdomain_data=mt)
-
-        x = ufl.SpatialCoordinate(self.sim.msh)
-        δ = 0.1
-        σxx_ssa = δ/2 + (x[1]-1)
-        t = ufl.as_vector((σxx_ssa, 0))
-
-        
         self.F = (
-            # 0.5*self.sim.params.C_inertia*ufl.inner(self.accel, v)  \
             + ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
-            #  - self.p_crack* ufl.inner(ufl.grad(g), v)\
-            # - self.p_crack*ufl.inner(ufl.Dx(g,0), v[0]) \
-            # + self.p_crack*Iprime*ufl.inner(ufl.Dx(self.sim.damage.d,0), v[0]) \
-            # + self.p_crack*Iprime*ufl.inner(ufl.grad(self.sim.damage.d), v)
               ) * ufl.dx 
               
         self.F += (
             self.pw * ufl.inner(n, v) * ufl.ds\
-            # +(self.pw-2e-3)*ufl.inner(n,v) * ds(1) \
-            # + self.pw * ufl.inner(n, v) * ds(3) \
-            # + self.pw * ufl.inner(n, v) * ds(2)\
-        #     # + 1e5 * ufl.inner(self.vel, v) * self.ds_bottom(1)\
             )
         
         self.F+= (
@@ -159,16 +135,6 @@ class SemiLagrangianEpsilon(Momentum):
             -    g*ufl.inner(σ0, mf.ε(v_v))
              ) * ufl.dx
         
-        # self.F += (
-        #         2*η*ufl.inner(mf.ε(self.vel), mf.ε(v_v))\
-        #         + ufl.inner(-self.p, ufl.div(v_v))  \
-        #         - ufl.inner(σ, mf.ε(v_v))\
-        #             ) * ufl.dx
-        # self.F += (
-        #         ufl.inner(σv0, mf.ε(v_v))\
-        #         + ufl.inner(σ, mf.ε(v_v))\
-        # )         * ufl.dx
-
 
         self.F += (
                 - g*ufl.div(self.du)*q \
@@ -224,11 +190,15 @@ class SemiLagrangianEpsilon(Momentum):
 
         self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
 
-        du = fem.Function(self.V)
-        du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
-        # self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
-        # du = self.smooth_problem.solve()
-        self.du_smooth.x.array[:] = du.x.array[:] # for saving
+        
+        if self.mesh_smoothing:
+            self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+            du = self.smooth_problem.solve()
+            self.du_smooth.x.array[:] = du.x.array[:] # for saving
+        else:
+            du = fem.Function(self.V)
+            du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+
         self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
         
         self.w_prev_2.x.array[:] = self.w_prev_time.x.array[:]

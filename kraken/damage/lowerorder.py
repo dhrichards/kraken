@@ -14,6 +14,7 @@ import numpy as np
 
 
 class LowerOrder(Damage):
+    ''' Parent class for lower order damage models, such as AT1 and AT2'''
     def __init__(self, sim):
         super().__init__(sim)
 
@@ -51,6 +52,8 @@ class LowerOrder(Damage):
 
 
 class AT2(LowerOrder):
+    '''Lower oder AT2 phase-field damage model.
+      Irreversibility is enforced using a history variable, which is updated at each timestep.'''
     def setup_weak_form(self):
         C3 = self.sim.params.C3; l = self.sim.params.lstar
         ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
@@ -74,6 +77,9 @@ class AT2(LowerOrder):
 
 
 class AT1(LowerOrder):
+    '''Lower order AT1 phase-field damage model.
+      Solved using a bounded solver,
+      Irreversibility is enforced using d_prev_time as a lower bound, which is updated at each timestep.'''
     def __init__(self, sim):
         super().__init__(sim)
 
