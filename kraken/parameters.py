@@ -166,12 +166,6 @@ class Params_with_uc:
     def length_star(self):
         return self.length / self.H
 
-    def set_l_from_mesh(self,msh,factor=2):
-        """Set the regularisation length from the mesh."""
-        h = mesh_sizes(msh)
-        self.lstar = factor*h.max()
-        
-
     def yrs2nondimt(self,yr):
         return yr*secperyr/self.dt
     
