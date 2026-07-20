@@ -1,7 +1,7 @@
 import ufl
 from math import sqrt
 from .invariants import eigenstate, matrix_function
-from .maths_functions import dev3, largest_eigenvalue, positive_part, negative_part
+from .maths_functions import positive_part, tr_e
 
 def λoverμ(ν):
     return 2*ν/(1-2*ν)
@@ -17,87 +17,61 @@ def Eoverμ(ν):
 
 def cauchy_stress(ε,ν):
     D = ufl.shape(ε)[0]
-    return 1.5*λoverμ(ν)*ufl.tr(ε)*ufl.Identity(D) + 2*ε 
-
-def principal_stress(ε,λ,μ):
-    return largest_eigenvalue(cauchy_stress(ε,λ,μ))
-
-def stress_plus_spectral(ε,ν):
-    I = ufl.Identity(ufl.shape(ε)[0])
-    εplus = matrix_function(ε,positive_part)
-    return 1.5*λoverμ(ν)*positive_part(ufl.tr(ε))*I + 2*εplus
-
-
-
-def stress_plus_amor(ε,ν):
-    D = ufl.shape(ε)[0]
-    I = ufl.Identity(D)
-    κ = Koverμ(ν)
-    return 1.5*κ*positive_part(ufl.tr(ε))*I + 2*ufl.dev(ε)
-
+    return λoverμ(ν)*tr_e(ε)*ufl.Identity(D) + 2*ε 
 
 
 def free_energy(ε,ν):
-    return 0.5*1.5*λoverμ(ν)*ufl.tr(ε)**2 + ufl.inner(ε,ε) 
+    εD = ufl.dev(ε)
+    return 0.5*Koverμ(ν)*tr_e(ε)**2 + ufl.inner(εD,εD) 
 
 
 
-def free_energy_plus_dp(ε, ν, γ=sqrt(2), eps=1e-14):
+# def stress_plus_spectral(ε,ν):
+#     D = ufl.shape(ε)[0]
+#     I = ufl.Identity(D)
+#     εplus = matrix_function(ε,positive_part)
+#     return λoverμ(ν)*positive_part(tr_e(ε))*I + 2*εplus
+
+# def free_energy_plus_spectral(ε,ν):
+#     ##Spectral:
+#     εplus = matrix_function(ε,positive_part)
+#     return 0.5*λoverμ(ν)*positive_part(tr_e(ε))**2 \
+#             + ufl.inner(εplus,εplus) 
+
+
+
+
+def free_energy_plus_dp(ε, ν, γ=sqrt(3), eps=1e-14):
     K = Koverμ(ν)
-    trε = 1.5*ufl.tr(ε)
     εD2 = ufl.inner(ufl.dev(ε), ufl.dev(ε)) + eps
     
     
     
-    ψ1 = 0.5*K*trε**2 + εD2
-    ψ2 = (K*γ*trε + 2*ufl.sqrt(εD2))**2 / (2*(K*γ**2 + 2))
+    ψ1 = 0.5*K*tr_e(ε)**2 + εD2
+    ψ2 = (K*γ*tr_e(ε) + 2*ufl.sqrt(εD2))**2 / (2*(K*γ**2 + 2))
 
-    return ufl.conditional(ufl.lt(ufl.sqrt(εD2), trε/γ), ψ1,
-                        ufl.conditional(ufl.lt(ufl.sqrt(εD2), -γ*K/2*trε), 0.0, 
+    return ufl.conditional(ufl.lt(ufl.sqrt(εD2), tr_e(ε)/γ), ψ1,
+                        ufl.conditional(ufl.lt(ufl.sqrt(εD2), -γ*K/2*tr_e(ε)), 0.0, 
                                          ψ2))
   
 
 
 
 
-def stress_plus_dp(ε, ν, γ=sqrt(2), eps=1e-14):
+def stress_plus_dp(ε, ν, γ=sqrt(3), eps=1e-14):
     K = Koverμ(ν)
-    trε = 1.5*ufl.tr(ε)
     εD2 = ufl.inner(ufl.dev(ε), ufl.dev(ε)) + eps
-    δ = ufl.Identity(2)
-    
+    D = ufl.shape(ε)[0]
+    δ = ufl.Identity(D)
 
-    σ1 = K*trε*δ + 2*ufl.dev(ε)
+    σ1 = K*tr_e(ε)*δ + 2*ufl.dev(ε)
     σ2 = (K*γ*δ + ufl.dev(ε)/ufl.sqrt(εD2))/(K*γ**2 + 2)
 
-    return ufl.conditional(ufl.lt(ufl.sqrt(εD2), trε/γ), σ1,
-                        ufl.conditional(ufl.lt(ufl.sqrt(εD2), -γ*K/2*trε), 0.0*δ, 
+    return ufl.conditional(ufl.lt(ufl.sqrt(εD2), tr_e(ε)/γ), σ1,
+                        ufl.conditional(ufl.lt(ufl.sqrt(εD2), -γ*K/2*tr_e(ε)), 0.0*δ, 
                                          σ2))
 
 
-def free_energy_plus_amor(ε,ν):
-    κ = λoverμ(ν) + 2/3
-    return 0.5*κ*1.5*positive_part(ufl.tr(ε))**2 + \
-            ufl.inner(ufl.dev(ε),ufl.dev(ε))
-
-def free_energy_plus_star(ε,ν,γ=1):
-    κ = Koverμ(ν)
-    return 0.5*κ*1.5*(positive_part(ufl.tr(ε))**2 \
-                  - γ*1.5*negative_part(ufl.tr(ε))**2) \
-            + ufl.inner(ufl.dev(ε),ufl.dev(ε)) 
-
-def stress_plus_star(ε,ν,γ=1):
-    D = ufl.shape(ε)[0]
-    I = ufl.Identity(D)
-    κ = Koverμ(ν)
-    return 1.5*(κ*positive_part(ufl.tr(ε)) - 2*γ*negative_part(ufl.tr(ε)))*I + 2*ufl.dev(ε)
-
-
-def free_energy_plus_spectral(ε,ν):
-    ##Spectral:
-    εplus = matrix_function(ε,positive_part)
-    return 0.5*1.5*λoverμ(ν)*positive_part(ufl.tr(ε))**2 \
-            + ufl.inner(εplus,εplus) 
 
 
 
@@ -179,7 +153,7 @@ def stress_plus_lo_3d(ε,ν):
 
 
 
-def degradation_default(d,k=1e-5):
+def degradation_default(d,k=1e-12):
     return (1-k)*(1-d)**2 + k
 
 

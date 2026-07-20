@@ -3,6 +3,17 @@ from .invariants import eigenstate
 from dolfinx import fem, default_scalar_type
 import numpy as np
 
+def tr_e(A):
+    ''' Special trace, assuming that we have plane viscous strain rates,
+      then there is out of plane elastic strain which is always equal to:
+      e_yy = (e_xx + e_zz)/2
+      so that the trace is:
+      tr(A) = e_xx + e_yy + e_zz = 1.5*(e_xx + e_zz)'''
+    if ufl.shape(A)[0] == 2:
+        return 1.5*ufl.tr(A)
+    else:
+        return ufl.tr(A)
+
 def viscosity(ε, n, eps=1.e-11, A=1.0): 
     εe2 = ufl.inner(ε, ε) / 2 + eps
     return  A**(-1/n) * εe2**((1 - n) / (2 * n))
