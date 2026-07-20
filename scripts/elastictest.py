@@ -13,7 +13,6 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--l", type=float, default=2, help="Regularization length scale in meters")
-parser.add_argument("--type", type=str, default="normal", help="degraded or normal")
 parser.add_argument("--cellfactor", type=float, default=2.0, help="Mesh cell size factor")
 
 args = parser.parse_args()
@@ -82,11 +81,6 @@ d_bc = lambda V: [
                 #   bc.get_zero_bc(V.sub(1), all_boundaries)
                   ]
 
-if args.type == "degraded":
-    elast = kr.momentum.elastic.ElasticityDegraded
-elif args.type == "normal":
-    elast = kr.momentum.elastic.Elasticity
-
 model = kr.base.Simulation(msh)
 
 model.params.H.value = true_height
@@ -98,10 +92,9 @@ model.params.length.value = true_length
 model.params.sea_level.value = model.params.H.value*0.9
 # model.params.ge_tol.value = 1e-3
 
-model.params.σt_deg.value = 20e3
-model.params.σt0.value = 200e3
+model.params.σc.value  = 200e3
 
-model.setup(kr.damage.higherorder.AT2,[u_bc, d_bc])
+model.setup(kr.momentum.elastic.Elasticity,kr.damage.higherorder.AT2,[u_bc, d_bc])
 
 
 #%%
