@@ -62,8 +62,8 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 model = kr.base.Simulation(msh)
 
 model.tol = 5e-6
-model.min_its = 990
-model.max_its = 1000
+model.min_its = 1200
+model.max_its = 1300
 
 x = ufl.SpatialCoordinate(msh)
 z = x[msh.geometry.dim-1]
@@ -86,6 +86,9 @@ if MPI.COMM_WORLD.rank == 0:
 
 
 δ = model.params.δ; ν = model.params.ν
+edotvxx = (δ/4)**3
+duv = lambda x: edotvxx*x[0]*model.params.dtstar
+
 duedx = lambda z: (-0.125*δ*ν + 0.25*δ + 1.0*ν - 0.5 - 1.0*z*ν + 0.5*z)/((ν + 1))
 ue_x = lambda x: duedx(x[1])*x[0]
 dudx = model.params.dtstar*(δ/4)**3

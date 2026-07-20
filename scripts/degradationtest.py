@@ -20,7 +20,7 @@ parser.add_argument("--save_bp", type=bool, default=True, help="Save bp files")
 args = parser.parse_args()
 
 
-filename = "degradationtest_l" + str(args.lstar) + "_cellfactor" + str(args.cellfactor) + "_notdegraded"
+filename = "degradationtest_l" + str(args.lstar) + "_cellfactor" + str(args.cellfactor) + "_degraded"
 
 path = './outputs'
 os.makedirs(path, exist_ok=True)
