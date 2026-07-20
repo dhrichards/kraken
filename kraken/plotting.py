@@ -1,4 +1,4 @@
-from dolfinx import fem
+from dolfinx import fem, io
 import adios4dolfinx
 from mpi4py import MPI
 import numpy as np
