@@ -62,7 +62,7 @@ msh = mesh.create_rectangle(MPI.COMM_WORLD,
 model = kr.base.Simulation(msh)
 
 model.tol = 5e-6
-model.min_its = 1200
+model.min_its = 200
 model.max_its = 1300
 
 x = ufl.SpatialCoordinate(msh)
@@ -124,7 +124,7 @@ model.damage_on = True
 
 
 
-flag,nits = model.fixed_point(save=False)
+flag,nits = model.fixed_point(save=True)
 
 t += model.params.dt.value
 if args.save_bp:
