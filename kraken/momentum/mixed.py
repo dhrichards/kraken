@@ -137,7 +137,7 @@ class SemiLagrangianEpsilon(Momentum):
         
 
         self.F += (
-                - g*ufl.div(self.du)*q \
+                - g*ufl.div(self.du_v)*q \
                 ) * ufl.dx 
         
 
