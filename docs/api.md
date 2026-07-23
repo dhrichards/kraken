@@ -1,0 +1,5 @@
+# Kraken
+
+## API Reference
+
+::: kraken

@@ -13,3 +13,7 @@ nav:
   - 📦 Install: install.md
 
 
+plugins:
+  - search
+  - mkdocstrings
+

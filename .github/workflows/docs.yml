@@ -2,8 +2,7 @@ name: Deploy documentation
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
@@ -11,21 +10,27 @@ permissions:
   id-token: write
 
 jobs:
-  deploy:
+  docs:
     runs-on: ubuntu-latest
+
+    container:
+      image: dolfinx/dolfinx:stable
 
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.x"
+      - name: Install Kraken
+        run: |
+          python3 -m pip install .
 
-      - run: |
-          pip install mkdocs-material
-          pip install "mkdocstrings[python]"
+      - name: Install documentation packages
+        run: |
+          python3 -m pip install \
+            mkdocs-material \
+            "mkdocstrings[python]"
 
-      - run: mkdocs build
+      - name: Build docs
+        run: mkdocs build
 
       - uses: actions/upload-pages-artifact@v3
         with:
