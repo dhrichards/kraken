@@ -143,7 +143,7 @@ model.params.crack_level_above_sea.value = args.level
 model.params.sea_level.value = args.sealevel * args.height
 model.params.length.value = args.nondim_length * args.height
 
-model.params.σc = args.strength0*1e3 - args.strength_deg*1e3*(model.params.T)
+model.params.σt = args.strength0*1e3 - args.strength_deg*1e3*(model.params.T)
 
 model.filename = filename
 def smoothstep(x, x_c, width):
@@ -386,7 +386,7 @@ for i in range(1,args.nt):
     t += model.params.dt.value
     if args.save_bp:
         model.write_checkpoint(path + "/" + filename +".bp", t)
-    ψpold = es.free_energy_plus_lo(model.momentum.ε_e, model.params.ν)
+    ψpold = es.free_energy_plus_nt(model.momentum.ε_e, model.params.ν)
     if i ==1 or i % 10 == 0 or flag == -1 or nits > 6:
         kr.utilities.write_xdmf(path + "/" + filename +"run" + str(i) + ".xdmf",
                                 model.msh, [model.momentum.u,model.damage.d,model.damage.d_prev_it2,model.damage.d_prev_it,model.damage.d_prev_it3,
