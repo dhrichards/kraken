@@ -1,0 +1,10 @@
+site name: kraken documentation
+
+theme:
+  name: material
+
+nav:
+  - 📖 About: index.md
+  - 📦 Install: install.md
+
+
