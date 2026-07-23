@@ -1,4 +1,5 @@
-site name: kraken documentation
+site_name: Kraken
+site_description: Phase-field fracture modelling framework
 
 theme:
   name: material
