@@ -9,8 +9,9 @@ theme:
         - content.code.copy
 
 nav:
-  - 📖 About: index.md
-  - 📦 Install: install.md
+  - About: index.md
+  - Install: install.md
+  - Api: api.md
 
 
 plugins:
