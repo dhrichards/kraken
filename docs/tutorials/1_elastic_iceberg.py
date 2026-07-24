@@ -1,6 +1,6 @@
 # %% [markdown]
 # # Elastic Iceberg
-#
+# 
 # This tutorial shows how to get kraken running, applied to the simple case of an elastic iceberg
 #
 # This file can also be run in parrallel using `mpirun`
@@ -16,7 +16,7 @@ from dolfinx import mesh
 
 # %% [markdown]
 # We then define the length and height of the iceberg. We will later impose a symmetry boundary condition on the left boundary, so the length here represents half the true iceberg length
-# We also define the regularisation length $\ell$, and the size of the mesh which we set to be half the regularisation length. 
+# We also define the regularisation length, and the size of the mesh which we set to be half the regularisation length. 
 #%%
 
 length = 1e3

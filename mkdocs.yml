@@ -14,7 +14,6 @@ nav:
   - Tutorials:
     - Elastic Iceberg: tutorials/1_elastic_iceberg.py
   - API:
-    - Overview: api/index.md
     - Base: api/base.md
     - Damage: api/damage.md
     - Momentum: api/momentum.md
