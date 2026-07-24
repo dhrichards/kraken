@@ -53,8 +53,6 @@ class Params:
 
     crack_level_above_sea : Water level in crack above sea level (default 0)
 
-    length: Length of domain (m)
-
     viscosity_tol: tolerance in viscosity degradation η → (1-d)²η + viscosity_tol 
 
     σt : Tensile strength (Pa).
@@ -80,7 +78,6 @@ class Params:
         self.patm = fem.Constant(msh,default_scalar_type(0.0)) # Atmospheric pressure
         self.ge_tol = fem.Constant(msh,default_scalar_type(1e-12)) # Elastic degradation tolerance
         self.crack_level_above_sea = fem.Constant(msh,default_scalar_type(0.0)) # Water level for hydrostatic pressure
-        self.length = fem.Constant(msh,default_scalar_type(16e3)) # Length of domain in flow direction
         self.viscosity_tol = fem.Constant(msh,default_scalar_type(0.1)) # Viscosity regularisation
 
         self.σt = fem.Constant(msh,default_scalar_type(0.2e6)) # Tensile strength
@@ -223,12 +220,7 @@ class Params:
         """Non dimensional constant describing ratio between
         elastic and fracture energies."""
         return self.μ * self.uc**2 / (self.Gc * self.H)
-
-
-    @property
-    def length_star(self):
-        '''Non-dimensional length'''
-        return self.length / self.H
+    
 
     def yrs2nondimt(self,yr):
         return yr*secperyr/self.dt

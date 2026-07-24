@@ -48,12 +48,11 @@ model = kr.base.Simulation(msh)
 
 # %% [markdown]
 # Within the model is the params class, which calculate non-dimensional numbers from physical constants.
-# We update the height, regularisation length, domain length and sea-level based on the problem specifications
+# We update the height and the regularisation length based on the problem specifications, we use the defaults otherwise
 #%%
 
 model.params.H.value = height
 model.params.l.value = l
-model.params.length.value = length
 # %% [markdown]
 # We now define our boundary conditions. To impose a symmetry condition we first define our left boundary as a function of x
 # Kraken provides a number of functions to impose different types of boundary conditions. They are specified as lambda functions to act on the function space

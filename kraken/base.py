@@ -67,8 +67,6 @@ class Simulation:
         self.params.patm.value = parent.params.patm.value
         self.params.ge_tol.value = parent.params.ge_tol.value
         self.params.crack_level_above_sea.value = parent.params.crack_level_above_sea.value
-        self.params.sea_level.value = parent.params.sea_level.value
-        self.params.length.value = parent.params.length.value
         self.params.viscosity_tol.value = parent.params.viscosity_tol.value
 
         self.params.σt.value = parent.params.σt.value
