@@ -1,5 +1,3 @@
-# Kraken
-
 ## API Reference
 
-::: kraken
+::: kraken.numerics.maths_functions
