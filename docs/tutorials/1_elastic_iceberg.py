@@ -54,8 +54,6 @@ model = kr.base.Simulation(msh)
 model.params.H.value = height
 model.params.l.value = l
 model.params.length.value = length
-model.params.sea_level.value = model.params.H.value*0.9
-
 # %% [markdown]
 # We now define our boundary conditions. To impose a symmetry condition we first define our left boundary as a function of x
 # Kraken provides a number of functions to impose different types of boundary conditions. They are specified as lambda functions to act on the function space

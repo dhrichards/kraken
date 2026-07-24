@@ -53,8 +53,6 @@ class Params:
 
     crack_level_above_sea : Water level in crack above sea level (default 0)
 
-    sea_level : Sea level for external boundary condition, default at flotation
-
     length: Length of domain (m)
 
     viscosity_tol: tolerance in viscosity degradation η → (1-d)²η + viscosity_tol 
@@ -78,16 +76,27 @@ class Params:
         self.n = fem.Constant(msh,default_scalar_type(3.0)) # Flow law exponent
         self.H = fem.Constant(msh,default_scalar_type(100)) # Characteristic length
         self.l = fem.Constant(msh,default_scalar_type(0.5)) # Regularisation length
-        self.dt = fem.Constant(msh,default_scalar_type(secperyr)) # Characteristic time in seconds
+        self.dt = fem.Constant(msh,default_scalar_type(3600*24)) # Timestep in seconds
         self.patm = fem.Constant(msh,default_scalar_type(0.0)) # Atmospheric pressure
         self.ge_tol = fem.Constant(msh,default_scalar_type(1e-12)) # Elastic degradation tolerance
         self.crack_level_above_sea = fem.Constant(msh,default_scalar_type(0.0)) # Water level for hydrostatic pressure
-        self.sea_level = fem.Constant(msh,default_scalar_type(self.ρi.value/self.ρw.value*self.H.value)) # Sea level height
         self.length = fem.Constant(msh,default_scalar_type(16e3)) # Length of domain in flow direction
         self.viscosity_tol = fem.Constant(msh,default_scalar_type(0.1)) # Viscosity regularisation
 
         self.σt = fem.Constant(msh,default_scalar_type(0.2e6)) # Tensile strength
         self.Kic = fem.Constant(msh,default_scalar_type(100e3)) # Fracture toughness
+
+    @property
+    def sea_level(self):
+        ''' Sea level, can be overwritten for non-flotation'''
+        if self._sea_level_override is None:
+            return self.ρi / self.ρw * self.H
+        else:
+            return self._sea_level_override
+
+    @sea_level.setter
+    def sea_level(self, value):
+        self._sea_level_override = value
 
     @property
     def ψcrit(self):
@@ -118,7 +127,7 @@ class Params:
     
     @property
     def crack_level_star(self):
-        '''Non dimensional crack water level above sea level'''
+        '''Non dimensional crack water level'''
         return self.crack_level_above_sea / self.H + self.sea_level_star
     
     @property
