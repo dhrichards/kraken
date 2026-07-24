@@ -5,10 +5,9 @@ FEniCSx.
 
 ## Features
 
-- Elastic fracture
-- Maxwell viscoelasticity
-- Poroelasticity
-- Adaptive timestepping
+- Phase-field modelling of crevasses and calving events
+- Long timescale viscoelastic deformation
+- Incorporation of pore pressure into free energy split to represent basal crevasses
 
 ## Getting Started
 
