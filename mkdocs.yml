@@ -11,6 +11,8 @@ theme:
 nav:
   - About: index.md
   - Install: install.md
+  - Tutorials:
+    - Elastic Iceberg: tutorials/1_elastic_iceberg.py
   - API:
     - Overview: api/index.md
     - Base: api/base.md
@@ -25,6 +27,7 @@ nav:
 plugins:
   - search
   - mkdocstrings
+  - mkdocs-jupyter
 
 
 markdown_extensions:

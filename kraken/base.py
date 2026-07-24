@@ -14,9 +14,7 @@ class Simulation:
         self.params = parameters.Params(self.msh)
         
 
-        self.damage_on = False
-        self.temperature_on = False
-        self.mass_on = False
+        self.damage_on = True
 
         self.tol = 5e-6
         self.min_its = 2

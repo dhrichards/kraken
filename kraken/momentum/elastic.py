@@ -13,7 +13,7 @@ class Elasticity(Momentum):
     def __init__(self, sim):
         super().__init__(sim)
 
-        self.W = fem.functionspace(self.sim.msh, ("Lagrange", 2, (self.sim.msh.geometry.dim, )))
+        self.W = fem.functionspace(self.sim.msh, ("Lagrange", 1, (self.sim.msh.geometry.dim, )))
 
         self.u = fem.Function(self.W, name="displacement")
         self.w = self.u

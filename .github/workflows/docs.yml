@@ -27,6 +27,7 @@ jobs:
         run: |
           python3 -m pip install \
             mkdocs-material \
+            mkdocs-jupyter \
             "mkdocstrings[python]"
 
       - name: Build docs
