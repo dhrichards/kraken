@@ -104,7 +104,7 @@ class SemiLagrangianEpsilon(Momentum):
         v, v_v, q = ufl.split(w_test)
         n = ufl.FacetNormal(self.sim.msh)
 
-        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
+        g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
         
 
         # σ0 = es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν)
@@ -172,7 +172,7 @@ class SemiLagrangianEpsilon(Momentum):
 
 
     def setup_smoother(self):
-        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
+        g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
 
         self.du_1 = fem.Function(self.V, name="du 1")
 

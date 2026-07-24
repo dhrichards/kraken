@@ -11,7 +11,7 @@ class Simulation:
     '''Base class for the simulation. Contains the mesh, parameters, and solvers for momentum and damage.'''
     def __init__(self, msh):
         self.msh = msh
-        self.params = parameters.Params_with_uc(self.msh)
+        self.params = parameters.Params(self.msh)
         
 
         self.damage_on = False

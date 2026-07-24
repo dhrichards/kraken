@@ -54,7 +54,7 @@ class Momentum:
         I = ufl.Identity(self.sim.msh.geometry.dim); ν = self.sim.params.ν
         
         σplus = es.stress_plus_nt(ε + pw*I/(3*es.Koverμ(ν)), ν)
-        g = es.degradation_default(self.sim.damage.d,self.sim.params.ge_tol)
+        g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
         σ0 = es.cauchy_stress(ε, self.sim.params.ν)
         σminus = σ0 - σplus
         return g*σplus+ σminus

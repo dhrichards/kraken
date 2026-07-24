@@ -1,9 +1,17 @@
+"""
+Plotting utilities for Kraken.
+
+Functions in this module enable writing to xdmfw as well as provide conversion between DOLFINx meshes and
+Matplotlib-compatible representations for visualisation and post-processing.
+"""
 from dolfinx import fem, io
 import adios4dolfinx
 from mpi4py import MPI
 import numpy as np
 import basix.ufl as bufl
 from matplotlib import tri
+
+
 
 
 def write_xdmf(filename,msh,functions,names,t=0.0):
@@ -57,6 +65,26 @@ def vector_to_array(msh, f):
     return fis
 
 def dolfinx_to_array(msh, f):
+    """
+    Convert a scalar or vector DOLFINx/UFL function to NumPy arrays.
+    Parameters
+    ----------
+    msh : dolfinx.mesh.Mesh
+        The mesh on which the function is defined.
+    f : ufl.core.expr.Expr or dolfinx.fem.Function
+        Scalar or vector-valued UFL expression or DOLFINx function.
+
+    Returns
+    -------
+    numpy.ndarray or list of numpy.ndarray
+        Nodal values of the function. Scalar fields return a single array;
+        vector fields return a list containing one array per component.
+
+    Raises
+    ------
+    NotImplementedError
+        If the input function has more than one tensor dimension.
+    """
     if len(f.ufl_shape) == 0:
         return scalar_to_array(msh, f)
     elif len(f.ufl_shape) == 1:
@@ -66,6 +94,25 @@ def dolfinx_to_array(msh, f):
             
 
 def get_triangulation(msh):
+    """
+    Extract the boundary outline of a two-dimensional triangular mesh.
+
+    Boundary edges are identified as edges belonging to only one triangle.
+    The output is formatted as NaN-separated line segments, making it
+    directly compatible with Matplotlib ``plot`` calls.
+
+    Parameters
+    ----------
+    msh : dolfinx.mesh.Mesh
+        A two-dimensional triangular DOLFINx mesh.
+
+    Returns
+    -------
+    X : numpy.ndarray
+        x-coordinates of boundary line segments with NaN separators.
+    Y : numpy.ndarray
+        y-coordinates of boundary line segments with NaN separators.
+    """
     connty = msh.topology.connectivity(2, 0)
     connty_array = np.array([connty.links(i)
             for i in range(connty.num_nodes)])
@@ -77,6 +124,25 @@ def get_triangulation(msh):
     
 
 def get_outline(msh):
+    """
+    Extract the boundary outline of a two-dimensional triangular mesh.
+
+    Boundary edges are identified as edges belonging to only one triangle.
+    The output is formatted as NaN-separated line segments, making it
+    directly compatible with Matplotlib ``plot`` calls.
+
+    Parameters
+    ----------
+    msh : dolfinx.mesh.Mesh
+        A two-dimensional triangular DOLFINx mesh.
+
+    Returns
+    -------
+    X : numpy.ndarray
+        x-coordinates of boundary line segments with NaN separators.
+    Y : numpy.ndarray
+        y-coordinates of boundary line segments with NaN separators.
+    """
     x,y = msh.geometry.x[:,0], msh.geometry.x[:,1]
     
     tess = get_triangulation(msh)

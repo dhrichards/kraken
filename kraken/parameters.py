@@ -7,7 +7,62 @@ secperyr = 31556926
 
 
 
-class Params_with_uc:
+class Params:
+    """
+    Container for physical and numerical parameters used by Kraken.
+
+    This class stores dimensional material properties, dimensionless constants,
+    and numerical parameters as DOLFINx ``Constant`` objects, so that they can be updated during a simulation.
+    The class is created and then a value can be updated as e.g.:
+    params.T.value = -20
+    They can also be overloaded as functions of space using ufl.SpatialCoordinate
+    Dervied quanitites auto-update as properties
+
+    Inputs
+    ----------
+    msh : dolfinx.mesh.Mesh
+        Mesh on which the DOLFINx constants are defined.
+
+    Attributes
+    ----------
+    T : Ice temperature (degrees Celsius).
+
+    ρi : Ice density (kg m⁻³).
+
+    ρw : Water density (kg m⁻³).
+
+    g : Gravitational acceleration (m s⁻²).
+
+    E : Young's modulus (Pa).
+
+    ν : Poisson's ratio.
+
+    A0 : Glen flow law parameter.
+
+    n : Glen flow law exponent.
+
+    H : Characteristic length scale (m).
+
+    l : Phase-field regularisation length scale (m).
+
+    dt : Timestep (s).
+
+    patm: Atmoshpheric pressure (Pa)
+
+    ge_tol: Tolerance in degradation function 
+
+    crack_level_above_sea : Water level in crack above sea level (default 0)
+
+    sea_level : Sea level for external boundary condition, default at flotation
+
+    length: Length of domain (m)
+
+    viscosity_tol: tolerance in viscosity degradation η → (1-d)²η + viscosity_tol 
+
+    σt : Tensile strength (Pa).
+
+    Kic : Fracture toughness (Pa m¹ᐟ²).
+    """
     def __init__(self,msh):
 
         self.msh = msh
@@ -27,7 +82,7 @@ class Params_with_uc:
         self.patm = fem.Constant(msh,default_scalar_type(0.0)) # Atmospheric pressure
         self.ge_tol = fem.Constant(msh,default_scalar_type(1e-12)) # Elastic degradation tolerance
         self.crack_level_above_sea = fem.Constant(msh,default_scalar_type(0.0)) # Water level for hydrostatic pressure
-        self.sea_level = fem.Constant(msh,default_scalar_type(0.9*self.H.value)) # Sea level height
+        self.sea_level = fem.Constant(msh,default_scalar_type(self.ρi.value/self.ρw.value*self.H.value)) # Sea level height
         self.length = fem.Constant(msh,default_scalar_type(16e3)) # Length of domain in flow direction
         self.viscosity_tol = fem.Constant(msh,default_scalar_type(0.1)) # Viscosity regularisation
 
@@ -36,60 +91,62 @@ class Params_with_uc:
 
     @property
     def ψcrit(self):
+        '''Critical energy threshold'''
         return self.σt**2 / (2*self.E)
 
     @property
     def Gc(self):
+        '''Critical energy release rate'''
         return self.Kic**2*(1-self.ν**2)/self.E
 
 
     @property
     def uc(self):
+        '''Characteristic displacement'''
         return self.ρc * self.g * self.H**2 / self.μ
 
     @property
     def ucstar(self):
+        '''Non-dimensional characteristic displacement'''
         return self.uc/self.H
     
     @property
     def ucstar_float(self):
+        '''Non-dimensional characteristic displacement as float'''
         μ = self.E.value / (2 * (1 + self.ν.value))
         return self.ρc.value * self.g.value * self.H.value / μ
     
     @property
     def crack_level_star(self):
+        '''Non dimensional crack water level above sea level'''
         return self.crack_level_above_sea / self.H + self.sea_level_star
     
     @property
     def sea_level_star(self):
+        '''Non dimensional sea-level'''
         return self.sea_level / self.H
     
     @property
     def τ(self):
-        """Relaxation time."""
+        '''Characteristic time'''
         return self.A0**(-1) * self.ucstar**(1-self.n) * self.μ**(-self.n)
     
 
     @property
     def γdot(self):
-        """Calculate the characteristic strain rate."""
+        '''Characteristic strain rate'''
         return self.ucstar / self.τ
     
     @property
     def ηc(self):
-        """Calculate the characteristic viscosity."""
+        '''Characteristic non-linear viscosity'''
         return self.A0**(-1/self.n) * self.γdot**((1-self.n)/self.n)
     
 
     @property
     def dtstar(self):
-        """Non dimensional time step."""
+        '''Non-dimensional timestep'''
         return self.dt / self.τ
-    
-    @property
-    def De(self):
-        """Deborah number."""
-        return 1 / self.dtstar
     
     @property
     def Hc(self):
@@ -97,6 +154,7 @@ class Params_with_uc:
     
     @property
     def ψcritstar(self):
+        '''Non-dimensional energy threshold'''
         return self.ψcrit / self.Hc
     
     @property
@@ -105,7 +163,6 @@ class Params_with_uc:
     
     @property
     def ρc(self):
-        """Characteristic density."""
         return self.ρi
     
     @property
@@ -114,10 +171,12 @@ class Params_with_uc:
     
     @property
     def ρistar(self):
+        '''Non-dimensional ice density'''
         return self.ρi/self.ρc
     
     @property
     def ρwstar(self):
+        '''Non-dimensional water density'''
         return self.ρw/self.ρc
     
     @property
@@ -127,43 +186,39 @@ class Params_with_uc:
     
     @property
     def patmstar(self):
+        '''Non-dimensional atmospheric pressure'''
         return self.patm / self.pwc
 
 
 
     @property
     def lstar(self):
+        '''Non-dimensional regularisation length'''
         return self.l/self.H
 
 
     @property
     def λ(self):
-        """Calculate the first Lamé parameter."""
+        """First Lamé parameter."""
         return self.ν * self.E / ((1 + self.ν) * (1 - 2 * self.ν))
 
     @property
     def μ(self):
-        """Calculate the shear modulus (second Lamé parameter)."""
+        """Second Lamé parameter"""
         return self.E / (2 * (1 + self.ν))
 
-  
 
-    @property
-    def C2(self):
-        """Non dimensional constant describing ratio between
-        elastic and viscousc stresses."""
-        return self.A0**(1/self.n) * (self.uc/self.H)**(1-1/self.n) * \
-                self.μ * self.τ**(1/self.n)
 
     @property
     def C3(self):
         """Non dimensional constant describing ratio between
-        elastic and fracture stresses."""
+        elastic and fracture energies."""
         return self.μ * self.uc**2 / (self.Gc * self.H)
 
 
     @property
     def length_star(self):
+        '''Non-dimensional length'''
         return self.length / self.H
 
     def yrs2nondimt(self,yr):

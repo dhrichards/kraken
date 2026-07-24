@@ -4,7 +4,7 @@ from dolfinx import fem, default_scalar_type
 import numpy as np
 
 def tr_e(A):
-    ''' Special trace, assuming that we have plane viscous strain rates,
+    ''' In 3D normal trace, in 2D a special trace, assuming that we have plane viscous strain rates,
       then there is out of plane elastic strain which is always equal to:
       e_yy = (e_xx + e_zz)/2
       so that the trace is:
@@ -15,6 +15,7 @@ def tr_e(A):
         return ufl.tr(A)
 
 def viscosity(ε, n, eps=1.e-11, A=1.0): 
+    '''Viscosity from Glens law'''
     εe2 = ufl.inner(ε, ε) / 2 + eps
     return  A**(-1/n) * εe2**((1 - n) / (2 * n))
 
@@ -39,12 +40,14 @@ def negative_part(x):
 
 
 def water_pressure(msh,v,ρw,ucstar=1.0, level = 0.0):
+    '''Water pressure, including how displacement changes water pressure'''
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1] + ucstar*v[msh.geometry.dim-1]
     z = z - level
     return ufl.max_value(0.0,-ρw*z) 
 
 def water_pressure_static(msh,ρw,level=0.0):
+    '''Water pressure, not dependent on displacement'''
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1]
     z = z - level
@@ -52,6 +55,7 @@ def water_pressure_static(msh,ρw,level=0.0):
 
 
 def body_force(msh):
+    '''Body force'''
     if msh.geometry.dim == 2:
         f = fem.Constant(msh, default_scalar_type((0.0, -1.0)))
     else:
@@ -60,6 +64,7 @@ def body_force(msh):
 
 
 def rate_factor(T):
+    '''Ice Rate factor in ufl (T in celcius)'''
     # https://elmerice.elmerfem.org/wiki/doku.php?id=problems:rheology
     R = 8.314
     Q = ufl.conditional(ufl.gt(T,-10),115e3,60e3)
@@ -69,6 +74,7 @@ def rate_factor(T):
     return A0*ufl.exp(-Q/(R*(T+273.15)))
 
 def rate_factor_np(T):
+    '''Ice rate factor in numpy (T in celcius)'''
     # https://elmerice.elmerfem.org/wiki/doku.php?id=problems:rheology
     R = 8.314
     Q = np.where(T>-10,115e3,60e3)

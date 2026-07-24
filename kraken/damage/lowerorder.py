@@ -29,7 +29,7 @@ class LowerOrder(Damage):
         self.d_prev_it2 = fem.Function(self.D, name="damage_prev_it2")
         self.d_prev_it3 = fem.Function(self.D, name="damage_prev_it3")
 
-        self.g = es.degradation_default(self.d)
+        self.g = es.degradation(self.d)
 
         
 

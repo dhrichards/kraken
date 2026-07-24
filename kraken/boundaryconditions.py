@@ -1,3 +1,5 @@
+'''Utilities for creating boundary conditions in Fenicsx'''
+
 import numpy as np
 from dolfinx import fem, mesh, default_scalar_type
 import ufl
