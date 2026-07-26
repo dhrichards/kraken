@@ -83,6 +83,8 @@ class Params:
         self.σt = fem.Constant(msh,default_scalar_type(0.2e6)) # Tensile strength
         self.Kic = fem.Constant(msh,default_scalar_type(100e3)) # Fracture toughness
 
+        self._sea_level_override = None
+
     @property
     def sea_level(self):
         ''' Sea level, can be overwritten for non-flotation'''

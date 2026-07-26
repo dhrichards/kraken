@@ -434,8 +434,7 @@ def fenicsx_refined_mesh(L,small_size,
 
     
 
-def refine_by_area(msh, small_size, large_size, cell_criterion):
-    n_div = int(np.log2(large_size/small_size))
+def refine_by_area(msh, cell_criterion, n_div=1):
 
     for i in range(n_div):
         # Compute midpoints for all cells on process
