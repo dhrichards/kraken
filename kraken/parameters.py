@@ -84,6 +84,7 @@ class Params:
         self.Kic = fem.Constant(msh,default_scalar_type(100e3)) # Fracture toughness
 
         self._sea_level_override = None
+        self._ρc_override = None
 
     @property
     def sea_level(self):
@@ -95,7 +96,7 @@ class Params:
 
     @sea_level.setter
     def sea_level(self, value):
-        self._sea_level_override = value
+        self._sea_level_override = fem.Constant(self.msh,default_scalar_type(value))
 
     @property
     def ψcrit(self):
@@ -171,7 +172,14 @@ class Params:
     
     @property
     def ρc(self):
-        return self.ρi
+        if self._ρc_override == None:
+            return self.ρi
+        else:
+            return self._ρc_override
+
+    @ρc.setter
+    def ρc(self, value):
+        self._ρc_override = fem.Constant(self.msh,default_scalar_type(value))
     
     @property
     def pwc(self):
