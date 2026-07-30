@@ -114,7 +114,7 @@ class SemiLagrangianEpsilon(Momentum):
         A = mf.rate_factor(self.sim.params.T)/self.sim.params.A0
 
         if self.sim.params.n.value==1.0:
-            η0 = 1/A
+            η0 = 1.0
         else:
             η0 = mf.viscosity(ufl.dev(mf.ε(self.vel_prev_it)), self.sim.params.n, 1e-19, A=A)
         η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
