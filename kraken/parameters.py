@@ -140,16 +140,10 @@ class Params:
         '''Characteristic time'''
         return self.A0**(-1) * self.ucstar**(1-self.n) * self.μ**(-self.n)
     
-
-    @property
-    def γdot(self):
-        '''Characteristic strain rate'''
-        return self.ucstar / self.τ
-    
     @property
     def ηc(self):
         '''Characteristic non-linear viscosity'''
-        return self.A0**(-1/self.n) * self.γdot**((1-self.n)/self.n)
+        return self.τ*self.μ
     
 
     @property

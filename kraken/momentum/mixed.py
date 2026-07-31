@@ -111,12 +111,10 @@ class SemiLagrangianEpsilon(Momentum):
         σ = self.stress(self.ε_e,self.du)
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         
-        A = mf.rate_factor(self.sim.params.T)/self.sim.params.A0
-
         if self.sim.params.n.value==1.0:
             η0 = 1.0
         else:
-            η0 = mf.viscosity(ufl.dev(mf.ε(self.vel_prev_it)), self.sim.params.n, 1e-19, A=A)
+            η0 = mf.viscosity(ufl.dev(mf.ε(self.vel_prev_it)), self.sim.params.n, 1e-19)
         η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
 
         self.ρ = self.sim.params.ρistar/self.area_ratio
