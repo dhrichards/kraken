@@ -139,6 +139,15 @@ class Params:
     def τ(self):
         '''Characteristic time'''
         return self.A0**(-1) * self.ucstar**(1-self.n) * self.μ**(-self.n)
+
+    @property
+    def τ_float(self):
+        '''Characteristic time as float'''
+        A0 = self.A0.value
+        ucstar = self.ucstar_float
+        μ = self.E.value / (2 * (1 + self.ν.value))
+        n = self.n.value
+        return A0**(-1) * ucstar**(1-n) * μ**(-n)
     
     @property
     def ηc(self):
@@ -225,13 +234,6 @@ class Params:
         elastic and fracture energies."""
         return self.μ * self.uc**2 / (self.Gc * self.H)
     
-
-    def yrs2nondimt(self,yr):
-        return yr*secperyr/self.dt
-    
-    def nondimt2yrs(self,t):
-        return t*self.dt/secperyr
-
 
 
 
