@@ -53,6 +53,14 @@ def water_pressure_static(msh,ρw,level=0.0):
     z = z - level
     return ufl.max_value(0.0,-ρw*z) 
 
+def modified_crack_pressure(msh,ρw,crack_level,sea_level):
+    x = ufl.SpatialCoordinate(msh)
+    z = x[msh.geometry.dim-1]
+    z = z - crack_level
+    ρ = ρw*sea_level/crack_level
+    return ufl.max_value(0.0,-ρ*z) 
+
+
 
 def body_force(msh):
     '''Body force'''

@@ -44,7 +44,8 @@ class Momentum:
     
     def crack_pressure(self, u):
         # return mf.water_pressure(self.sim.msh, u, self.sim.params.ρwstar, self.sim.params.ucstar, level=self.sim.params.crack_level_star) + self.sim.params.patmstar
-        return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar, self.sim.params.crack_level_star) + self.sim.params.patmstar
+        # return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar, self.sim.params.crack_level_star) + self.sim.params.patmstar
+        return mf.modified_crack_pressure(self.sim.msh,self.sim.params.ρwstar,self.sim.params.crack_level_star,self.sim.params.sea_level_star) + self.sim.params.patmstar
         
     def stress(self,ε,u):
         '''Calculate the stress tensor for a given strain tensor and displacement field
