@@ -43,9 +43,8 @@ class Momentum:
         # return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar, self.sim.params.sea_level_star) + self.sim.params.patmstar
     
     def crack_pressure(self, u):
-        # return mf.water_pressure(self.sim.msh, u, self.sim.params.ρwstar, self.sim.params.ucstar, level=self.sim.params.crack_level_star) + self.sim.params.patmstar
-        # return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar, self.sim.params.crack_level_star) + self.sim.params.patmstar
-        return mf.modified_crack_pressure(self.sim.msh,self.sim.params.ρwstar,self.sim.params.crack_level_star,self.sim.params.sea_level_star) + self.sim.params.patmstar
+        # return mf.water_pressure(self.sim.msh, u, self.sim.params.ρmstar, self.sim.params.ucstar, level=self.sim.params.crack_level_star) + self.sim.params.patmstar
+        return mf.water_pressure_static(self.sim.msh, self.sim.params.ρmstar, self.sim.params.crack_level_star) + self.sim.params.patmstar
         
     def stress(self,ε,u):
         '''Calculate the stress tensor for a given strain tensor and displacement field
@@ -74,7 +73,7 @@ class Momentum:
         self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
 
 
-        self.solver.setTolerances(rtol=1.0e-11, max_it=100, atol=1e-13)
+        self.solver.setTolerances(rtol=1.0e-11, max_it=10, atol=1e-13)
         self.solver.getKSP().setType("preonly")
         # self.solver.getKSP().setTolerances(rtol=1.0e-7)
         self.solver.getKSP().getPC().setType("lu")

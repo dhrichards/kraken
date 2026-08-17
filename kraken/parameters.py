@@ -29,7 +29,9 @@ class Params:
 
     ρi : Ice density (kg m⁻³).
 
-    ρw : Water density (kg m⁻³).
+    ρw : Ocean water density (kg m⁻³).
+
+    ρm : Density of melt water in crack (kg m⁻³).
 
     g : Gravitational acceleration (m s⁻²).
 
@@ -66,7 +68,8 @@ class Params:
         # Default material properties
         self.T = fem.Constant(msh,default_scalar_type(-20.0)) # Temperature in Celsius
         self.ρi = fem.Constant(msh,default_scalar_type(900)) # Density of ice
-        self.ρw = fem.Constant(msh,default_scalar_type(1000)) # Density of water
+        self.ρw = fem.Constant(msh,default_scalar_type(1000)) # Density of water in ocean
+        self.ρm = fem.Constant(msh,default_scalar_type(1000)) # Density of melt water in crack
         self.g = fem.Constant(msh,default_scalar_type(9.81)) # Gravitational acceleration
         self.E = fem.Constant(msh,default_scalar_type(9.33e9)) # Young's modulus
         self.ν = fem.Constant(msh,default_scalar_type(0.325)) # Poisson's ratio
@@ -197,6 +200,10 @@ class Params:
     def ρwstar(self):
         '''Non-dimensional water density'''
         return self.ρw/self.ρc
+
+    @property
+    def ρmstar(self):
+        return self.ρm/self.ρc
     
     @property
     def δ(self):
