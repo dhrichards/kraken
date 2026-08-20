@@ -56,7 +56,7 @@ def water_pressure_static(msh,ρw,level=0.0):
 def modified_water_pressure(msh,ρw,ρm,sealevel=0.0,cracklevel=0.0):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1]
-    pw0 = ufl.max_value(0.0,ρw*sealevel)
+    pw0 = ρw*sealevel
     pc = ufl.max_value(0.0,-ρw*(z-cracklevel))
     return ufl.min_value(pw0,pc)
 
