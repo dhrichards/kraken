@@ -58,7 +58,7 @@ def modified_water_pressure(msh,ρw,ρm,sealevel=0.0,cracklevel=0.0):
     z = x[msh.geometry.dim-1]
     pw0 = ρw*sealevel
     pc = ufl.max_value(0.0,-ρw*(z-cracklevel))
-    return ufl.min_value(pw0,pc)
+    return ufl.min_value(4,pc)
 
 
 
