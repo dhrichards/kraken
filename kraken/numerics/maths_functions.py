@@ -56,9 +56,17 @@ def water_pressure_static(msh,ρw,level=0.0):
 def modified_water_pressure(msh,ρw,ρm,sealevel=0.0,cracklevel=0.0):
     x = ufl.SpatialCoordinate(msh)
     z = x[msh.geometry.dim-1]
-    pw0 = ρw*sealevel
+    pw = ufl.max_value(0.0,-ρw*(z-sealevel))
     pc = ufl.max_value(0.0,-ρw*(z-cracklevel))
-    return ufl.min_value(4,pc)
+
+
+    def smoothstep(x, x_c, width):
+        return 0.5*(1 + ufl.tanh((x-x_c)/width))
+
+    def smoothtransition(a, b, x, x_c, width):
+        return a + (b-a)*smoothstep(x, x_c, width)
+    # return ufl.max_value(pw,pc)
+    return smoothtransition(pw,pc, z, 0.3, 0.05)
 
 
 
