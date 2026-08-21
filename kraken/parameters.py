@@ -1,7 +1,6 @@
 from dolfinx import fem, default_scalar_type
 import numpy as np
 import ufl
-from kraken.utilities import mesh_sizes
 secperyr = 31556926
 
 
@@ -82,6 +81,7 @@ class Params:
         self.ge_tol = fem.Constant(msh,default_scalar_type(1e-12)) # Elastic degradation tolerance
         self.crack_level_above_sea = fem.Constant(msh,default_scalar_type(0.0)) # Water level for hydrostatic pressure
         self.viscosity_tol = fem.Constant(msh,default_scalar_type(0.1)) # Viscosity regularisation
+        self.β = fem.Constant(msh,default_scalar_type(0.0)) # Basal friction coefficient
 
         self.σt = fem.Constant(msh,default_scalar_type(0.2e6)) # Tensile strength
         self.Kic = fem.Constant(msh,default_scalar_type(100e3)) # Fracture toughness
@@ -243,8 +243,13 @@ class Params:
     
 
 
+    @property
+    def βc(self):
+        return self.pc*self.τ/self.uc
 
-
+    @property
+    def βstar(self):
+        return self.β/self.βc
 
     
 

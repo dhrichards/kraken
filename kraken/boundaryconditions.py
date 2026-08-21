@@ -105,15 +105,30 @@ def marked_ds(msh, boundaries):
     '''Create a measure ds with subdomain data for the given boundaries.'''
 
     facets = []
-    for boundary in boundaries:
-        boundary_facets = mesh.locate_entities_boundary(msh, msh.topology.dim-1, boundary)
+    values = []
+
+    for i, boundary in enumerate(boundaries):
+        boundary_facets = mesh.locate_entities_boundary(
+            msh, msh.topology.dim - 1, boundary
+        )
+
         facets.append(boundary_facets)
+        values.append(np.full(len(boundary_facets), i + 1, dtype=np.int32))
 
     facets = np.hstack(facets)
-    values = np.hstack([np.full_like(facets[i], i+1) for i in range(len(boundaries))])
+    values = np.hstack(values)
+
     sorted_facets = np.argsort(facets)
-    mt = mesh.meshtags(msh, msh.topology.dim-1, facets[sorted_facets], values[sorted_facets])
+
+    mt = mesh.meshtags(
+        msh,
+        msh.topology.dim - 1,
+        facets[sorted_facets],
+        values[sorted_facets]
+    )
+
     ds = ufl.Measure("ds", domain=msh, subdomain_data=mt)
+
     return ds
 
 

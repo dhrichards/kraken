@@ -2,6 +2,7 @@ import adios4dolfinx
 from .base import Momentum
 import numpy as np
 from dolfinx import fem, mesh
+from dolfinx.fem.petsc import NonlinearProblem
 from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
@@ -91,6 +92,8 @@ class SemiLagrangianEpsilon(Momentum):
 
         self.ψplus = self.free_energy_plus(self.ε_e,self.du)
 
+    
+
         
 
         
@@ -124,10 +127,22 @@ class SemiLagrangianEpsilon(Momentum):
         self.F = (
             + ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
               ) * ufl.dx 
-              
-        self.F += (
-            self.pw * ufl.inner(n, v) * ufl.ds\
+
+
+        if self.sim.basal_friction:
+            # water pressure on other boundaries
+            self.F += (
+                self.pw * ufl.inner(n, v) * self.sim.marked_ds(2)\
+                )
+
+            # linear weertman on bottom boundary
+            self.F += (
+                self.sim.params.βstar*ufl.inner(self.vel,v)*self.sim.marked_ds(1)
             )
+        else:
+            self.F += (
+                self.pw * ufl.inner(n, v) * ufl.ds\
+                )
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
@@ -140,16 +155,18 @@ class SemiLagrangianEpsilon(Momentum):
         self.F += (
                 - g*ufl.div(self.du_v)*q \
                 ) * ufl.dx 
-        
+    
 
         self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
-            
         
         self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_u)
+        
+
 
 
     def solve(self):
         self.solver.solve(None, self.w.x.petsc_vec)
+        # self.problem.solve()
         self.w.x.scatter_forward()
 
         self.w_prev_it.x.array[:] = self.w.x.array[:]
@@ -184,7 +201,7 @@ class SemiLagrangianEpsilon(Momentum):
         a = g*ufl.inner(du, v) * ufl.dx + self.sim.params.lstar**2*ufl.inner(ufl.grad(du), ufl.grad(v)) * ufl.dx
         L = g*ufl.inner(self.du_1, v) * ufl.dx
 
-        self.smooth_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"})
+        self.smooth_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"})#,petsc_options_prefix="smoothproblem")
     
 
     def timestep(self):

@@ -1,4 +1,4 @@
-from kraken import parameters, utilities, momentum, damage
+from kraken import parameters, momentum, damage
 from kraken.numerics import energy_splits as es
 from kraken.numerics import maths_functions as mf
 from dolfinx import fem, mesh
@@ -25,6 +25,12 @@ class Simulation:
         mesh_tags = mesh.meshtags(self.msh, self.msh.topology.dim - 1, b_facets, 1)
         ds = ufl.Measure("ds", domain=self.msh, subdomain_data=mesh_tags)
         self.ds_bottom = ds(1)
+
+
+    def use_basal_friction(self,bottom_boundary):
+        other_boundaries = lambda x: ~bottom_boundary(x)
+        self.marked_ds = kr.boundaryconditions.marked_ds(self.msh,[bottom_boundary,other_boundaries])
+        self.basal_friction = True
 
     
         
@@ -159,15 +165,15 @@ class Simulation:
                
 
                 if save:
-                    utilities.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
+                    kr.plotting.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, [self.momentum.u,self.damage.d,
                                            self.momentum.ψplus/self.params.ψcritstar,
-                                           self.params.l
+                                        #    self.momentum.p_crack(self.momentum.du),
                                         # self.momentum.u_e, self.momentum.u_v
                                         ],
                                         ["u","d",
                                             "psi_plus",
-                                            "l"
+                                            # "p_c",
                                         # "ue","uv",
                                         ],
                                     t=i)

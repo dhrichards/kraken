@@ -1,6 +1,7 @@
 import numpy as np
 from dolfinx import fem
-import dolfinx.fem.petsc
+import dolfinx
+from dolfinx.fem.petsc import NonlinearProblem
 from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
@@ -28,6 +29,9 @@ class Momentum:
 
         self.area_ratio = fem.Function(self.DG0)
         self.area_ratio.x.array[:] = 1.0
+
+
+        self.basal_friction = False
         
 
 
@@ -72,7 +76,22 @@ class Momentum:
     
     
     def setup_solver(self):
-        
+        # self.problem = NonlinearProblem(self.F,self.w,bcs=self.bc_u,
+        #                                         petsc_options_prefix='momentum_',
+        #                                          petsc_options={
+        #                                                 "snes_monitor": None,
+        #                                                 "snes_type": "newtonls",
+        #                                                 "snes_linesearch_type": "bt",
+        #                                                 "ksp_type": "preonly",
+        #                                                 "pc_type": "lu",
+        #                                                 "pc_factor_mat_solver_type": "mumps",
+        #                                                 "snes_rtol": 1e-11,
+        #                                                 "snes_atol": 1e-13,
+        #                                                 "snes_max_it": 10,
+        #                                                 # "ksp_error_if_not_converged": True,
+        #                                                 # "snes_error_if_not_converged": True,
+        #                                          })
+        # self.solver = self.problem.solver        
 
         self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
 
@@ -83,12 +102,9 @@ class Momentum:
         self.solver.getKSP().getPC().setType("lu")
         self.solver.getKSP().getPC().setFactorSolverType("mumps")
  
-
-        # self.solver.setFunction(self.problem.F, fem.petsc.create_vector(fem.form(self.F,jit_options=dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))))
-        # self.solver.setJacobian(self.problem.J, fem.petsc.create_matrix(fem.form(self.J,jit_options = dict(cffi_extra_compile_args=["-std=gnu17", "-g0"]))),P=None)
-
-        self.solver.setFunction(self.problem.F, dolfinx.fem.petsc.create_vector(fem.form(self.F)))
-        self.solver.setJacobian(self.problem.J, dolfinx.fem.petsc.create_matrix(fem.form(self.J)),P=None)
+        # self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.extract_function_spaces(fem.form(self.F))))
+        self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.form(self.F)))
+        self.solver.setJacobian(self.problem.J,dolfinx.fem.petsc.create_matrix(fem.form(self.J)),P=None)
 
 
     def update_bcs(self,new_bcs):
@@ -101,6 +117,7 @@ class Momentum:
         self.area_ratio.interpolate(parent.momentum.area_ratio, cells0=self.sim.parent_cells, cells1=self.sim.cells)
 
 
+    
     
 
     def solve(self):
