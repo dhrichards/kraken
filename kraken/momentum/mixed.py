@@ -157,16 +157,16 @@ class SemiLagrangianEpsilon(Momentum):
                 ) * ufl.dx 
     
 
-        self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
+        # self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
         
-        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_u)
+        # self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_u)
         
 
 
 
     def solve(self):
-        self.solver.solve(None, self.w.x.petsc_vec)
-        # self.problem.solve()
+        # self.solver.solve(None, self.w.x.petsc_vec)
+        self.problem.solve()
         self.w.x.scatter_forward()
 
         self.w_prev_it.x.array[:] = self.w.x.array[:]
@@ -201,21 +201,21 @@ class SemiLagrangianEpsilon(Momentum):
         a = g*ufl.inner(du, v) * ufl.dx + self.sim.params.lstar**2*ufl.inner(ufl.grad(du), ufl.grad(v)) * ufl.dx
         L = g*ufl.inner(self.du_1, v) * ufl.dx
 
-        self.smooth_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"})#,petsc_options_prefix="smoothproblem")
+        self.smooth_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"},petsc_options_prefix="smoothproblem")
     
 
     def timestep(self):
 
-        self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
+        self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points))
 
         
         if self.mesh_smoothing:
-            self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+            self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points))
             du = self.smooth_problem.solve()
             self.du_smooth.x.array[:] = du.x.array[:] # for saving
         else:
             du = fem.Function(self.V)
-            du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+            du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points))
 
         self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
         

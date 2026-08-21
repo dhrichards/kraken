@@ -60,7 +60,8 @@ class Elasticity(Momentum):
         # self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_u)
 
     def solve(self):
-        self.solver.solve(None, self.u.x.petsc_vec)
+        # self.solver.solve(None, self.u.x.petsc_vec)
+        self.problem.solve()
         self.u_prev_it.x.array[:] = self.u.x.array[:]
 
     def timestep(self):
