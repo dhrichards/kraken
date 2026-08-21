@@ -27,9 +27,8 @@ class Simulation:
         self.ds_bottom = ds(1)
 
 
-    def use_basal_friction(self,bottom_boundary):
-        other_boundaries = lambda x: ~bottom_boundary(x)
-        self.marked_ds = kr.boundaryconditions.marked_ds(self.msh,[bottom_boundary,other_boundaries])
+    def use_basal_friction(self,bottom_boundary,ocean_boundaries):
+        self.marked_ds = kr.boundaryconditions.marked_ds(self.msh,[bottom_boundary,ocean_boundaries])
         self.basal_friction = True
 
     
