@@ -80,7 +80,7 @@ class Momentum:
                                                 petsc_options_prefix='momentum_',
                                                  petsc_options={
                                                         "snes_type": "newtonls",
-                                                        # "snes_linesearch_type": "bt",
+                                                        "snes_linesearch_type": "none",
                                                         "ksp_type": "preonly",
                                                         "pc_type": "lu",
                                                         "pc_factor_mat_solver_type": "mumps",
