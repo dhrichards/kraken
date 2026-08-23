@@ -31,7 +31,7 @@ class Momentum:
         self.area_ratio.x.array[:] = 1.0
 
 
-        self.basal_friction = False
+        
         
 
 
@@ -79,7 +79,6 @@ class Momentum:
         self.problem = NonlinearProblem(self.F,self.w,bcs=self.bc_u,
                                                 petsc_options_prefix='momentum_',
                                                  petsc_options={
-                                                        "snes_monitor": None,
                                                         "snes_type": "newtonls",
                                                         # "snes_linesearch_type": "bt",
                                                         "ksp_type": "preonly",

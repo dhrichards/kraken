@@ -44,7 +44,6 @@ class Damage:
         self.problem = NonlinearProblem(self.F,self.w,bcs=self.bc_d,
                                                 petsc_options_prefix='damage_',
                                                  petsc_options={
-                                                        "snes_monitor": None,
                                                         "ksp_type": "preonly",
                                                         "pc_type": "lu",
                                                         "pc_factor_mat_solver_type": "mumps",
