@@ -64,7 +64,7 @@ class Damage:
     def timestep(self):
         '''Update the history variable for the damage model.'''
         self.H_func = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
-        self.Hprev.interpolate(fem.Expression(self.H_func, self.H_space.element.interpolation_points()))
+        self.Hprev.interpolate(fem.Expression(self.H_func, self.H_space.element.interpolation_points))
 
     def write_checkpoint(self, filename, t=0):
         adios4dolfinx.write_function(filename, self.w, name = "w_damage",time = t)
