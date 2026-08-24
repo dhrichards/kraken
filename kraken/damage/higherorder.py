@@ -71,10 +71,10 @@ class AT2(Damage):
                 - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx
         
 
-        # self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
+        self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
 
 
-        # self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
+        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
 
     def interpolate_from_parent(self, parent):
         super().interpolate_from_parent(parent)
@@ -106,8 +106,8 @@ class AT2(Damage):
         self.w_prev_it3.x.array[:] = self.w_prev_it2.x.array[:]
         self.w_prev_it2.x.array[:] = self.w_prev_it.x.array[:]
         self.w_prev_it.x.array[:] = self.w.x.array[:]
-        # self.solver.solve(None, self.w.x.petsc_vec)
-        self.problem.solve()
+        self.solver.solve(None, self.w.x.petsc_vec)
+        # self.problem.solve()
         self.w.x.scatter_forward()
         
         assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"

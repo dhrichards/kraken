@@ -20,6 +20,8 @@ class Simulation:
         self.min_its = 2
         self.max_its = 300
 
+        self.basal_friction = False
+
 
         b_facets = mesh.locate_entities_boundary(self.msh, self.msh.topology.dim-1, lambda x: np.isclose(x[1], 0.0))
         mesh_tags = mesh.meshtags(self.msh, self.msh.topology.dim - 1, b_facets, 1)

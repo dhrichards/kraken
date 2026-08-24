@@ -157,16 +157,16 @@ class SemiLagrangianEpsilon(Momentum):
                 ) * ufl.dx 
     
 
-        # self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
+        self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
         
-        # self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_u)
+        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_u)
         
 
 
 
     def solve(self):
-        # self.solver.solve(None, self.w.x.petsc_vec)
-        self.problem.solve()
+        self.solver.solve(None, self.w.x.petsc_vec)
+        # self.problem.solve()
         self.w.x.scatter_forward()
 
         self.w_prev_it.x.array[:] = self.w.x.array[:]
