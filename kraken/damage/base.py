@@ -32,8 +32,8 @@ class Damage:
         '''Set up the nonlinear solver for the damage problem.'''
 
         self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
-        self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.extract_function_spaces(fem.form(self.F))))
-        # self.solver.setFunction(self.problem.F, dolfinx.fem.petsc.create_vector(fem.form(self.F)))
+        # self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.extract_function_spaces(fem.form(self.F))))
+        self.solver.setFunction(self.problem.F, dolfinx.fem.petsc.create_vector(fem.form(self.F)))
         self.solver.setJacobian(self.problem.J, dolfinx.fem.petsc.create_matrix(fem.form(self.J)),P=None)
         
         self.solver.setType("newtonls")
@@ -42,18 +42,6 @@ class Damage:
         self.solver.getKSP().setType("preonly")
         self.solver.getKSP().setTolerances(rtol=1.0e-9)
         self.solver.getKSP().getPC().setType("lu")
-        # self.problem = NonlinearProblem(self.F,self.w,bcs=self.bc_d,
-        #                                         petsc_options_prefix='damage_',
-        #                                          petsc_options={
-        #                                                 "snes_type": "newtonls",
-        #                                                 "snes_linesearch_type": "none",
-        #                                                 "ksp_type": "preonly",
-        #                                                 "pc_type": "lu",
-        #                                                 "pc_factor_mat_solver_type": "mumps",
-        #                                                 "ksp_error_if_not_converged": True,
-        #                                                 "snes_error_if_not_converged": True,
-        #                                          })
-        # self.solver = self.problem.solver
 
 
     def interpolate_from_parent(self, parent):
@@ -67,7 +55,7 @@ class Damage:
     def timestep(self):
         '''Update the history variable for the damage model.'''
         self.H_func = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
-        self.Hprev.interpolate(fem.Expression(self.H_func, self.H_space.element.interpolation_points))
+        self.Hprev.interpolate(fem.Expression(self.H_func, self.H_space.element.interpolation_points()))
 
     def write_checkpoint(self, filename, t=0):
         adios4dolfinx.write_function(filename, self.w, name = "w_damage",time = t)

@@ -76,21 +76,7 @@ class Momentum:
     
     
     def setup_solver(self):
-        # self.problem = NonlinearProblem(self.F,self.w,bcs=self.bc_u,
-        #                                         petsc_options_prefix='momentum_',
-        #                                          petsc_options={
-        #                                                 "snes_type": "newtonls",
-        #                                                 "snes_linesearch_type": "none",
-        #                                                 "ksp_type": "preonly",
-        #                                                 "pc_type": "lu",
-        #                                                 "pc_factor_mat_solver_type": "mumps",
-        #                                                 "snes_rtol": 1e-11,
-        #                                                 "snes_atol": 1e-13,
-        #                                                 "snes_max_it": 10,
-        #                                                 # "ksp_error_if_not_converged": True,
-        #                                                 # "snes_error_if_not_converged": True,
-        #                                          })
-        # self.solver = self.problem.solver        
+
 
         self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
 
@@ -101,8 +87,8 @@ class Momentum:
         self.solver.getKSP().getPC().setType("lu")
         self.solver.getKSP().getPC().setFactorSolverType("mumps")
  
-        self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.extract_function_spaces(fem.form(self.F))))
-        # self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.form(self.F)))
+        # self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.extract_function_spaces(fem.form(self.F))))
+        self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.form(self.F)))
         self.solver.setJacobian(self.problem.J,dolfinx.fem.petsc.create_matrix(fem.form(self.J)),P=None)
 
 

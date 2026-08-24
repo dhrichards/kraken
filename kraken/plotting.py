@@ -26,14 +26,14 @@ def write_xdmf(filename,msh,functions,names,t=0.0):
             # Interpolate onto order 1
             Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
             temp = fem.Function(Q)
-            temp.interpolate(fem.Expression(f,Q.element.interpolation_points))
+            temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
             temp.name = names[idx]
             functions[idx] = temp
 
         else:
             Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
             temp = fem.Function(Q)
-            temp.interpolate(fem.Expression(f,Q.element.interpolation_points))
+            temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
             temp.name = names[idx]
             functions[idx] = temp
 
@@ -53,7 +53,7 @@ def scalar_to_array(msh, f):
     #             return f.x.array
     # else:
     f_CG1 = fem.Function(CG1)
-    f_CG1.interpolate(fem.Expression(f, CG1.element.interpolation_points))
+    f_CG1.interpolate(fem.Expression(f, CG1.element.interpolation_points()))
     return f_CG1.x.array[:]
     
 

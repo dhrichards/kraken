@@ -54,14 +54,13 @@ class Elasticity(Momentum):
               + p_w * ufl.inner(n, v) * ufl.ds 
         )
             
-        # self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.W))
+        self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.W))
             
         
-        # self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_u)
+        self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_u)
 
     def solve(self):
-        # self.solver.solve(None, self.u.x.petsc_vec)
-        self.problem.solve()
+        self.solver.solve(None, self.u.x.petsc_vec)
         self.u_prev_it.x.array[:] = self.u.x.array[:]
 
     def timestep(self):

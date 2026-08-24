@@ -206,16 +206,16 @@ class SemiLagrangianEpsilon(Momentum):
 
     def timestep(self):
 
-        self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points))
+        self.ε_e_prev_time.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
 
         
         if self.mesh_smoothing:
-            self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points))
+            self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
             du = self.smooth_problem.solve()
             self.du_smooth.x.array[:] = du.x.array[:] # for saving
         else:
             du = fem.Function(self.V)
-            du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points))
+            du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
 
         self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
         
