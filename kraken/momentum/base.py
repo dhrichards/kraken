@@ -101,8 +101,8 @@ class Momentum:
         self.solver.getKSP().getPC().setType("lu")
         self.solver.getKSP().getPC().setFactorSolverType("mumps")
  
-        # self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.extract_function_spaces(fem.form(self.F))))
-        self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.form(self.F)))
+        self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.extract_function_spaces(fem.form(self.F))))
+        # self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.form(self.F)))
         self.solver.setJacobian(self.problem.J,dolfinx.fem.petsc.create_matrix(fem.form(self.J)),P=None)
 
 
