@@ -99,7 +99,7 @@ class Momentum:
         self.solver.getKSP().setType("preonly")
         # self.solver.getKSP().setTolerances(rtol=1.0e-7)
         self.solver.getKSP().getPC().setType("lu")
-        self.solver.getKSP().getPC().setFactorSolverType("superlu_dist")
+        self.solver.getKSP().getPC().setFactorSolverType("mumps")
  
         self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.extract_function_spaces(fem.form(self.F))))
         # self.solver.setFunction(self.problem.F,dolfinx.fem.petsc.create_vector(fem.form(self.F)))
