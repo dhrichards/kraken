@@ -201,7 +201,7 @@ class SemiLagrangianEpsilon(Momentum):
         a = g*ufl.inner(du, v) * ufl.dx + self.sim.params.lstar**2*ufl.inner(ufl.grad(du), ufl.grad(v)) * ufl.dx
         L = g*ufl.inner(self.du_1, v) * ufl.dx
 
-        self.smooth_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"},petsc_options_prefix="smoothproblem")
+        self.smooth_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"})
     
 
     def timestep(self):
