@@ -66,7 +66,7 @@ def modified_water_pressure(msh,ρw,ρm,sealevel=0.0,cracklevel=0.0):
     def smoothtransition(a, b, x, x_c, width):
         return a + (b-a)*smoothstep(x, x_c, width)
     # return ufl.max_value(pw,pc)
-    return smoothtransition(pw,pc, z, 0.5, 0.05)
+    return smoothtransition(pw,pc, z, 0.7, 0.05)
 
 
 
