@@ -58,7 +58,7 @@ class SemiLagrangianEpsilon(Momentum):
 
         self.vel_prev_time = (self.u_v_prev_time - self.u_v_prev_2)/self.sim.params.dtstar
         
-        self.bc_u = self.sim.bc_funcs[0](self.W)
+        self.bc_e = self.sim.bc_funcs[0](self.W)
 
         self.du, self.du_v, self.dp = ufl.split(self.w)
         self.du_e = self.du - self.du_v
@@ -90,7 +90,7 @@ class SemiLagrangianEpsilon(Momentum):
         self.ε_e = mf.ε(self.du_e) + self.ε_e_prev_time
         self.ε_e_prev_it = mf.ε(self.du_e_prev_it) + self.ε_e_prev_time
 
-        self.ψplus = self.free_energy_plus(self.ε_e,self.du)
+        self.ψplus = self.free_energy_plus(self.ε_e)
 
     
 
@@ -137,7 +137,7 @@ class SemiLagrangianEpsilon(Momentum):
 
             # linear weertman on bottom boundary
             self.F += (
-                self.sim.params.βstar*ufl.inner(self.vel,v)*self.sim.marked_ds(1)
+                self.sim.params.βstar*ufl.inner(self.du/self.sim.params.dtstar,v)*self.sim.marked_ds(1)
             )
         else:
             self.F += (
@@ -159,7 +159,7 @@ class SemiLagrangianEpsilon(Momentum):
 
         self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
         
-        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_u)
+        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_e)
         
 
 

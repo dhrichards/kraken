@@ -46,32 +46,32 @@ class Momentum:
         return mf.water_pressure(self.sim.msh, u, self.sim.params.ρwstar, self.sim.params.ucstar, self.sim.params.sea_level_star) + self.sim.params.patmstar
         # return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar, self.sim.params.sea_level_star) + self.sim.params.patmstar
     
-    def crack_pressure(self, u):
+    def crack_pressure(self):
         # return mf.water_pressure(self.sim.msh, u, self.sim.params.ρmstar, self.sim.params.ucstar, level=self.sim.params.crack_level_star) + self.sim.params.patmstar
         switch = ufl.conditional(ufl.gt(self.sim.damage.d_prev_it,1e-3),1,0)
-        return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar,self.sim.params.crack_level_star) + self.sim.params.patmstar
+        return switch*mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar,self.sim.params.crack_level_star) + self.sim.params.patmstar
         # return mf.modified_water_pressure(self.sim.msh,
         #             self.sim.params.ρwstar,self.sim.params.ρmstar,
         #             self.sim.params.sea_level_star,
         #             self.sim.params.crack_level_star)
         
-    def stress(self,ε,u):
+    def stress(self,ε,ε_prev):
         '''Calculate the stress tensor for a given strain tensor and displacement field
         including the effect of water pressure inside cracks.
         The stress is split into a positive and negative part, with the positive part being degraded by the damage variable.'''
-        pw = self.crack_pressure(u)
+        pw = self.crack_pressure()
         I = ufl.Identity(self.sim.msh.geometry.dim); ν = self.sim.params.ν
         
-        σplus = es.stress_plus_nt(ε + pw*I/(3*es.Koverμ(ν)), ν)
+        σplus = es.stress_plus_nt_linearised(ε + pw*I/(3*es.Koverμ(ν)),ε_prev + pw*I/(3*es.Koverμ(ν)), ν)
         g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
         σ0 = es.cauchy_stress(ε, self.sim.params.ν)
         σminus = σ0 - σplus
         return g*σplus+ σminus
     
-    def free_energy_plus(self,ε,u):
+    def free_energy_plus(self,ε):
         '''Calculate the positive part of the free energy for a given strain tensor and displacement field,
         including the effect of water pressure inside cracks.'''
-        pw = self.crack_pressure(u)
+        pw = self.crack_pressure()
         I = ufl.Identity(self.sim.msh.geometry.dim); ν = self.sim.params.ν
         return es.free_energy_plus_nt(ε + pw*I/(3*es.Koverμ(ν)), ν)
     
@@ -94,7 +94,7 @@ class Momentum:
 
 
     def update_bcs(self,new_bcs):
-        self.bc_u = new_bcs(self.W)
+        self.bc_e = new_bcs(self.W)
         # self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_u)
         self.setup_solver()
 

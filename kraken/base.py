@@ -44,8 +44,9 @@ class Simulation:
 
 
         self.bc_funcs = bc_funcs
-        self.momentum = MomentumSolver(self)
         self.damage = DamageSolver(self)
+        self.momentum = MomentumSolver(self)
+        
         
         self.momentum.setup()
         self.damage.setup()
@@ -170,12 +171,12 @@ class Simulation:
                                 self.msh, [self.momentum.u,self.damage.d,
                                            self.momentum.ψplus/self.params.ψcritstar,
                                         #    self.momentum.p_crack(self.momentum.du),
-                                        # self.momentum.u_e, self.momentum.u_v
+                                        self.momentum.u_e, self.momentum.u_v
                                         ],
                                         ["u","d",
                                             "psi_plus",
                                             # "p_c",
-                                        # "ue","uv",
+                                        "ue","uv",
                                         ],
                                     t=i)
     
@@ -193,7 +194,7 @@ class Simulation:
 
                 error_L2 = np.abs(L2 - L2_old)/area
                 if MPI.COMM_WORLD.rank == 0:
-                    print(f"iteration {i}, error {error_L2}, L2 {L2}, L2_bottom {L2_bottom}, mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")
+                    print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
 
                 errors.append(error_L2)
 

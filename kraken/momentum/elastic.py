@@ -18,14 +18,13 @@ class Elasticity(Momentum):
         self.u = fem.Function(self.W, name="displacement")
         self.w = self.u
         self.ε_e = mf.ε(self.u)
-        self.ψplus = self.free_energy_plus(self.ε_e,self.u)
+        self.ψplus = self.free_energy_plus(self.ε_e)
         self.p_crack = self.crack_pressure(self.u)
-        self.ψplus  = es.free_energy_plus_nt(self.ε_e + self.p_crack*ufl.Identity(self.sim.msh.geometry.dim)/(3*es.Koverμ(self.sim.params.ν)), self.sim.params.ν)
-
+   
         self.u_prev_it = fem.Function(self.W, name="displacement previous iteration")
         self.u_prev_time = fem.Function(self.W, name="displacement previous time")
 
-        self.bc_u = self.sim.bc_funcs[0](self.W)
+        self.bc_e = self.sim.bc_funcs[0](self.W)
 
         
 
@@ -57,7 +56,7 @@ class Elasticity(Momentum):
         self.J = ufl.derivative(self.F,self.u,ufl.TrialFunction(self.W))
             
         
-        self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_u)
+        self.problem = solvers.SNESProblem(self.F, self.u, bcs=self.bc_e)
 
     def solve(self):
         self.solver.solve(None, self.u.x.petsc_vec)

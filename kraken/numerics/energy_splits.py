@@ -74,10 +74,6 @@ def stress_plus_dp(ε, ν, γ=sqrt(3), eps=1e-14):
                                          σ2))
 
 
-
-
-
-
 def free_energy_plus_nt(ε,ν):
     '''Positive part of free energy from no-tension split'''
     D = ufl.shape(ε)[0]
@@ -121,6 +117,38 @@ def stress_plus_nt(ε,ν):
     return ufl.conditional(ufl.gt(λ[0],0),stress1,
             ufl.conditional(ufl.gt(λ[1] + ν*λ[0],0),stress2,
              ufl.conditional(ufl.gt((1-ν)*λ[2] + ν*(λ[0]+λ[1]),0),stress3,
+                             ufl.zero(ufl.shape(ε)))))
+
+
+def stress_plus_nt_linearised(ε,ε_prev,ν):
+    '''Positive part of stress for no-tension split'''
+    D = ufl.shape(ε)[0]
+    E = Eoverμ(ν)
+    λ_prev,M = eigenstate(ε_prev)
+    λ0 = ufl.inner(M[0],ε)
+    λ1 = ufl.inner(M[1],ε)
+    if D == 2:
+        λ_mid = (ε[0,0] + ε[1,1])/2
+        λ = [λ0, λ_mid, λ1]
+        M = [M[0], 0*M[0], M[1]]
+        λ_prev_mid = (ε_prev[0,0] + ε_prev[1,1])/2
+        λ_prev = [λ_prev[0],λ_prev_mid,λ_prev[1]]
+    else:
+        λ2 = ufl.inner(M[2],ε)
+        λ = [λ0, λ1, λ2]
+
+
+    #M_mid is 0 in 2D
+
+    stress1 = cauchy_stress(ε,ν)
+    stress2 = cauchy_stress(ε,ν) - E*λ[0]*M[0]
+
+    stress3 = 2*(1+ν)/((1-2*ν)*(1-ν**2))*((1-ν)*λ[2]+ν*λ[1] +ν*λ[0])*(
+            (1-ν)*M[2] + ν*M[1] + ν*M[0])
+
+    return ufl.conditional(ufl.gt(λ_prev[0],0),stress1,
+            ufl.conditional(ufl.gt(λ_prev[1] + ν*λ_prev[0],0),stress2,
+             ufl.conditional(ufl.gt((1-ν)*λ_prev[2] + ν*(λ_prev[0]+λ_prev[1]),0),stress3,
                              ufl.zero(ufl.shape(ε)))))
 
 
