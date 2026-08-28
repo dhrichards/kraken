@@ -66,31 +66,11 @@ class SemiLagrangianEpsilon(Momentum):
         self.du_prev_it, self.du_v_prev_it, self.dp_prev_it = ufl.split(self.w_prev_it)
         self.du_e_prev_it = self.du_prev_it - self.du_v_prev_it
 
-        self.u = self.u_prev_time + self.du
-        self.u_v = self.u_v_prev_time + self.du_v
-        self.u_e = self.u_e_prev_time + self.du_e
-        self.p =  self.p_prev_time + self.dp
-
-        self.u_prev_it = self.u_prev_time + self.du_prev_it
-        self.u_v_prev_it = self.u_v_prev_time + self.du_v_prev_it
-        self.u_e_prev_it = self.u_e_prev_time + self.du_e_prev_it
-        self.p_prev_it = self.p_prev_time + self.dp_prev_it
-
-        self.vel = self.du_v/self.sim.params.dtstar
-        self.vel_prev_it = self.du_v_prev_it/self.sim.params.dtstar
-
-        self.pw = self.water_pressure(self.du)
-        self.p_crack = self.crack_pressure(self.du)
-
 
         self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(self.sim.msh.geometry.dim, self.sim.msh.geometry.dim))
         self.E = fem.functionspace(self.sim.msh, self.ε_el)
 
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
-        self.ε_e = mf.ε(self.du_e) + self.ε_e_prev_time
-        self.ε_e_prev_it = mf.ε(self.du_e_prev_it) + self.ε_e_prev_time
-
-        self.ψplus = self.free_energy_plus(self.ε_e)
 
     
 
@@ -111,7 +91,7 @@ class SemiLagrangianEpsilon(Momentum):
         
 
         # σ0 = es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν)
-        σ = self.stress(self.ε_e,self.du)
+        σ = self.σ
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         
         if self.sim.params.n.value==1.0:

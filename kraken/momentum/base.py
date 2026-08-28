@@ -42,11 +42,13 @@ class Momentum:
         self.setup_momentum()
         self.setup_solver()
 
-    def water_pressure(self,u):
-        return mf.water_pressure(self.sim.msh, u, self.sim.params.ρwstar, self.sim.params.ucstar, self.sim.params.sea_level_star) + self.sim.params.patmstar
+    @property
+    def pw(self):
+        return mf.water_pressure(self.sim.msh, self.du, self.sim.params.ρwstar, self.sim.params.ucstar, self.sim.params.sea_level_star) + self.sim.params.patmstar
         # return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar, self.sim.params.sea_level_star) + self.sim.params.patmstar
     
-    def crack_pressure(self):
+    @property
+    def p_crack(self):
         # return mf.water_pressure(self.sim.msh, u, self.sim.params.ρmstar, self.sim.params.ucstar, level=self.sim.params.crack_level_star) + self.sim.params.patmstar
         switch = ufl.conditional(ufl.gt(self.sim.damage.d_prev_it,1e-3),1,0)
         return switch*mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar,self.sim.params.crack_level_star) + self.sim.params.patmstar
@@ -54,26 +56,76 @@ class Momentum:
         #             self.sim.params.ρwstar,self.sim.params.ρmstar,
         #             self.sim.params.sea_level_star,
         #             self.sim.params.crack_level_star)
-        
-    def stress(self,ε,ε_prev):
+
+    @property
+    def u(self):
+        return self.u_prev_time + self.du
+    
+    @property
+    def u_v(self):
+        return self.u_v_prev_time + self.du_v
+
+    @property
+    def u_e(self):
+        return self.u_e_prev_time + self.du_e
+
+    @property
+    def p(self):
+        return self.p_prev_time + self.dp
+
+    @property
+    def u_prev_it(self):
+        return self.u_prev_time + self.du_prev_it
+    
+    @property
+    def u_v_prev_it(self):
+        return self.u_v_prev_time + self.du_v_prev_it
+
+    @property
+    def u_e_prev_it(self):
+        return self.u_e_prev_time + self.du_e_prev_it
+
+    @property
+    def p_prev_it(self):
+        return self.p_prev_time + self.dp_prev_it
+
+    @property
+    def vel(self):
+        return self.du_v / self.sim.params.dtstar
+
+    @property
+    def vel_prev_it(self):
+        return self.du_v_prev_it / self.sim.params.dtstar
+
+    @property
+    def ε_e(self):
+        return mf.ε(self.du_e) + self.ε_e_prev_time
+
+    @property
+    def ε_e_prev_it(self):
+        return mf.ε(self.du_e_prev_it) + self.ε_e_prev_time
+
+    
+
+    @property
+    def σ(self):
         '''Calculate the stress tensor for a given strain tensor and displacement field
         including the effect of water pressure inside cracks.
         The stress is split into a positive and negative part, with the positive part being degraded by the damage variable.'''
-        pw = self.crack_pressure()
         I = ufl.Identity(self.sim.msh.geometry.dim); ν = self.sim.params.ν
         
-        σplus = es.stress_plus_nt_linearised(ε + pw*I/(3*es.Koverμ(ν)),ε_prev + pw*I/(3*es.Koverμ(ν)), ν)
+        σplus = es.stress_plus_nt(self.ε_e + self.p_crack*I/(3*es.Koverμ(ν)), ν)
         g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
-        σ0 = es.cauchy_stress(ε, self.sim.params.ν)
+        σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         σminus = σ0 - σplus
         return g*σplus+ σminus
-    
-    def free_energy_plus(self,ε):
+
+    @property
+    def ψplus(self):
         '''Calculate the positive part of the free energy for a given strain tensor and displacement field,
         including the effect of water pressure inside cracks.'''
-        pw = self.crack_pressure()
         I = ufl.Identity(self.sim.msh.geometry.dim); ν = self.sim.params.ν
-        return es.free_energy_plus_nt(ε + pw*I/(3*es.Koverμ(ν)), ν)
+        return es.free_energy_plus_nt(self.ε_e + self.p_crack*I/(3*es.Koverμ(ν)), ν)
     
     
     def setup_solver(self):

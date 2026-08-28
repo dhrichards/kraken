@@ -19,7 +19,7 @@ class Elasticity(Momentum):
         self.w = self.u
         self.ε_e = mf.ε(self.u)
         self.ψplus = self.free_energy_plus(self.ε_e)
-        self.p_crack = self.crack_pressure(self.u)
+        self.p_crack = self.crack_pressure()
    
         self.u_prev_it = fem.Function(self.W, name="displacement previous iteration")
         self.u_prev_time = fem.Function(self.W, name="displacement previous time")
