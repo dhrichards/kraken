@@ -51,7 +51,7 @@ class Momentum:
     def p_crack(self):
         # return mf.water_pressure(self.sim.msh, u, self.sim.params.ρmstar, self.sim.params.ucstar, level=self.sim.params.crack_level_star) + self.sim.params.patmstar
         switch = ufl.conditional(ufl.gt(self.sim.damage.d_prev_it,1e-3),1,0)
-        return switch*mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar,self.sim.params.crack_level_star) + self.sim.params.patmstar
+        return mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar,self.sim.params.crack_level_star) + self.sim.params.patmstar
         # return mf.modified_water_pressure(self.sim.msh,
         #             self.sim.params.ρwstar,self.sim.params.ρmstar,
         #             self.sim.params.sea_level_star,

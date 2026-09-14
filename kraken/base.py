@@ -117,12 +117,12 @@ class Simulation:
         self.setup()
      
     
-    def write_checkpoint(self, filename, t=0):
-        if t == 0:
-            adios4dolfinx.write_mesh(filename, self.msh,time = t)
-        else:
+    def write_checkpoint(self, filename, t, append=True):
+        if append:
             adios4dolfinx.write_mesh(filename, self.msh, time = t,
                                      mode = adios4dolfinx.adios2_helpers.adios2.Mode.Append)
+        else:
+            adios4dolfinx.write_mesh(filename, self.msh,time = t)
             
         self.momentum.write_checkpoint(filename, t) 
         self.damage.write_checkpoint(filename, t)
@@ -194,7 +194,7 @@ class Simulation:
 
                 error_L2 = np.abs(L2 - L2_old)/area
                 if MPI.COMM_WORLD.rank == 0:
-                    print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
+                    print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")#, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
 
                 errors.append(error_L2)
 
