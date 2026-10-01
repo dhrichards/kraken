@@ -148,7 +148,7 @@ class Momentum:
     def update_bcs(self,new_bcs):
         self.bc_e = new_bcs(self.W)
         # self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_u)
-        self.setup_solver()
+        self.setup()
 
 
     def interpolate_from_parent(self, parent):
