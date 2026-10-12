@@ -13,9 +13,9 @@ class Damage:
     def __init__(self, sim):
         self.sim = sim
 
-        self.d_el = bufl.element("CG", self.sim.msh.basix_cell(), 2)
+        self.d_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
 
-        self.H_space = fem.functionspace(self.sim.msh, ("DG", 1))
+        self.H_space = fem.functionspace(self.sim.msh, ("DG", 0))
         self.Hprev = fem.Function(self.H_space, name="history")
 
 
