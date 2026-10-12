@@ -94,7 +94,7 @@ class SemiLagrangianEpsilon(Momentum):
 
         W = self.sim.params.ucstar_float*ufl.skew(L(self.du))
         self.ε_e = self.ε_e_prev_time + ufl.sym(L(self.du)) - viscous_strain(self.dq) \
-            # + ufl.dot(W,self.ε_e_prev_time) - ufl.dot(self.ε_e_prev_time,W)
+            + ufl.dot(W,self.ε_e_prev_time) - ufl.dot(self.ε_e_prev_time,W)
 
         W_prev_it = self.sim.params.ucstar_float*ufl.skew(L(self.du_prev_it))
         self.ε_e_prev_it = self.ε_e_prev_time + ufl.sym(L(self.du_prev_it)) - viscous_strain(self.dq_prev_it) \
@@ -156,8 +156,8 @@ class SemiLagrangianEpsilon(Momentum):
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
-                η*ufl.inner(self.ε_v_dot, R)\
-            -    g*ufl.inner(ufl.dev(σ0), R)
+                η0*ufl.inner(self.ε_v_dot, R)\
+            -    ufl.inner(ufl.dev(σ0), R)
              ) * ufl.dx
         
     

@@ -170,11 +170,13 @@ class Simulation:
                     kr.plotting.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, [self.momentum.u,self.damage.d,
                                            self.momentum.ψplus/self.params.ψcritstar,
+                                           self.dq,self.ε_e,
                                         #    self.momentum.p_crack(self.momentum.du),
                                         # self.momentum.u_e, self.momentum.du_v
                                         ],
                                         ["u","d",
                                             "psi_plus",
+                                            "dq,eps_e",
                                             # "p_c",
                                         # "ue","uv",
                                         ],
