@@ -1,6 +1,6 @@
 import ufl
 from math import sqrt
-from .invariants import eigenstate, matrix_function
+from .invariants import eigenstate, matrix_function, eigenstate_plane_strain
 from .maths_functions import positive_part, tr_e
 
 def λoverμ(ν):
@@ -77,10 +77,13 @@ def stress_plus_dp(ε, ν, γ=sqrt(3), eps=1e-14):
 def free_energy_plus_nt(ε,ν):
     '''Positive part of free energy from no-tension split'''
     D = ufl.shape(ε)[0]
-    λ,M = eigenstate(ε)
-    if D == 2:
+    if D == 3:
+        λ,M = eigenstate_plane_strain(ε)
+    else:
+        λ,M = eigenstate(ε)
         λ_mid = (ε[0,0] + ε[1,1])/2
         λ = [λ[0], λ_mid, λ[1]]
+        M = [M[0], 0*M[0], M[1]]
 
     psi1 = free_energy(ε,ν)
     psi2 = free_energy(ε,ν) - Eoverμ(ν)*λ[0]**2/2
@@ -96,11 +99,15 @@ def stress_plus_nt(ε,ν):
     '''Positive part of stress for no-tension split'''
     D = ufl.shape(ε)[0]
     E = Eoverμ(ν)
-    λ,M = eigenstate(ε)
-    if D == 2:
+    if D == 3:
+        λ,M = eigenstate_plane_strain(ε)
+    else:
+        λ,M = eigenstate(ε)
         λ_mid = (ε[0,0] + ε[1,1])/2
         λ = [λ[0], λ_mid, λ[1]]
         M = [M[0], 0*M[0], M[1]]
+    
+    
 
     #M_mid is 0 in 2D
 

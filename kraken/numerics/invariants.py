@@ -388,3 +388,70 @@ def matrix_function(A, fn=lambda A: A):
 
     return fn_A
 
+
+
+def eigenstate_plane_strain(A, tol=1.0e-12):
+    """
+    Sorted eigenvalues and regularised eigenprojectors for a
+    symmetric 3x3 plane-strain tensor:
+
+        [[Axx,   0, Axz],
+         [  0, Ayy,   0],
+         [Axz,   0, Azz]]
+
+    tol has the same units/scaling as A.
+    """
+    if ufl.shape(A) != (3, 3):
+        raise ValueError("Expected a 3x3 tensor.")
+
+    mean = 0.5 * (A[0, 0] + A[2, 2])
+    diff = 0.5 * (A[0, 0] - A[2, 2])
+    shear = 0.5 * (A[0, 2] + A[2, 0])
+
+    radius = ufl.sqrt(diff**2 + shear**2 + tol**2)
+
+    P_xz = ufl.as_tensor([
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ])
+
+    P_y = ufl.as_tensor([
+        [0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0],
+    ])
+
+    B = ufl.as_tensor([
+        [diff,  0.0,  shear],
+        [0.0,   0.0,  0.0],
+        [shear, 0.0, -diff],
+    ])
+
+    values = [
+        mean - radius,
+        A[1, 1],
+        mean + radius,
+    ]
+
+    projectors = [
+        0.5 * (P_xz - B / radius),
+        P_y,
+        0.5 * (P_xz + B / radius),
+    ]
+
+    # The in-plane pair is already ordered.
+    # Insert the out-of-plane eigenvalue, preserving its projector.
+    for i, j in ((0, 1), (1, 2)):
+        swap = ufl.gt(values[i], values[j])
+
+        li, lj = values[i], values[j]
+        Mi, Mj = projectors[i], projectors[j]
+
+        values[i] = ufl.conditional(swap, lj, li)
+        values[j] = ufl.conditional(swap, li, lj)
+
+        projectors[i] = ufl.conditional(swap, Mj, Mi)
+        projectors[j] = ufl.conditional(swap, Mi, Mj)
+
+    return values, projectors
