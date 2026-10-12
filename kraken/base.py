@@ -176,7 +176,7 @@ class Simulation:
                                         ],
                                         ["u","d",
                                             "psi_plus",
-                                            "dq,eps_e",
+                                            "dq","eps_e",
                                             # "p_c",
                                         # "ue","uv",
                                         ],
