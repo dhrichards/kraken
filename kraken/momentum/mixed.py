@@ -73,7 +73,53 @@ class SemiLagrangianEpsilon(Momentum):
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
 
     
+    @property
+    def u(self):
+        return self.u_prev_time + self.du
+    
+    @property
+    def u_v(self):
+        return self.u_v_prev_time + self.du_v
 
+    @property
+    def u_e(self):
+        return self.u_e_prev_time + self.du_e
+
+    @property
+    def p(self):
+        return self.p_prev_time + self.dp
+
+    @property
+    def u_prev_it(self):
+        return self.u_prev_time + self.du_prev_it
+    
+    @property
+    def u_v_prev_it(self):
+        return self.u_v_prev_time + self.du_v_prev_it
+
+    @property
+    def u_e_prev_it(self):
+        return self.u_e_prev_time + self.du_e_prev_it
+
+    @property
+    def p_prev_it(self):
+        return self.p_prev_time + self.dp_prev_it
+
+    @property
+    def vel(self):
+        return self.du_v / self.sim.params.dtstar
+
+    @property
+    def vel_prev_it(self):
+        return self.du_v_prev_it / self.sim.params.dtstar
+
+    @property
+    def ε_e(self):
+        return mf.ε(self.du_e) + self.ε_e_prev_time
+
+    @property
+    def ε_e_prev_it(self):
+        return mf.ε(self.du_e_prev_it) + self.ε_e_prev_time
         
 
         

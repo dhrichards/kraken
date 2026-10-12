@@ -171,12 +171,12 @@ class Simulation:
                                 self.msh, [self.momentum.u,self.damage.d,
                                            self.momentum.ψplus/self.params.ψcritstar,
                                         #    self.momentum.p_crack(self.momentum.du),
-                                        self.momentum.u_e, self.momentum.du_v
+                                        # self.momentum.u_e, self.momentum.du_v
                                         ],
                                         ["u","d",
                                             "psi_plus",
                                             # "p_c",
-                                        "ue","uv",
+                                        # "ue","uv",
                                         ],
                                     t=i)
     

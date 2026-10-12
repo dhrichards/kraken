@@ -1,0 +1,250 @@
+import adios4dolfinx
+from .base import Momentum
+import numpy as np
+from dolfinx import fem, mesh
+from dolfinx.fem.petsc import NonlinearProblem
+from mpi4py import MPI
+import ufl
+import basix.ufl as bufl
+import numpy as np
+from kraken import parameters
+from kraken.numerics import maths_functions as mf
+from kraken.numerics import energy_splits as es
+from kraken.numerics import solvers
+from petsc4py import PETSc
+from kraken.numerics.invariants import matrix_function
+from kraken.boundaryconditions import marked_ds
+
+
+def viscous_strain(q):
+    return ufl.as_tensor([
+        [q[0], 0,             q[2]],
+        [0,   -q[0] - q[1],   0],
+        [q[2], 0,             q[1]],
+    ])
+
+def L(du):
+    # Mesh coordinates: (x, z)
+    # Tensor coordinates: (x, y, z)
+    return ufl.as_tensor([
+        [du[0].dx(0), 0, du[0].dx(1)],
+        [0,             0, 0],
+        [du[1].dx(0), 0, du[1].dx(1)],
+    ])
+
+
+class SemiLagrangianEpsilon(Momentum):
+    '''
+    Class for solving the momentum equation for a Maxwell viscoelastic material
+
+    Time evolution is handled using a semi-Lagrangian approach, such that it solves for the change
+    in displacements at each timestep and the mesh is then moved. 
+
+    Solves for the change in total displacement, change in viscous displacement, and pressure as a mixed function.
+    The elastic displacement is then calculated as the difference between the total and viscous displacements.
+    The elastic strain is then calculated from the elastic displacement and the previous timestep's elastic strain.
+
+    The viscosity can be non-newtonian, for some power law
+    '''
+
+    def __init__(self, sim):
+        super().__init__(sim)
+
+        self.mesh_smoothing = False
+
+        self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), 2, shape=(self.sim.msh.geometry.dim,))
+        self.q_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(3,))
+        
+        self.mixed_el = bufl.mixed_element([self.u_el, self.q_el])
+
+        self.W = fem.functionspace(self.sim.msh, self.mixed_el)
+
+        self.w = fem.Function(self.W, name="mixed function")
+        # self.w.x.array[:] =1.0
+        self.w_prev_it = fem.Function(self.W, name="mixed function previous iteration")
+        
+        self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
+        self.u_prev_time, self.q_prev_time = ufl.split(self.w_prev_time)
+
+        self.w_start = fem.Function(self.W, name="mixed function at start of iteration")
+        self.w_prev_it_start = fem.Function(self.W, name="mixed function previous iteration at start of iteration")
+
+        self.w_prev_2 = fem.Function(self.W, name="mixed function 2 timesteps previous")
+        self.u_prev_2, self.q_prev_2 = ufl.split(self.w_prev_2)
+
+        
+        self.bc_e = self.sim.bc_funcs[0](self.W)
+
+        self.du, self.dq = ufl.split(self.w)
+        self.u = self.u_prev_time + self.du
+        
+        self.du_prev_it, self.dq_prev_it = ufl.split(self.w_prev_it)
+        
+
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(3,3))
+        self.E = fem.functionspace(self.sim.msh, self.ε_el)
+
+        self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
+        self.ε_e_updated = fem.Function(self.E)
+
+        self.ε_v_dot = viscous_strain(self.dq)/self.sim.params.dtstar
+        self.ε_v_dot_prev_it = viscous_strain(self.dq_prev_it)/self.sim.params.dtstar
+
+        # self.ε_e = self.ε_e_prev_time + ufl.sym(L(self.du)) - viscous_strain(self.dq)
+
+        W = self.sim.params.ucstar_float*ufl.skew(L(self.du))
+        self.ε_e = self.ε_e_prev_time + ufl.sym(L(self.du)) - viscous_strain(self.dq) \
+            + ufl.dot(W,self.ε_e_prev_time) - ufl.dot(self.ε_e_prev_time,W)
+
+
+    
+
+        
+
+        
+
+
+    def setup_momentum(self):
+
+        if self.mesh_smoothing:
+            self.setup_smoother()
+        w_test = ufl.TestFunction(self.W)
+        v, r = ufl.split(w_test)
+        R = viscous_strain(r)
+        n = ufl.FacetNormal(self.sim.msh)
+
+        g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
+        
+
+        # σ0 = es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν)
+        σ = self.σ
+        σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
+        
+        if self.sim.params.n.value==1.0:
+            η0 = 1.0
+        else:
+            η0 = mf.viscosity(self.ε_v_dot_prev_it, self.sim.params.n, 1e-19)
+        η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
+
+        self.ρ = self.sim.params.ρistar/self.area_ratio
+        f = self.ρ*mf.body_force(self.sim.msh)
+
+
+        self.F = (
+            + ufl.inner(σ, ufl.sym(L(v))) - ufl.inner(f, v) 
+              ) * ufl.dx 
+
+
+        if self.sim.basal_friction:
+            # water pressure on other boundaries
+            self.F += (
+                self.pw * ufl.inner(n, v) * self.sim.marked_ds(2)\
+                )
+
+            # linear weertman on bottom boundary
+            self.F += (
+                self.sim.params.βstar*ufl.inner(self.du/self.sim.params.dtstar,v)*self.sim.marked_ds(1)
+            )
+        else:
+            self.F += (
+                self.pw * ufl.inner(n, v) * ufl.ds\
+                )
+        
+        self.F+= (
+                # η0*ufl.inner(εD, mf.ε(v_v))\
+                η*ufl.inner(self.ε_v_dot, R)\
+            -    g*ufl.inner(ufl.dev(σ0), R)
+             ) * ufl.dx
+        
+    
+
+        self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
+        
+        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_e)
+        
+
+
+
+    def solve(self):
+        self.solver.solve(None, self.w.x.petsc_vec)
+        # self.problem.solve()
+        self.w.x.scatter_forward()
+
+        self.w_prev_it.x.array[:] = self.w.x.array[:]
+
+
+    def interpolate_from_parent(self, parent):
+        super().interpolate_from_parent(parent)
+
+
+        for i in range(3):
+            self.w.sub(i).interpolate(parent.momentum.w.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+            self.w_prev_time.sub(i).interpolate(parent.momentum.w_prev_time.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+            self.w_prev_it.sub(i).interpolate(parent.momentum.w_prev_it.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+            self.w_prev_it_start.sub(i).interpolate(parent.momentum.w_prev_it_start.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+            self.w_prev_2.sub(i).interpolate(parent.momentum.w_prev_2.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
+  
+        self.ε_e_prev_time.interpolate(parent.momentum.ε_e_prev_time, cells0=self.sim.parent_cells, cells1=self.sim.cells)
+
+
+   
+
+
+    def setup_smoother(self):
+        g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
+
+        self.du_1 = fem.Function(self.V, name="du 1")
+
+        self.du_smooth = fem.Function(self.V, name="du smooth")
+        du = ufl.TrialFunction(self.V)
+        v = ufl.TestFunction(self.V)
+
+        a = g*ufl.inner(du, v) * ufl.dx + self.sim.params.lstar**2*ufl.inner(ufl.grad(du), ufl.grad(v)) * ufl.dx
+        L = g*ufl.inner(self.du_1, v) * ufl.dx
+
+        self.smooth_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"})
+    
+
+    def timestep(self):
+
+        self.ε_e_updated.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
+
+        
+        if self.mesh_smoothing:
+            self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+            du = self.smooth_problem.solve()
+            self.du_smooth.x.array[:] = du.x.array[:] # for saving
+        else:
+            du = fem.Function(self.V)
+            du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+
+        self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
+
+        self.ε_e_prev_time.x.array[:] = self.ε_e_updated.x.array[:]
+        
+        self.w_prev_2.x.array[:] = self.w_prev_time.x.array[:]
+        self.w_prev_time.x.array[:] += self.w.x.array[:]
+
+        self.area = fem.assemble_vector(self.cell_area_form).array
+        self.area_ratio.x.array[:] = self.area/self.area_0
+        
+
+        self.w_start.x.array[:] = self.w.x.array[:]
+        self.w_prev_it_start.x.array[:] = self.w_prev_it.x.array[:]
+
+    def revert(self):
+        self.w.x.array[:] = self.w_start.x.array[:]
+        self.w_prev_it.x.array[:] = self.w_prev_it_start.x.array[:]
+
+        
+    def write_checkpoint(self, filename, t=0):
+        super().write_checkpoint(filename, t)
+        adios4dolfinx.write_function(filename, self.ε_e_prev_time, name="epsiloneprevtime", time=t)
+
+    def read_checkpoint(self, filename, t=0):
+        super().read_checkpoint(filename, t)
+        adios4dolfinx.read_function(filename, self.ε_e_prev_time, name="epsiloneprevtime", time=t)
+
+        
+        
+    
