@@ -81,7 +81,7 @@ class SemiLagrangianEpsilon(Momentum):
         self.du_prev_it, self.dq_prev_it = ufl.split(self.w_prev_it)
         
 
-        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(3,3))
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 0, shape=(3,3))
         self.E = fem.functionspace(self.sim.msh, self.ε_el)
 
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
@@ -90,7 +90,6 @@ class SemiLagrangianEpsilon(Momentum):
         self.ε_v_dot = viscous_strain(self.dq)/self.sim.params.dtstar
         self.ε_v_dot_prev_it = viscous_strain(self.dq_prev_it)/self.sim.params.dtstar
 
-        # self.ε_e = self.ε_e_prev_time + ufl.sym(L(self.du)) - viscous_strain(self.dq)
 
         W = self.sim.params.ucstar_float*ufl.skew(L(self.du))
         self.ε_e = self.ε_e_prev_time + ufl.sym(L(self.du)) - viscous_strain(self.dq) \
@@ -175,71 +174,23 @@ class SemiLagrangianEpsilon(Momentum):
         self.w.x.scatter_forward()
 
         self.w_prev_it.x.array[:] = self.w.x.array[:]
-
-
-    def interpolate_from_parent(self, parent):
-        super().interpolate_from_parent(parent)
-
-
-        for i in range(3):
-            self.w.sub(i).interpolate(parent.momentum.w.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
-            self.w_prev_time.sub(i).interpolate(parent.momentum.w_prev_time.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
-            self.w_prev_it.sub(i).interpolate(parent.momentum.w_prev_it.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
-            self.w_prev_it_start.sub(i).interpolate(parent.momentum.w_prev_it_start.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
-            self.w_prev_2.sub(i).interpolate(parent.momentum.w_prev_2.sub(i), cells0=self.sim.parent_cells, cells1=self.sim.cells)
-  
-        self.ε_e_prev_time.interpolate(parent.momentum.ε_e_prev_time, cells0=self.sim.parent_cells, cells1=self.sim.cells)
-
-
    
-
-
-    def setup_smoother(self):
-        g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
-
-        self.du_1 = fem.Function(self.V, name="du 1")
-
-        self.du_smooth = fem.Function(self.V, name="du smooth")
-        du = ufl.TrialFunction(self.V)
-        v = ufl.TestFunction(self.V)
-
-        a = g*ufl.inner(du, v) * ufl.dx + self.sim.params.lstar**2*ufl.inner(ufl.grad(du), ufl.grad(v)) * ufl.dx
-        L = g*ufl.inner(self.du_1, v) * ufl.dx
-
-        self.smooth_problem = fem.petsc.LinearProblem(a, L, bcs=[], petsc_options={"ksp_type":"preonly","pc_type":"lu"})
-    
 
     def timestep(self):
 
         self.ε_e_updated.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
 
-        
-        if self.mesh_smoothing:
-            self.du_1.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
-            du = self.smooth_problem.solve()
-            self.du_smooth.x.array[:] = du.x.array[:] # for saving
-        else:
-            du = fem.Function(self.V)
-            du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+
+        du = fem.Function(self.V)
+        du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
 
         self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
 
         self.ε_e_prev_time.x.array[:] = self.ε_e_updated.x.array[:]
-        
-        self.w_prev_2.x.array[:] = self.w_prev_time.x.array[:]
-        self.w_prev_time.x.array[:] += self.w.x.array[:]
+
 
         self.area = fem.assemble_vector(self.cell_area_form).array
         self.area_ratio.x.array[:] = self.area/self.area_0
-        
-
-        self.w_start.x.array[:] = self.w.x.array[:]
-        self.w_prev_it_start.x.array[:] = self.w_prev_it.x.array[:]
-
-    def revert(self):
-        self.w.x.array[:] = self.w_start.x.array[:]
-        self.w_prev_it.x.array[:] = self.w_prev_it_start.x.array[:]
-
         
     def write_checkpoint(self, filename, t=0):
         super().write_checkpoint(filename, t)
