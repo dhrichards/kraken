@@ -50,7 +50,7 @@ class SemiLagrangianEpsilon(Momentum):
     def __init__(self, sim):
         super().__init__(sim)
 
-        self.mesh_smoothing = False
+
 
         self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), 1, shape=(self.sim.msh.geometry.dim,))
         self.q_el = bufl.element("DG", self.sim.msh.basix_cell(), 0, shape=(3,))
@@ -65,13 +65,6 @@ class SemiLagrangianEpsilon(Momentum):
         
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
         self.u_prev_time, self.q_prev_time = ufl.split(self.w_prev_time)
-
-        self.w_start = fem.Function(self.W, name="mixed function at start of iteration")
-        self.w_prev_it_start = fem.Function(self.W, name="mixed function previous iteration at start of iteration")
-
-        self.w_prev_2 = fem.Function(self.W, name="mixed function 2 timesteps previous")
-        self.u_prev_2, self.q_prev_2 = ufl.split(self.w_prev_2)
-
         
         self.bc_e = self.sim.bc_funcs[0](self.W)
 
@@ -81,7 +74,7 @@ class SemiLagrangianEpsilon(Momentum):
         self.du_prev_it, self.dq_prev_it = ufl.split(self.w_prev_it)
         
 
-        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 0, shape=(3,3))
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(3,3))
         self.E = fem.functionspace(self.sim.msh, self.ε_el)
 
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
@@ -90,6 +83,7 @@ class SemiLagrangianEpsilon(Momentum):
         self.ε_v_dot = viscous_strain(self.dq)/self.sim.params.dtstar
         self.ε_v_dot_prev_it = viscous_strain(self.dq_prev_it)/self.sim.params.dtstar
 
+        # self.ε_e = self.ε_e_prev_time + ufl.sym(L(self.du)) - viscous_strain(self.dq)
 
         W = self.sim.params.ucstar_float*ufl.skew(L(self.du))
         self.ε_e = self.ε_e_prev_time + ufl.sym(L(self.du)) - viscous_strain(self.dq) \
@@ -109,8 +103,6 @@ class SemiLagrangianEpsilon(Momentum):
 
     def setup_momentum(self):
 
-        if self.mesh_smoothing:
-            self.setup_smoother()
         w_test = ufl.TestFunction(self.W)
         v, r = ufl.split(w_test)
         R = viscous_strain(r)
@@ -174,6 +166,7 @@ class SemiLagrangianEpsilon(Momentum):
         self.w.x.scatter_forward()
 
         self.w_prev_it.x.array[:] = self.w.x.array[:]
+
    
 
     def timestep(self):
@@ -187,7 +180,7 @@ class SemiLagrangianEpsilon(Momentum):
         self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
 
         self.ε_e_prev_time.x.array[:] = self.ε_e_updated.x.array[:]
-
+        self.w_prev_time.x.array[:] += self.w.x.array[:]
 
         self.area = fem.assemble_vector(self.cell_area_form).array
         self.area_ratio.x.array[:] = self.area/self.area_0
