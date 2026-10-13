@@ -33,10 +33,12 @@ class SemiLagrangianEpsilon(Momentum):
     def __init__(self, sim):
         super().__init__(sim)
 
+        self.order = 2
+
         self.mesh_smoothing = True
 
-        self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), 2, shape=(self.sim.msh.geometry.dim,))
-        self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
+        self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), self.order, shape=(self.sim.msh.geometry.dim,))
+        self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), self.order-1)
 
         self.mixed_el = bufl.mixed_element([self.u_el, self.u_el, self.p_el])
 
@@ -67,7 +69,7 @@ class SemiLagrangianEpsilon(Momentum):
         self.du_e_prev_it = self.du_prev_it - self.du_v_prev_it
 
 
-        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), 1, shape=(self.sim.msh.geometry.dim, self.sim.msh.geometry.dim))
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), self.order-1, shape=(self.sim.msh.geometry.dim, self.sim.msh.geometry.dim))
         self.E = fem.functionspace(self.sim.msh, self.ε_el)
 
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
