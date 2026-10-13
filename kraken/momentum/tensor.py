@@ -93,7 +93,7 @@ class SemiLagrangianEpsilon(Momentum):
         R = mf.viscous_strain(r)
         n = ufl.FacetNormal(self.sim.msh)
 
-        g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
+        g = self.sim.damage.g
         
 
         # σ0 = es.cauchy_stress(self.ε_e_prev_it,self.sim.params.ν)

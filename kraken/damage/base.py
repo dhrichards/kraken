@@ -24,6 +24,10 @@ class Damage:
         self.setup_solver()
         # self.setup_history()
 
+    @property
+    def g(self):
+        return es.degradation(self.d,self.sim.params.ge_tol)
+
 
     def setup_weak_form(self):
         raise NotImplementedError("This method should be implemented in subclasses.")

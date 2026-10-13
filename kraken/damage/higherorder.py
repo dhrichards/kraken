@@ -27,6 +27,7 @@ class AT2(Damage):
 
         self.W = fem.functionspace(self.sim.msh, self.d_el_mixed)
         self.w = fem.Function(self.W, name="mixed function")
+        self.w_candidate = fem.Function(self.W)
         self.d, self.lap = ufl.split(self.w)
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
         self.d_prev_time, self.lap_prev_time = ufl.split(self.w_prev_time)
@@ -108,6 +109,9 @@ class AT2(Damage):
         self.w_prev_it.x.array[:] = self.w.x.array[:]
         self.solver.solve(None, self.w.x.petsc_vec)
         # self.problem.solve()
+
+        self.w_candidate.x.array[:] = self.w.x.array.copy()
+        self.w.x.array[:] = self.w_prev_it.x.array[:] + 0.5*(self.w_candidate.x.array[:]-self.w_prev_it.x.array[:])
         self.w.x.scatter_forward()
         
         assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
