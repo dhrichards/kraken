@@ -16,6 +16,7 @@ class Simulation:
 
         self.damage_on = True
 
+
         self.tol = 5e-6
         self.min_its = 2
         self.max_its = 300
@@ -162,6 +163,18 @@ class Simulation:
                 self.momentum.solve()
                 if self.damage_on:
                     self.damage.solve()
+
+                g = es.degradation(self.damage.d_prev_it,self.params.ge_tol)
+                B = ufl.dev(
+                    self.momentum.ε_e_prev_time + ufl.sym(mf.L(self.momentum.du))
+                )
+
+                Q = mf.viscous_strain(self.momentum.dq)
+                η = (1-self.damage.d_prev_it)**2 + self.params.viscosity_tol
+                Q_expected = (
+                    2 * g * self.params.dtstar
+                    / (η + 2 * g * self.params.dtstar)
+                ) * B
                 
              
                
@@ -171,12 +184,14 @@ class Simulation:
                                 self.msh, [self.momentum.u,self.damage.d,
                                            self.momentum.ψplus/self.params.ψcritstar,
                                            self.momentum.dq,self.momentum.ε_e,
+                                           B,Q,Q_expected,
                                         #    self.momentum.p_crack(self.momentum.du),
                                         # self.momentum.u_e, self.momentum.du_v
                                         ],
                                         ["u","d",
                                             "psi_plus",
                                             "dq","eps_e",
+                                            "B","Q","Qexp",
                                             # "p_c",
                                         # "ue","uv",
                                         ],

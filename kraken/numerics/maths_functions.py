@@ -3,6 +3,23 @@ from .invariants import eigenstate
 from dolfinx import fem, default_scalar_type
 import numpy as np
 
+def viscous_strain(q):
+    return ufl.as_tensor([
+        [q[0], 0,             q[2]],
+        [0,   -q[0] - q[1],   0],
+        [q[2], 0,             q[1]],
+    ])
+
+def L(du):
+    # Mesh coordinates: (x, z)
+    # Tensor coordinates: (x, y, z)
+    return ufl.as_tensor([
+        [du[0].dx(0), 0, du[0].dx(1)],
+        [0,             0, 0],
+        [du[1].dx(0), 0, du[1].dx(1)],
+    ])
+
+
 def tr_e(A):
     ''' In 3D normal trace, in 2D a special trace, assuming that we have plane viscous strain rates,
       then there is out of plane elastic strain which is always equal to:

@@ -16,21 +16,6 @@ from kraken.numerics.invariants import matrix_function
 from kraken.boundaryconditions import marked_ds
 
 
-def viscous_strain(q):
-    return ufl.as_tensor([
-        [q[0], 0,             q[2]],
-        [0,   -q[0] - q[1],   0],
-        [q[2], 0,             q[1]],
-    ])
-
-def L(du):
-    # Mesh coordinates: (x, z)
-    # Tensor coordinates: (x, y, z)
-    return ufl.as_tensor([
-        [du[0].dx(0), 0, du[0].dx(1)],
-        [0,             0, 0],
-        [du[1].dx(0), 0, du[1].dx(1)],
-    ])
 
 
 class SemiLagrangianEpsilon(Momentum):
@@ -80,17 +65,17 @@ class SemiLagrangianEpsilon(Momentum):
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
         self.ε_e_updated = fem.Function(self.E)
 
-        self.ε_v_dot = viscous_strain(self.dq)/self.sim.params.dtstar
-        self.ε_v_dot_prev_it = viscous_strain(self.dq_prev_it)/self.sim.params.dtstar
+        self.ε_v_dot = mf.viscous_strain(self.dq)/self.sim.params.dtstar
+        self.ε_v_dot_prev_it = mf.viscous_strain(self.dq_prev_it)/self.sim.params.dtstar
 
         # self.ε_e = self.ε_e_prev_time + ufl.sym(L(self.du)) - viscous_strain(self.dq)
 
-        W = self.sim.params.ucstar_float*ufl.skew(L(self.du))
-        self.ε_e = self.ε_e_prev_time + ufl.sym(L(self.du)) - viscous_strain(self.dq) \
+        W = self.sim.params.ucstar_float*ufl.skew(mf.L(self.du))
+        self.ε_e = self.ε_e_prev_time + ufl.sym(mf.L(self.du)) - mf.viscous_strain(self.dq) \
             # + ufl.dot(W,self.ε_e_prev_time) - ufl.dot(self.ε_e_prev_time,W)
 
-        W_prev_it = self.sim.params.ucstar_float*ufl.skew(L(self.du_prev_it))
-        self.ε_e_prev_it = self.ε_e_prev_time + ufl.sym(L(self.du_prev_it)) - viscous_strain(self.dq_prev_it) \
+        W_prev_it = self.sim.params.ucstar_float*ufl.skew(mf.L(self.du_prev_it))
+        self.ε_e_prev_it = self.ε_e_prev_time + ufl.sym(mf.L(self.du_prev_it)) - mf.viscous_strain(self.dq_prev_it) \
             + ufl.dot(W_prev_it,self.ε_e_prev_time) - ufl.dot(self.ε_e_prev_time,W_prev_it)
 
 
@@ -105,7 +90,7 @@ class SemiLagrangianEpsilon(Momentum):
 
         w_test = ufl.TestFunction(self.W)
         v, r = ufl.split(w_test)
-        R = viscous_strain(r)
+        R = mf.viscous_strain(r)
         n = ufl.FacetNormal(self.sim.msh)
 
         g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
@@ -126,7 +111,7 @@ class SemiLagrangianEpsilon(Momentum):
 
 
         self.F = (
-            + ufl.inner(σ, ufl.sym(L(v))) - ufl.inner(f, v) 
+            + ufl.inner(σ, ufl.sym(mf.L(v))) - ufl.inner(f, v) 
               ) * ufl.dx 
 
 
