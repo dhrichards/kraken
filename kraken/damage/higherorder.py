@@ -110,8 +110,8 @@ class AT2(Damage):
         self.solver.solve(None, self.w.x.petsc_vec)
         # self.problem.solve()
 
-        self.w_candidate.x.array[:] = self.w.x.array.copy()
-        self.w.x.array[:] = self.w_prev_it.x.array[:] + 0.5*(self.w_candidate.x.array[:]-self.w_prev_it.x.array[:])
+        # self.w_candidate.x.array[:] = self.w.x.array.copy()
+        # self.w.x.array[:] = self.w_prev_it.x.array[:] + 0.5*(self.w_candidate.x.array[:]-self.w_prev_it.x.array[:])
         self.w.x.scatter_forward()
         
         assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"

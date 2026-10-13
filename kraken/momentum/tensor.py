@@ -132,8 +132,8 @@ class SemiLagrangianEpsilon(Momentum):
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
-                η*ufl.inner(self.ε_v_dot, R)\
-            -    g*ufl.inner(ufl.dev(σ0), R)
+                η0*ufl.inner(self.ε_v_dot, R)\
+            -    ufl.inner(ufl.dev(σ), R)
              ) * ufl.dx
         
     
