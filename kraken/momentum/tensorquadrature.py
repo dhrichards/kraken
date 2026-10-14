@@ -350,8 +350,8 @@ class Tensor(Momentum):
 
         # Restore these values if this constitutive evaluation fails.
         q_before = q_values[blocks].copy()
+        failure = None
 
-        # Reference residual for the existing relative-tolerance scale.
         q_values[blocks] = 0.0
 
         if len(cells):
@@ -361,10 +361,13 @@ class Tensor(Momentum):
 
             reference_norm = np.linalg.norm(r_reference, axis=1)
 
-            tolerance = (
-                self.local_atol
-                + self.local_rtol * reference_norm
-            )
+            if not np.all(np.isfinite(reference_norm)):
+                failure = "nonfinite zero-increment reference residual"
+            else:
+                tolerance = (
+                    self.local_atol
+                    + self.local_rtol * reference_norm
+                )
 
         # Start Newton from the previous staggered solution.
         q_guess = self.dq_prev_it.x.array.reshape(-1, 3)
@@ -373,11 +376,8 @@ class Tensor(Momentum):
         max_backtracks = 20
         armijo = 1.0e-4
 
-        failure = None
 
-        if len(cells):
-            initial_norm = None
-
+        if len(cells) and failure is None:
             for iteration in range(self.local_max_it + 1):
                 r = self.r_local_expr.eval(msh, cells).reshape(-1, 3)
                 residual_norm = np.linalg.norm(r, axis=1)
@@ -387,14 +387,6 @@ class Tensor(Momentum):
                         f"nonfinite local residual at iteration {iteration}"
                     )
                     break
-
-                if initial_norm is None:
-                    initial_norm = residual_norm.copy()
-
-                tolerance = (
-                    self.local_atol
-                    + self.local_rtol * initial_norm
-                )
 
                 active = np.flatnonzero(residual_norm > tolerance)
 
