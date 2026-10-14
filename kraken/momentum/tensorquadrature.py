@@ -336,8 +336,8 @@ class Tensor(Momentum):
             )
 
         # Starting tolerances in your nondimensional residual units.
-        self.local_rtol = 1e-10
-        self.local_atol = 1e-12
+        self.local_rtol = 1e-7
+        self.local_atol = 1e-9
         self.local_max_it = 30
 
     def update_constitutive_state(self):
@@ -480,11 +480,11 @@ class Tensor(Momentum):
 
                     if backtrack == max_backtracks:
                         failure = (
-                            f"local backtracking failed at Newton iteration "
-                            f"{iteration}; "
+                            f"local backtracking failed at Newton iteration {iteration}; "
                             f"{np.count_nonzero(pending)} points rejected; "
-                            f"max starting residual="
-                            f"{norm_base[pending].max():.3e}"
+                            f"max starting residual={norm_base[pending].max():.3e}; "
+                            f"max residual/tolerance="
+                            f"{np.max(norm_base[pending] / tol_active[pending]):.3e}"
                         )
                         break
 
