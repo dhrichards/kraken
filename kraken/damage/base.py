@@ -72,7 +72,7 @@ class Damage:
         self.H_func = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
         self.Hupdated.interpolate(
             fem.Expression(
-                self.H,
+                self.H_func,
                 self.sim.momentum.quad_points,
             )
         )
