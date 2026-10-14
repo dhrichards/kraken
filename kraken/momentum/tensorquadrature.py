@@ -341,34 +341,52 @@ class Tensor(Momentum):
         self.local_max_it = 30
 
     def update_constitutive_state(self):
-        """Solve viscous evolution independently at each quadrature point."""
+        """Local Newton solve with independent quadrature-point backtracking."""
         msh = self.sim.msh
         cells = self._local_cells
         blocks = self._q_blocks
 
-        # Three stored viscous-strain components per quadrature point.
         q_values = self.dq.x.array.reshape(-1, 3)
 
-        # Deterministic starting guess for each SNES evaluation.
-        # This resets the increment only, not the elastic timestep history.
+        # Restore these values if this constitutive evaluation fails.
+        q_before = q_values[blocks].copy()
+
+        # Reference residual for the existing relative-tolerance scale.
         q_values[blocks] = 0.0
 
-        failed = False
+        if len(cells):
+            r_reference = self.r_local_expr.eval(
+                msh, cells
+            ).reshape(-1, 3)
+
+            reference_norm = np.linalg.norm(r_reference, axis=1)
+
+            tolerance = (
+                self.local_atol
+                + self.local_rtol * reference_norm
+            )
+
+        # Start Newton from the previous staggered solution.
+        q_guess = self.dq_prev_it.x.array.reshape(-1, 3)
+        q_values[blocks] = q_guess[blocks]
+
+        max_backtracks = 20
+        armijo = 1.0e-4
+
+        failure = None
 
         if len(cells):
             initial_norm = None
 
             for iteration in range(self.local_max_it + 1):
-
-                r = self.r_local_expr.eval(
-                    msh, cells
-                ).reshape(-1, 3)
-
-                if not np.all(np.isfinite(r)):
-                    failed = True
-                    break
-
+                r = self.r_local_expr.eval(msh, cells).reshape(-1, 3)
                 residual_norm = np.linalg.norm(r, axis=1)
+
+                if not np.all(np.isfinite(residual_norm)):
+                    failure = (
+                        f"nonfinite local residual at iteration {iteration}"
+                    )
+                    break
 
                 if initial_norm is None:
                     initial_norm = residual_norm.copy()
@@ -378,13 +396,19 @@ class Tensor(Momentum):
                     + self.local_rtol * initial_norm
                 )
 
-                active = residual_norm > tolerance
+                active = np.flatnonzero(residual_norm > tolerance)
 
-                if not np.any(active):
+                if active.size == 0:
                     break
 
                 if iteration == self.local_max_it:
-                    failed = True
+                    failure = (
+                        f"local iteration limit reached; "
+                        f"{active.size} unconverged points; "
+                        f"max residual={residual_norm[active].max():.3e}; "
+                        f"max residual/tolerance="
+                        f"{np.max(residual_norm[active] / tolerance[active]):.3e}"
+                    )
                     break
 
                 A = self.A_local_expr.eval(
@@ -392,7 +416,9 @@ class Tensor(Momentum):
                 ).reshape(-1, 3, 3)
 
                 if not np.all(np.isfinite(A[active])):
-                    failed = True
+                    failure = (
+                        f"nonfinite local Jacobian at iteration {iteration}"
+                    )
                     break
 
                 try:
@@ -402,25 +428,105 @@ class Tensor(Momentum):
                     )[..., 0]
 
                 except np.linalg.LinAlgError:
-                    failed = True
+                    failure = (
+                        f"singular local Jacobian at iteration {iteration}"
+                    )
                     break
 
                 if not np.all(np.isfinite(correction)):
-                    failed = True
+                    failure = (
+                        f"nonfinite Newton correction at iteration {iteration}"
+                    )
                     break
 
-                q_values[blocks[active]] += correction
+                # Save this Newton iteration's starting values.
+                q_base = q_values[blocks[active]].copy()
+                norm_base = residual_norm[active].copy()
+                tol_active = tolerance[active]
 
-        # All ranks reach this check before any rank raises an exception.
-        failed_anywhere = msh.comm.allreduce(failed, op=MPI.LOR)
+                # Each active point gets its own step length.
+                alpha = np.ones(active.size)
+                pending = np.ones(active.size, dtype=bool)
+
+                for backtrack in range(max_backtracks + 1):
+                    pending_ids = np.flatnonzero(pending)
+                    point_ids = active[pending_ids]
+
+                    q_values[blocks[point_ids]] = (
+                        q_base[pending_ids]
+                        + alpha[pending_ids, None]
+                        * correction[pending_ids]
+                    )
+
+                    # Evaluate on owned cells. Accepted points retain their values.
+                    r_trial = self.r_local_expr.eval(
+                        msh, cells
+                    ).reshape(-1, 3)
+
+                    norm_trial = np.linalg.norm(
+                        r_trial[point_ids], axis=1
+                    )
+
+                    sufficient_decrease = (
+                        norm_trial
+                        <= (
+                            1.0 - armijo * alpha[pending_ids]
+                        ) * norm_base[pending_ids]
+                    )
+
+                    converged = norm_trial <= tol_active[pending_ids]
+
+                    accepted = (
+                        np.isfinite(norm_trial)
+                        & (sufficient_decrease | converged)
+                    )
+
+                    pending[pending_ids[accepted]] = False
+
+                    if not np.any(pending):
+                        break
+
+                    if backtrack == max_backtracks:
+                        failure = (
+                            f"local backtracking failed at Newton iteration "
+                            f"{iteration}; "
+                            f"{np.count_nonzero(pending)} points rejected; "
+                            f"max starting residual="
+                            f"{norm_base[pending].max():.3e}"
+                        )
+                        break
+
+                    alpha[pending] *= 0.5
+
+                if failure is not None:
+                    break
+
+        # All ranks participate, including ranks with no owned cells.
+        failed_anywhere = msh.comm.allreduce(
+            failure is not None, op=MPI.LOR
+        )
 
         if failed_anywhere:
+            # Restore state on every rank before reporting failure.
+            q_values[blocks] = q_before
+            self.dq.x.scatter_forward()
+
+            reports = msh.comm.allgather(
+                None if failure is None
+                else f"rank {msh.comm.rank}: {failure}"
+            )
+            reports = [report for report in reports if report is not None]
+
+            # Keep the exception readable when many ranks fail.
+            details = "; ".join(reports[:4])
+            if len(reports) > 4:
+                details += f"; plus {len(reports) - 4} other ranks"
+
             raise RuntimeError(
-                "Local viscous constitutive solve failed to converge."
+                "Local viscous constitutive solve failed: " + details
             )
 
         self.dq.x.scatter_forward()
-
 
 
     def solve(self):
