@@ -37,8 +37,8 @@ class SemiLagrangianEpsilon(Momentum):
 
         self.mesh_smoothing = True
 
-        self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), self.order, shape=(self.sim.msh.geometry.dim,))
-        self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), self.order-1)
+        self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), self.sim.order, shape=(self.sim.msh.geometry.dim,))
+        self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), self.sim.order-1)
 
         self.mixed_el = bufl.mixed_element([self.u_el, self.u_el, self.p_el])
 

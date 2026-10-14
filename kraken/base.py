@@ -12,7 +12,17 @@ class Simulation:
     def __init__(self, msh):
         self.msh = msh
         self.params = parameters.Params(self.msh)
-        
+        self.order = 1
+        self.quad_degree = max(4, 2 * self.order)
+
+        self.dx = ufl.Measure(
+                    "dx",
+                    domain=self.msh,
+                    metadata={
+                        "quadrature_degree": self.quad_degree,
+                        "quadrature_rule": "default",
+                    },
+                )
 
         self.damage_on = True
 
@@ -164,34 +174,22 @@ class Simulation:
                 if self.damage_on:
                     self.damage.solve()
 
-                g = es.degradation(self.damage.d_prev_it,self.params.ge_tol)
-                B = ufl.dev(
-                    self.momentum.ε_e_prev_time + ufl.sym(mf.L(self.momentum.du))
-                )
-
-                Q = mf.viscous_strain(self.momentum.dq)
-                η = (1-self.damage.d_prev_it)**2 + self.params.viscosity_tol
-                Q_expected = (
-                    2 * g * self.params.dtstar
-                    / (η + 2 * g * self.params.dtstar)
-                ) * B
-                
+        
              
                
 
                 if save:
                     kr.plotting.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
-                                self.msh, [self.momentum.u,self.damage.d,
-                                           self.momentum.ψplus/self.params.ψcritstar,
-                                           self.momentum.dq,self.momentum.ε_e,
-                                           B,Q,Q_expected,
+                                self.msh, [self.momentum.du,self.damage.d,
+                                        #    self.momentum.ψplus/self.params.ψcritstar,
+                                        #    self.momentum.dq,self.momentum.ε_e,
                                         #    self.momentum.p_crack(self.momentum.du),
                                         # self.momentum.u_e, self.momentum.du_v
                                         ],
                                         ["u","d",
-                                            "psi_plus",
-                                            "dq","eps_e",
-                                            "B","Q","Qexp",
+                                            # "psi_plus",
+                                            # "dq","eps_e",
+                                            # "B","Q","Qexp",
                                             # "p_c",
                                         # "ue","uv",
                                         ],

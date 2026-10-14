@@ -39,7 +39,8 @@ class AT2(Damage):
         self.d_prev_it2, self.lap_prev_it2 = ufl.split(self.w_prev_it2)
         self.d_prev_it3, self.lap_prev_it3 = ufl.split(self.w_prev_it3)
 
-        self.D, _ = self.W.sub(0).collapse()
+        self.D, self.d_to_W = self.W.sub(0).collapse()
+        self.d_to_W = np.asarray(self.d_to_W, dtype=np.int32)
 
         # self.H_space = fem.functionspace(self.sim.msh, ("DG", 1))
         # self.Hprev = fem.Function(self.H_space, name="history")
@@ -58,6 +59,7 @@ class AT2(Damage):
 
     def setup_weak_form(self):
         C3 = self.sim.params.C3; l = self.sim.params.lstar
+        dx = self.sim.dx
         
         
         H = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
@@ -66,10 +68,10 @@ class AT2(Damage):
         v, q = ufl.split(mixed_test)
 
 
-        self.F = -C3*2*l*(1-self.d)*v*H*ufl.dx \
+        self.F = -C3*2*l*(1-self.d)*v*H*dx \
                   +(1/2)*(2*self.d*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
-                ) * ufl.dx \
-                - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * ufl.dx
+                ) * dx \
+                - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * dx
         
 
         self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
@@ -118,3 +120,150 @@ class AT2(Damage):
 
     def revert(self):
         self.w.x.array[:] = self.w_prev_time.x.array[:]
+
+
+
+class Bounded(AT2):
+    '''
+    Higher order AT2 phase-field damage model.
+    This is solved using a mixed formulation, where the damage field and its Laplacian are solved for simultaneously.
+    Irreversibility is enforced using a bounded solver.
+    '''
+    def __init__(self, sim):
+        super().__init__(sim)
+        self.lower_bound = fem.Function(self.W, name="damage_lower_bound")
+        self.upper_bound = fem.Function(self.W, name="damage_upper_bound")
+
+    
+
+    def setup_weak_form(self):
+        C3 = self.sim.params.C3; l = self.sim.params.lstar
+        dx = self.sim.momentum.dx
+        
+        
+        H = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, 0.0)
+
+        mixed_test = ufl.TestFunction(self.W)
+        v, q = ufl.split(mixed_test)
+
+
+        self.F = -C3*2*l*(1-self.d)*v*H*dx \
+                  +(1/2)*(2*self.d*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
+                ) * dx \
+                - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * dx
+        
+
+        self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
+
+
+        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
+
+    def update_bounds(self):
+        # Auxiliary Laplacian remains unrestricted.
+        self.lower_bound.x.array[:] = PETSc.NINFINITY
+        self.upper_bound.x.array[:] = PETSc.INFINITY
+
+        # Only damage is bounded.
+        idx = self.d_to_W
+        self.lower_bound.x.array[idx] = self.w_prev_time.x.array[idx]
+        self.upper_bound.x.array[idx] = 1.0
+
+        self.lower_bound.x.scatter_forward()
+        self.upper_bound.x.scatter_forward()
+
+    def setup_solver(self):
+        super().setup_solver()
+
+        self.update_bounds()
+
+        self.solver.setType("vinewtonrsls")
+        self.solver.setVariableBounds(
+            self.lower_bound.x.petsc_vec,
+            self.upper_bound.x.petsc_vec,
+        )
+
+        ksp = self.solver.getKSP()
+        ksp.setType("preonly")
+        ksp.getPC().setType("lu")
+        ksp.getPC().setFactorSolverType("mumps")
+
+
+    def solve(self):
+        self.w_prev_it3.x.array[:] = self.w_prev_it2.x.array[:]
+        self.w_prev_it2.x.array[:] = self.w_prev_it.x.array[:]
+        self.w_prev_it.x.array[:] = self.w.x.array[:]
+
+        self.update_bounds()
+
+        idx = self.d_to_W
+        self.w.x.array[idx] = np.clip(
+            self.w.x.array[idx],
+            self.lower_bound.x.array[idx],
+            self.upper_bound.x.array[idx],
+        )
+        self.w.x.scatter_forward()
+
+                # Separate unbounded solver: no bounds attached.
+        unbounded = PETSc.SNES().create(self.sim.msh.comm)
+        unbounded.setType("newtonls")
+
+        unbounded.setFunction(
+            self.problem.F,
+            fem.petsc.create_vector(fem.form(self.F)),
+        )
+        unbounded.setJacobian(
+            self.problem.J,
+            fem.petsc.create_matrix(fem.form(self.J)),
+        )
+
+        unbounded.setTolerances(rtol=1.0e-9, max_it=50)
+
+        ksp = unbounded.getKSP()
+        ksp.setType("preonly")
+        ksp.getPC().setType("lu")
+        ksp.getPC().setFactorSolverType("mumps")
+
+        unbounded.solve(None, self.w.x.petsc_vec)
+        self.w.x.scatter_forward()
+
+        reason = unbounded.getConvergedReason()
+        unbounded.destroy()
+
+        if reason <= 0:
+            raise RuntimeError(
+                f"Unbounded diagnostic solve failed: SNES reason {reason}"
+            )
+
+        # Original bounded solver, starting from the unbounded solution.
+        self.solver.setType("vinewtonrsls")
+        self.solver.setVariableBounds(
+            self.lower_bound.x.petsc_vec,
+            self.upper_bound.x.petsc_vec,
+        )
+
+        self.solver.solve(None, self.w.x.petsc_vec)
+        self.w.x.scatter_forward()
+
+        reason = self.solver.getConvergedReason()
+
+        PETSc.Sys.Print(
+            "Bounded restart:",
+            reason,
+            "iterations:",
+            self.solver.getIterationNumber(),
+            "residual:",
+            self.solver.getFunctionNorm(),
+        )
+
+        if reason <= 0:
+            raise RuntimeError(
+                f"Bounded damage solve failed: SNES reason {reason}"
+            )
+
+
+    def timestep(self):
+        self.w_prev_time.x.array[:] = self.w.x.array[:]
+        self.w_prev_time.x.scatter_forward()
+
+
+

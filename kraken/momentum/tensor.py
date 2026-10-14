@@ -35,10 +35,8 @@ class Tensor(Momentum):
     def __init__(self, sim):
         super().__init__(sim)
 
-        self.order = 1
-
-        self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), self.order, shape=(self.sim.msh.geometry.dim,))
-        self.q_el = bufl.element("DG", self.sim.msh.basix_cell(), self.order-1, shape=(3,))
+        self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), self.sim.order, shape=(self.sim.msh.geometry.dim,))
+        self.q_el = bufl.element("DG", self.sim.msh.basix_cell(), self.sim.order-1, shape=(3,))
         
         self.mixed_el = bufl.mixed_element([self.u_el, self.q_el])
 
@@ -59,7 +57,7 @@ class Tensor(Momentum):
         self.du_prev_it, self.dq_prev_it = ufl.split(self.w_prev_it)
         
 
-        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), self.order-1, shape=(3,3))
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), self.sim.order-1, shape=(3,3))
         self.E = fem.functionspace(self.sim.msh, self.ε_el)
 
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
@@ -199,11 +197,10 @@ class Pressure(Tensor):
     def __init__(self, sim):
         super().__init__(sim)
 
-        self.order = 2
 
-        self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), self.order, shape=(self.sim.msh.geometry.dim,))
-        self.q_el = bufl.element("DG", self.sim.msh.basix_cell(), self.order-1, shape=(3,))
-        self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), self.order-1)
+        self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), self.sim.order, shape=(self.sim.msh.geometry.dim,))
+        self.q_el = bufl.element("DG", self.sim.msh.basix_cell(), self.sim.order-1, shape=(3,))
+        self.p_el = bufl.element("CG", self.sim.msh.basix_cell(), self.sim.order-1)
         
         self.mixed_el = bufl.mixed_element([self.u_el, self.q_el, self.p_el])
 
@@ -225,7 +222,7 @@ class Pressure(Tensor):
         self.du_prev_it, self.dq_prev_it, self.dp_prev_it = ufl.split(self.w_prev_it)
         
 
-        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), self.order-1, shape=(3,3))
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), self.sim.order-1, shape=(3,3))
         self.E = fem.functionspace(self.sim.msh, self.ε_el)
 
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")

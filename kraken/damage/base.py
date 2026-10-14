@@ -13,10 +13,21 @@ class Damage:
     def __init__(self, sim):
         self.sim = sim
 
-        self.d_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
+        self.d_el = bufl.element("CG", self.sim.msh.basix_cell(), self.sim.order)
 
-        self.H_space = fem.functionspace(self.sim.msh, ("DG", 0))
+        # self.H_space = fem.functionspace(self.sim.msh, ("DG", self.sim.order-1))
+
+        self.H_el = bufl.quadrature_element(
+            self.sim.msh.basix_cell(),
+            value_shape=(),
+            scheme="default",
+            degree=self.sim.quad_degree,
+        )
+        self.H_space = fem.functionspace(self.sim.msh, self.H_el)
+
+        
         self.Hprev = fem.Function(self.H_space, name="history")
+        self.Hupdated = fem.Function(self.H_space, name="updated history")
 
 
     def setup(self):
@@ -59,7 +70,15 @@ class Damage:
     def timestep(self):
         '''Update the history variable for the damage model.'''
         self.H_func = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
-        self.Hprev.interpolate(fem.Expression(self.H_func, self.H_space.element.interpolation_points()))
+        self.Hupdated.interpolate(
+            fem.Expression(
+                self.H,
+                self.sim.momentum.quad_points,
+            )
+        )
+        self.Hupdated.x.scatter_forward()
+        self.Hprev.x.array[:] = self.Hupdated.x.array
+        self.Hprev.x.scatter_forward()
 
     def write_checkpoint(self, filename, t=0):
         adios4dolfinx.write_function(filename, self.w, name = "w_damage",time = t)
