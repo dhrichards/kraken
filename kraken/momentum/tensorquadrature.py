@@ -133,25 +133,28 @@ class Tensor(Momentum):
             mf.viscous_strain(self.dq_prev_it) / self.sim.params.dtstar
         )
 
+        # self.ε_trial = (
+        #     self.ε_e_prev_time
+        #     + ufl.sym(mf.L(self.du))
+        # )
+
+        # self.ε_e = (
+        #     self.ε_trial - mf.viscous_strain(self.dq)
+        # )
+        Omega = self.sim.params.ucstar * ufl.skew(mf.L(self.du))
+
         self.ε_trial = (
             self.ε_e_prev_time
             + ufl.sym(mf.L(self.du))
-        )
-
-        self.ε_trial_prev_it = (
-            self.ε_e_prev_time
-            + ufl.sym(mf.L(self.du_prev_it))
+            + ufl.dot(Omega, self.ε_e_prev_time)
+            - ufl.dot(self.ε_e_prev_time, Omega)
         )
 
         self.ε_e = (
-            self.ε_trial - mf.viscous_strain(self.dq)
+            self.ε_trial
+            - mf.viscous_strain(self.dq)
         )
 
-        self.ε_e_prev_it = (
-            self.ε_trial_prev_it
-            - mf.viscous_strain(self.dq_prev_it)
-        )
-            
 
         
 
