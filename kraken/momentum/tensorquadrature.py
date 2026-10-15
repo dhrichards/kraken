@@ -175,16 +175,15 @@ class Tensor(Momentum):
         # Undegraded viscosity.
         if self.sim.params.n.value == 1.0:
             η0 = 1.0
-            η = η0
         else:
             # Retains your existing staggered/Picard viscosity treatment.
             η0 = mf.viscosity(
-                self.ε_v_dot_prev_it,
+                self.ε_v_dot,
                 self.sim.params.n,
-                1e-19,
+                1e-9,
             )
-            # η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
-            η = g*η0 + (1-g)*1
+        η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
+            
         self.η0 = η0
 
         self.ρ = self.sim.params.ρistar / self.area_ratio
@@ -230,7 +229,7 @@ class Tensor(Momentum):
         ]
 
         mismatch = (
-            η * self.ε_v_dot
+            η0 * self.ε_v_dot
             - ufl.dev(σ)
         )
 
