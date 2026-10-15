@@ -178,9 +178,9 @@ class Tensor(Momentum):
         else:
             # Retains your existing staggered/Picard viscosity treatment.
             η0 = mf.viscosity(
-                self.ε_v_dot,
+                self.ε_v_dot_prev_it,
                 self.sim.params.n,
-                1e-5,
+                1e-9,
             )
         η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
             
