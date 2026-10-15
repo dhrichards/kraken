@@ -166,8 +166,11 @@ class Tensor(Momentum):
         n = ufl.FacetNormal(self.sim.msh)
         dt = self.sim.params.dtstar
 
+        g = self.sim.damage.g
+
         # Must be a UFL expression depending on self.du and self.dq.
         σ = self.σ
+        σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
 
         # Undegraded viscosity.
         if self.sim.params.n.value == 1.0:
@@ -175,11 +178,11 @@ class Tensor(Momentum):
         else:
             # Retains your existing staggered/Picard viscosity treatment.
             η0 = mf.viscosity(
-                self.ε_v_dot_prev_it,
+                self.ε_v_dot,
                 self.sim.params.n,
                 1e-19,
             )
-
+        η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
         self.η0 = η0
 
         self.ρ = self.sim.params.ρistar / self.area_ratio
