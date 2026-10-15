@@ -13,7 +13,7 @@ class Simulation:
         self.msh = msh
         self.params = parameters.Params(self.msh)
         self.order = 2
-        self.quad_degree = max(6, 2 * self.order)
+        self.quad_degree = max(4, 2 * self.order)
 
         self.dx = ufl.Measure(
                     "dx",
