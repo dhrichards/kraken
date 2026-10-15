@@ -121,3 +121,75 @@ def rate_factor_np(T):
     # A0 = 2.89165e-13
     return A0*np.exp(-Q/(R*(T+273.15)))
 
+
+def corotational_increment(du, ucstar):
+    """
+    Returns:
+        R3: incremental rotation, embedded in 3D
+        de3: logarithmic stretch increment in the new spatial frame,
+             scaled consistently with sym(L(du))
+
+    Assumes:
+        - tensor ordering is x, y, z, with y out of plane;
+        - det(f2) > 0;
+        - ucstar > 0.
+    """
+    L3 = L(du)
+
+    L2 = ufl.as_matrix((
+        (L3[0, 0], L3[0, 2]),
+        (L3[2, 0], L3[2, 2]),
+    ))
+
+    I2 = ufl.Identity(2)
+    f2 = I2 + ucstar * L2
+
+    # Proper polar rotation: f2 = V2 * R2.
+    c = f2[0, 0] + f2[1, 1]
+    s = f2[1, 0] - f2[0, 1]
+    norm = ufl.sqrt(c*c + s*s)
+
+    R2 = ufl.as_matrix((
+        (c, -s),
+        (s,  c),
+    )) / norm
+
+    V2 = ufl.sym(ufl.dot(f2, R2.T))
+
+    # Matrix logarithm of the symmetric positive-definite V2.
+    m = 0.5 * ufl.tr(V2)
+    B = V2 - m * I2
+
+    # V2 has eigenvalues m * (1 +/- t).
+    t2 = 0.5 * ufl.inner(B, B) / (m*m)
+
+    # Safe evaluation at repeated eigenvalues.
+    t = ufl.sqrt(ufl.max_value(t2, 1.0e-16))
+
+    ratio = ufl.conditional(
+        ufl.lt(t2, 1.0e-8),
+        1.0 + t2 / 3.0 + t2*t2 / 5.0,
+        0.5 * ufl.ln((1.0 + t) / (1.0 - t)) / t,
+    )
+
+    logV2 = (
+        0.5 * ufl.ln(ufl.det(V2)) * I2
+        + (ratio / m) * B
+    )
+
+    de2 = logV2 / ucstar
+
+    R3 = ufl.as_matrix((
+        (R2[0, 0], 0.0, R2[0, 1]),
+        (0.0,      1.0, 0.0),
+        (R2[1, 0], 0.0, R2[1, 1]),
+    ))
+
+    de3 = ufl.as_matrix((
+        (de2[0, 0], 0.0, de2[0, 1]),
+        (0.0,       0.0, 0.0),
+        (de2[1, 0], 0.0, de2[1, 1]),
+    ))
+
+    return R3, de3
+
