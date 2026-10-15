@@ -180,7 +180,7 @@ class Tensor(Momentum):
             η0 = mf.viscosity(
                 self.ε_v_dot_prev_it,
                 self.sim.params.n,
-                1e-17,
+                1e-4,
             )
         η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
             
