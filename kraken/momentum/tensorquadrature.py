@@ -250,7 +250,7 @@ class Tensor(Momentum):
         ]
 
         mismatch = (
-            η0 * self.ε_v_dot
+            η * self.ε_v_dot
             - ufl.dev(σ)
         )
 
