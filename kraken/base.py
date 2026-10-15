@@ -12,8 +12,8 @@ class Simulation:
     def __init__(self, msh):
         self.msh = msh
         self.params = parameters.Params(self.msh)
-        self.order = 1
-        self.quad_degree = max(4, 2 * self.order)
+        self.order = 2
+        self.quad_degree = max(6, 2 * self.order)
 
         self.dx = ufl.Measure(
                     "dx",
