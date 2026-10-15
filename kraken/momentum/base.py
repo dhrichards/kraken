@@ -50,7 +50,7 @@ class Momentum:
         self.setup_momentum()
         self.setup_solver()
 
-        self.initial_infinite_shelf()
+        # self.initial_infinite_shelf()
         # self.initial_stokes()
 
 
@@ -91,6 +91,37 @@ class Momentum:
         mixed_el = bufl.mixed_element([u_el,p_el])
 
         W = fem.functionspace(self.sim.msh, mixed_el)
+        msh = self.sim.msh
+        comm = msh.comm
+        vertical = msh.geometry.dim - 1
+
+
+        bcs = self.sim.bc_funcs[0](W)
+
+        # Scalar vertical component of the Stokes displacement.
+        Vz, z_to_W = W.sub(0).sub(vertical).collapse()
+        z_to_W = np.asarray(z_to_W, dtype=np.int32)
+
+        # Select exactly one global scalar degree of freedom.
+        imap = Vz.dofmap.index_map
+        local_ids = np.arange(
+            imap.size_local + imap.num_ghosts,
+            dtype=np.int32,
+        )
+        global_ids = imap.local_to_global(local_ids)
+
+        pin_dofs = np.sort(
+            z_to_W[global_ids == 0]
+        ).astype(np.int32)
+
+        bc_vertical_reference = fem.dirichletbc(
+            PETSc.ScalarType(0.0),
+            pin_dofs,
+            W.sub(0).sub(vertical),
+        )
+
+        bcs.append(bc_vertical_reference)
+
         w = fem.Function(W)
 
         du,p = ufl.split(w)
@@ -99,25 +130,25 @@ class Momentum:
         v,q = ufl.split(w_test)
 
 
-        εdot = ufl.sym(L(du))/self.sim.params.dtstar
+        εdot = mf.ε(du)/self.sim.params.dtstar
         
 
         if self.sim.params.n.value==1.0:
             η = 1.0
         else:
-            η = mf.viscosity(εdot, self.sim.params.n, 1e-19)
+            η = mf.viscosity(εdot, self.sim.params.n, 1e-8)
                 
-        σ = η*εdot - p*ufl.Identity(3)
+        σ = η*εdot - p*ufl.Identity(2)
                
         f = mf.body_force(self.sim.msh)
         n = ufl.FacetNormal(self.sim.msh)
 
-        pw = mf.water_pressure(self.sim.msh, du, self.sim.params.ρwstar, self.sim.params.ucstar, self.sim.params.sea_level_star) + self.sim.params.patmstar
-        # pw = mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar) + self.sim.params.patmstar
+        # pw = mf.water_pressure(self.sim.msh, du, self.sim.params.ρwstar, self.sim.params.ucstar, self.sim.params.sea_level_star) + self.sim.params.patmstar
+        pw = mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar) + self.sim.params.patmstar
         
         
         F = (
-            + ufl.inner(σ, ufl.sym(L(v))) - ufl.inner(f, v) 
+            + ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
                 ) * ufl.dx 
 
         if self.sim.basal_friction:
@@ -141,7 +172,7 @@ class Momentum:
         J = ufl.derivative(F,w,ufl.TrialFunction(W))
 
 
-        problem = solvers.SNESProblem(F, w, bcs=self.sim.bc_funcs[0](W))
+        problem = solvers.SNESProblem(F, w, bcs=bcs)
         solver = PETSc.SNES().create(MPI.COMM_WORLD)
         
         
@@ -156,13 +187,15 @@ class Momentum:
         solver.setJacobian(problem.J,dolfinx.fem.petsc.create_matrix(fem.form(J)),P=None)
         solver.solve(None, w.x.petsc_vec)
 
-        reason = solver.getConvergedReason()
-        if reason <= 0:
-            raise RuntimeError(
-                f"Initial Stokes solve failed: SNES reason {reason}"
-            )
+        # reason = solver.getConvergedReason()
+        # if reason <= 0:
+        #     raise RuntimeError(
+        #         f"Initial Stokes solve failed: SNES reason {reason}"
+        #     )
 
         w.x.scatter_forward()
+
+  
 
         eps_e_init = (
             0.5 * ufl.dev(σ)
@@ -176,6 +209,8 @@ class Momentum:
             )
         )
         self.ε_e_prev_time.x.scatter_forward()
+
+        
 
         
                 
@@ -211,10 +246,9 @@ class Momentum:
         I = ufl.Identity(D); ν = self.sim.params.ν
         
         σplus = es.stress_plus_nt(self.ε_e + self.p_crack*I/(3*es.Koverμ(ν)), ν)
-        g = es.degradation(self.sim.damage.d,self.sim.params.ge_tol)
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         σminus = σ0 - σplus
-        return g*σplus+ σminus
+        return self.sim.damage.g*σplus+ σminus
 
     @property
     def ψplus(self):
