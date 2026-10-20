@@ -10,6 +10,7 @@ from kraken.numerics import solvers
 from petsc4py import PETSc
 from mpi4py import MPI
 import numpy as np
+from kraken.boundaryconditions import get_zero_bc
 
 
 
@@ -46,8 +47,11 @@ class AT2(Damage):
         # self.Hprev = fem.Function(self.H_space, name="history")
 
 
-        bc_func_mod = lambda V: self.sim.bc_funcs[1](V.sub(0))
-        self.bc_d = bc_func_mod(self.W)
+        free_boundary = lambda x: ~np.isclose(x[0], 0.0)
+        self.bc_d = list(self.sim.bc_funcs[1](self.W.sub(0)))
+        self.bc_d.append(
+            get_zero_bc(self.W.sub(1), free_boundary)
+        )
 
 
     def update_bcs(self,new_bcs):
@@ -68,11 +72,19 @@ class AT2(Damage):
         v, q = ufl.split(mixed_test)
 
 
-        self.F = -C3*2*l*(1-self.d)*v*H*dx \
-                  +(1/2)*(2*self.d*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
-                ) * dx \
-                - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * dx
-        
+        # self.F = -C3*2*l*(1-self.d)*v*H*dx \
+        #           +(1/2)*(2*self.d*v - l**2*self.lap*v - (1/8)*l**4*ufl.inner(ufl.grad(self.lap), ufl.grad(v)) \
+        #         ) * dx \
+        #         - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * dx
+        self.F = (
+            -2*C3*l*(1-self.d)*v*H
+            + self.d*v
+            + (l**2/2)*ufl.inner(ufl.grad(self.d), ufl.grad(v))
+            - (l**4/16)*ufl.inner(ufl.grad(self.lap), ufl.grad(v))
+            - self.lap*q
+            - ufl.inner(ufl.grad(self.d), ufl.grad(q))
+        ) * dx
+                
 
         self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
 
