@@ -37,6 +37,7 @@ class Tensor(Momentum):
 
         self.u_el = bufl.element("CG", self.sim.msh.basix_cell(), self.sim.order, shape=(self.sim.msh.geometry.dim,))
         self.q_el = bufl.element("DG", self.sim.msh.basix_cell(), self.sim.order-1, shape=(3,))
+        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), self.sim.order-1, shape=(3,3))
         
         self.mixed_el = bufl.mixed_element([self.u_el, self.q_el])
 
@@ -57,14 +58,13 @@ class Tensor(Momentum):
         self.du_prev_it, self.dq_prev_it = ufl.split(self.w_prev_it)
         
 
-        self.ε_el = bufl.element("DG", self.sim.msh.basix_cell(), self.sim.order-1, shape=(3,3))
+        
         self.E = fem.functionspace(self.sim.msh, self.ε_el)
 
         self.ε_e_prev_time = fem.Function(self.E, name="epsiloneprevtime")
         self.ε_e_updated = fem.Function(self.E)
 
         self.ε_v_dot = mf.viscous_strain(self.dq)/self.sim.params.dtstar
-        self.ε_v_dot_prev_it = mf.viscous_strain(self.dq_prev_it)/self.sim.params.dtstar
 
         # self.ε_e = self.ε_e_prev_time + ufl.sym(L(self.du)) - viscous_strain(self.dq)
 
@@ -72,9 +72,9 @@ class Tensor(Momentum):
         self.ε_e = self.ε_e_prev_time + ufl.sym(mf.L(self.du)) - mf.viscous_strain(self.dq) \
             # + ufl.dot(W,self.ε_e_prev_time) - ufl.dot(self.ε_e_prev_time,W)
 
-        W_prev_it = self.sim.params.ucstar_float*ufl.skew(mf.L(self.du_prev_it))
-        self.ε_e_prev_it = self.ε_e_prev_time + ufl.sym(mf.L(self.du_prev_it)) - mf.viscous_strain(self.dq_prev_it) \
-            + ufl.dot(W_prev_it,self.ε_e_prev_time) - ufl.dot(self.ε_e_prev_time,W_prev_it)
+        self.fluidity_el = bufl.element("DG", self.sim.msh.basix_cell(), self.sim.order-1)
+        self.FluiditySpace = fem.functionspace(self.sim.msh, self.fluidity_el)
+        self.fluidity_prev_it = fem.Function(self.FluiditySpace)
 
 
     
@@ -98,11 +98,11 @@ class Tensor(Momentum):
         σ = self.σ
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
         
-        if self.sim.params.n.value==1.0:
-            η0 = 1.0
-        else:
-            η0 = mf.viscosity(self.ε_v_dot_prev_it, self.sim.params.n, 1e-19)
-        η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
+        # if self.sim.params.n.value==1.0:
+        #     η0 = 1.0
+        # else:
+        #     η0 = mf.viscosity(self.ε_v_dot_prev_it, self.sim.params.n, 1e-19)
+        # η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
 
         self.ρ = self.sim.params.ρistar/self.area_ratio
         f = self.ρ*mf.body_force(self.sim.msh)
@@ -130,8 +130,8 @@ class Tensor(Momentum):
         
         self.F+= (
                 # η0*ufl.inner(εD, mf.ε(v_v))\
-                η0*ufl.inner(self.ε_v_dot, R)\
-            -    ufl.inner(ufl.dev(σ), R)
+                ufl.inner(self.ε_v_dot, R)\
+            -    self.fluidity_prev_it*ufl.inner(ufl.dev(σ), R)
              ) * ufl.dx
         
     
@@ -149,6 +149,15 @@ class Tensor(Momentum):
         self.w.x.scatter_forward()
 
         self.w_prev_it.x.array[:] = self.w.x.array[:]
+        s = ufl.dev(self.σ)
+    
+        self.fluidity_prev_it.interpolate(
+            fem.Expression(
+                ufl.inner(s, s) / 2,
+                self.FluiditySpace.element.interpolation_points(),
+            )
+        )
+        self.fluidity_prev_it.x.scatter_forward()
 
    
 

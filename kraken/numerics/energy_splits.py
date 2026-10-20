@@ -43,7 +43,7 @@ def free_energy(ε,ν):
 
 
 
-def free_energy_plus_dp(ε, ν, γ=sqrt(3), eps=1e-14):
+def free_energy_plus_dp(ε, ν, γ=2.2, eps=1e-19):
     K = Koverμ(ν)
     εD2 = ufl.inner(ufl.dev(ε), ufl.dev(ε)) + eps
     
@@ -60,14 +60,18 @@ def free_energy_plus_dp(ε, ν, γ=sqrt(3), eps=1e-14):
 
 
 
-def stress_plus_dp(ε, ν, γ=sqrt(3), eps=1e-14):
+def stress_plus_dp(ε, ν, γ=2.2, eps=1e-19):
     K = Koverμ(ν)
     εD2 = ufl.inner(ufl.dev(ε), ufl.dev(ε)) + eps
     D = ufl.shape(ε)[0]
     δ = ufl.Identity(D)
 
     σ1 = K*tr_e(ε)*δ + 2*ufl.dev(ε)
-    σ2 = (K*γ*δ + ufl.dev(ε)/ufl.sqrt(εD2))/(K*γ**2 + 2)
+    σ2 = (
+            (K*γ*tr_e(ε) + 2*ufl.sqrt(εD2))
+            / (K*γ**2 + 2)
+            * (K*γ*δ + 2*ufl.dev(ε)/ufl.sqrt(εD2))
+        )
 
     return ufl.conditional(ufl.lt(ufl.sqrt(εD2), tr_e(ε)/γ), σ1,
                         ufl.conditional(ufl.lt(ufl.sqrt(εD2), -γ*K/2*tr_e(ε)), 0.0*δ, 
@@ -168,3 +172,34 @@ def degradation(d,k=1e-12):
 
 def crack_density_function(d,l,w=lambda d: d**2,cw=2):
     return  (w(d)/l + l * ufl.inner(ufl.grad(d), ufl.grad(d)))/cw
+
+
+
+def free_energy_plus_steinke(ε, ν):
+    '''Degradable elastic energy for a fixed crack normal n = e_x.
+    Energy is normalised by the shear modulus.
+    '''
+    λ = λoverμ(ν)
+    σ0 = cauchy_stress(ε, ν)
+
+    σnn_plus = positive_part(σ0[0, 0])
+    τ2 = σ0[0, 1]**2 + σ0[0, 2]**2
+
+    return σnn_plus**2/(2*(λ + 2)) + 0.5*τ2
+
+
+def stress_plus_steinke(ε, ν):
+    '''Degradable stress for a fixed crack normal n = e_x.
+    Exact derivative of free_energy_plus_steinke.
+    '''
+    λ = λoverμ(ν)
+    σ0 = cauchy_stress(ε, ν)
+
+    σnn_plus = positive_part(σ0[0, 0])
+    σparallel = λ/(λ + 2)*σnn_plus
+
+    return ufl.as_tensor([
+        [σnn_plus, σ0[0, 1], σ0[0, 2]],
+        [σ0[0, 1], σparallel, 0.0],
+        [σ0[0, 2], 0.0, σparallel],
+    ])

@@ -38,6 +38,10 @@ class Tensor(Momentum):
     def __init__(self, sim):
         super().__init__(sim)
 
+        self.creep_newton_weight = fem.Constant(
+            self.sim.msh, PETSc.ScalarType(0.0)
+        )
+
         msh = self.sim.msh
         cell = msh.basix_cell()
         gdim = msh.geometry.dim
@@ -79,7 +83,7 @@ class Tensor(Momentum):
         self.q_el = bufl.quadrature_element(
             cell,
             value_shape=(3,),
-            scheme="default",
+            scheme=self.sim.quad_scheme,
             degree=self.quad_degree,
         )
 
@@ -99,7 +103,7 @@ class Tensor(Momentum):
         self.ε_el = bufl.quadrature_element(
             cell,
             value_shape=(3, 3),
-            scheme="default",
+            scheme=self.sim.quad_scheme,
             degree=self.quad_degree,
         )
 
@@ -119,8 +123,10 @@ class Tensor(Momentum):
 
         # Points used by fem.Expression for local constitutive evaluations.
         self.quad_points, self.quad_weights = basix.make_quadrature(
-            cell, self.quad_degree
-        )
+                cell,
+                self.quad_degree,
+                rule=basix.quadrature.string_to_type(self.sim.quad_scheme),
+            )
 
         # ---------------------------------------------------------------
         # Kinematics: existing scaling and 3D plane-strain embedding
@@ -133,27 +139,34 @@ class Tensor(Momentum):
             mf.viscous_strain(self.dq_prev_it) / self.sim.params.dtstar
         )
 
-        # self.ε_trial = (
-        #     self.ε_e_prev_time
-        #     + ufl.sym(mf.L(self.du))
-        # )
-
-        # self.ε_e = (
-        #     self.ε_trial - mf.viscous_strain(self.dq)
-        # )
         Omega = self.sim.params.ucstar * ufl.skew(mf.L(self.du))
 
         self.ε_trial = (
             self.ε_e_prev_time
             + ufl.sym(mf.L(self.du))
-            + ufl.dot(Omega, self.ε_e_prev_time)
-            - ufl.dot(self.ε_e_prev_time, Omega)
+            # + ufl.dot(Omega, self.ε_e_prev_time)
+            # - ufl.dot(self.ε_e_prev_time, Omega)
         )
 
         self.ε_e = (
             self.ε_trial
             - mf.viscous_strain(self.dq)
         )
+
+        fluidity_el = bufl.quadrature_element(
+            cell,
+            value_shape=(),
+            scheme=self.sim.quad_scheme,
+            degree=self.quad_degree,
+        )
+
+        self.FluiditySpace = fem.functionspace(msh, fluidity_el)
+
+        # Frozen coefficient during each mechanical solve.
+        self.fluidity_prev_it = fem.Function(
+            self.FluiditySpace, name="lagged fluidity"
+        )
+
 
         # R, de = mf.corotational_increment(
         #     self.du,
@@ -195,17 +208,42 @@ class Tensor(Momentum):
 
         # Undegraded viscosity.
         if self.sim.params.n.value == 1.0:
-            η0 = 1.0
+            η0 = 0.5
         else:
             # Retains your existing staggered/Picard viscosity treatment.
             η0 = mf.viscosity(
                 self.ε_v_dot_prev_it,
                 self.sim.params.n,
-                1e-18,
+                1e-19,
             )
-        η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol
-            
-        self.η0 = η0
+        η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol/2
+
+
+        ## Hageman block
+
+        s = ufl.dev(σ)
+
+        s_e2 = ufl.inner(s,s)/2
+
+        if self.sim.params.n.value == 1.0:
+            creep_rate = s
+        else:# self.sim.params.n.value == 3.0:
+            # creep_rate = s_e2*s
+            theta = self.creep_newton_weight
+
+            fluidity = (
+                (1.0 - theta) * self.fluidity_prev_it
+                + theta * s_e2
+            )
+            creep_rate = fluidity * s
+        # else:
+        #     creep_rate =  s_e2**((self.sim.params.n.value - 1.0) / 2.0) * s
+        
+        # creep_rate_lim = ufl.conditional(
+        #     ufl.gt(self.sim.damage.d, 0.5),
+        #     ufl.zero(s.ufl_shape),
+        #     creep_rate,
+        # )    
 
         self.ρ = self.sim.params.ρistar / self.area_ratio
         f = self.ρ * mf.body_force(self.sim.msh)
@@ -249,10 +287,11 @@ class Tensor(Momentum):
             for ei in component_directions
         ]
 
-        mismatch = (
-            η * self.ε_v_dot
-            - ufl.dev(σ)
-        )
+        # mismatch = (
+        #     2*η * self.ε_v_dot
+        #     - g*ufl.dev(σ0)
+        # )
+        mismatch = self.sim.params.dtstar*(self.ε_v_dot - creep_rate)
 
         self.r_local = ufl.as_vector([
             ufl.inner(mismatch, Bi)
@@ -403,6 +442,7 @@ class Tensor(Momentum):
 
 
         if len(cells) and failure is None:
+            
             for iteration in range(self.local_max_it + 1):
                 r = self.r_local_expr.eval(msh, cells).reshape(-1, 3)
                 residual_norm = np.linalg.norm(r, axis=1)
@@ -412,6 +452,17 @@ class Tensor(Momentum):
                         f"nonfinite local residual at iteration {iteration}"
                     )
                     break
+
+                # scaled_residual = residual_norm / tolerance
+
+                # if iteration % 5 == 0 or iteration == self.local_max_it:
+                #     worst = np.argmax(scaled_residual)
+                #     print(
+                #         f"rank {msh.comm.rank}, local Newton {iteration}: "
+                #         f"max residual/tolerance={scaled_residual[worst]:.3e}, "
+                #         f"residual={residual_norm[worst]:.3e}",
+                #         flush=True,
+                #     )
 
                 active = np.flatnonzero(residual_norm > tolerance)
 
@@ -556,9 +607,26 @@ class Tensor(Momentum):
         self.w_prev_it.x.scatter_forward()
         self.dq_prev_it.x.array[:] = self.dq.x.array[:]
         self.dq_prev_it.x.scatter_forward()
-   
 
-    def timestep(self):
+        # fluidity_old = self.fluidity_prev_it.x.array.copy()
+        s = ufl.dev(self.σ)
+
+        self.fluidity_prev_it.interpolate(
+            fem.Expression(
+                ufl.inner(s, s) / 2,
+                self.FluiditySpace.element.interpolation_points(),
+            )
+        )
+        # omega = 0.25
+        # self.fluidity_prev_it.x.array[:] = (
+        #     (1.0 - omega) * fluidity_old
+        #     + omega * self.fluidity_prev_it.x.array
+        # )
+        self.fluidity_prev_it.x.scatter_forward()
+
+
+
+    def timestep(self,move_mesh=True):
 
         self.ε_e_updated.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
 
@@ -566,13 +634,22 @@ class Tensor(Momentum):
         du = fem.Function(self.V)
         du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
 
-        self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
+        if move_mesh:
+            self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
 
         self.ε_e_prev_time.x.array[:] = self.ε_e_updated.x.array[:]
         self.w_prev_time.x.array[:] += self.w.x.array[:]
 
         self.area = fem.assemble_vector(self.cell_area_form).array
         self.area_ratio.x.array[:] = self.area/self.area_0
+        for function in (
+            self.w,
+            self.w_prev_it,
+            self.dq,
+            self.dq_prev_it,
+        ):
+            function.x.array[:] = 0.0
+            function.x.scatter_forward()
         
     def write_checkpoint(self, filename, t=0):
         super().write_checkpoint(filename, t)

@@ -10,38 +10,120 @@ from mpi4py import MPI
 import numpy as np
 import basix.ufl as bufl
 from matplotlib import tri
+import basix
+import ufl
+from ufl.algorithms import extract_coefficients
 
 
+def write_xdmf(
+    filename, msh, functions, names, t=0.0, *,
+    quadrature_degree=None,
+):
+    """
+    Write functions or UFL expressions to XDMF.
 
+    Ordinary fields are interpolated to CG1.
+    Fields involving quadrature coefficients are averaged into DG0.
 
-def write_xdmf(filename,msh,functions,names,t=0.0):
-    ''' Write a list of functions to an XDMF file. 
-    If the function is not continuous, it will be interpolated 
-    onto a continuous function space of order 1 before writing.
-    '''
+    quadrature_degree must match the quadrature fields' degree.
+    This assumes they use the default Basix quadrature rule.
+    """
+    if len(functions) != len(names):
+        raise ValueError("functions and names must have the same length.")
 
-    for idx,f in enumerate(functions):
-        # check if has function space
-        if hasattr(f,"ufl_function_space"):
-            # Interpolate onto order 1
-            Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
-            temp = fem.Function(Q)
-            temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
-            temp.name = names[idx]
-            functions[idx] = temp
+    def is_quadrature_element(element):
+        if getattr(element, "family_name", "").lower() == "quadrature":
+            return True
 
-        else:
-            Q = fem.functionspace(msh, ("Lagrange", 1, f.ufl_shape))
-            temp = fem.Function(Q)
-            temp.interpolate(fem.Expression(f,Q.element.interpolation_points()))
-            temp.name = names[idx]
-            functions[idx] = temp
+        return any(
+            is_quadrature_element(e)
+            for e in element.sub_elements
+        )
 
+    def uses_quadrature(expression):
+        return any(
+            is_quadrature_element(c.ufl_element())
+            for c in extract_coefficients(expression)
+        )
 
-    with io.XDMFFile(MPI.COMM_WORLD, filename, "w") as file:
+    expressions = [ufl.as_ufl(f) for f in functions]
+    quadrature_flags = [uses_quadrature(f) for f in expressions]
+
+    if any(quadrature_flags):
+        if quadrature_degree is None:
+            raise ValueError(
+                "Provide quadrature_degree for quadrature-based fields."
+            )
+
+        points, weights = basix.make_quadrature(
+            msh.basix_cell(), quadrature_degree
+        )
+
+        cell_map = msh.topology.index_map(msh.topology.dim)
+        cells = np.arange(cell_map.size_local, dtype=np.int32)
+
+        # Physical integration weights, including the geometry Jacobian.
+        if cells.size:
+            jacobian = fem.Expression(
+                abs(ufl.JacobianDeterminant(msh)), points
+            )
+            detJ = jacobian.eval(msh, cells).reshape(
+                cells.size, len(weights)
+            )
+            physical_weights = detJ * weights[None, :]
+            cell_volumes = physical_weights.sum(axis=1)
+
+    with io.XDMFFile(msh.comm, filename, "w") as file:
         file.write_mesh(msh)
-        for f in functions:
-            file.write_function(f,t)
+
+        for f, name, use_quadrature in zip(
+            expressions, names, quadrature_flags
+        ):
+            if not use_quadrature:
+                # Ordinary finite-element fields: continuous output.
+                V = fem.functionspace(
+                    msh, ("Lagrange", 1, f.ufl_shape)
+                )
+                output = fem.Function(V, name=name)
+
+                output.interpolate(
+                    fem.Expression(
+                        f, V.element.interpolation_points()
+                    )
+                )
+
+            else:
+                # Quadrature-based fields: one average per cell.
+                V = fem.functionspace(
+                    msh, ("DG", 0, f.ufl_shape)
+                )
+                output = fem.Function(V, name=name)
+
+                # Construct collectively, including ranks with no cells.
+                expression = fem.Expression(f, points)
+
+                if cells.size:
+                    ncomp = int(np.prod(f.ufl_shape))
+
+                    values = expression.eval(msh, cells).reshape(
+                        cells.size, len(weights), ncomp
+                    )
+
+                    averages = np.einsum(
+                        "cq,cqk->ck", physical_weights, values
+                    ) / cell_volumes[:, None]
+
+                    cell_dofs = np.array(
+                        [V.dofmap.cell_dofs(c)[0] for c in cells],
+                        dtype=np.int32,
+                    )
+
+                    output.x.array.reshape(-1, ncomp)[
+                        cell_dofs
+                    ] = averages
+
+            output.x.scatter_forward()
+            file.write_function(output, t)
 
 
 
