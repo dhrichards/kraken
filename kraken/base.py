@@ -14,13 +14,14 @@ class Simulation:
         self.params = parameters.Params(self.msh)
         self.order = 2
         self.quad_degree = max(4, 2 * self.order)
+        self.quad_scheme =  "default"
 
         self.dx = ufl.Measure(
                     "dx",
                     domain=self.msh,
                     metadata={
                         "quadrature_degree": self.quad_degree,
-                        "quadrature_rule": "default",
+                        "quadrature_rule": self.quad_scheme,
                     },
                 )
 
@@ -166,6 +167,9 @@ class Simulation:
             error_prev = 100
 
             errors = []
+
+            # self.momentum.creep_newton_weight.value = 0.0
+            # direct_mode = False
              
             i = 0
             while i < self.max_its:
@@ -181,19 +185,19 @@ class Simulation:
                 if save:
                     kr.plotting.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, [self.momentum.du,self.damage.d,
-                                        #    self.momentum.ψplus/self.params.ψcritstar,
+                                           self.momentum.ψplus/self.params.ψcritstar,
                                         #    self.momentum.dq,self.momentum.ε_e,
                                         #    self.momentum.p_crack(self.momentum.du),
                                         # self.momentum.u_e, self.momentum.du_v
                                         ],
                                         ["u","d",
-                                            # "psi_plus",
+                                            "psi_plus",
                                             # "dq","eps_e",
                                             # "B","Q","Qexp",
                                             # "p_c",
                                         # "ue","uv",
                                         ],
-                                    t=i)
+                                    t=i,quadrature_degree=self.quad_degree)
     
                 
 
@@ -207,7 +211,14 @@ class Simulation:
                 L2_bottom_rank = fem.assemble_scalar(fem.form(L2_bottom_))
                 L2_bottom = np.sqrt(MPI.COMM_WORLD.allreduce(L2_bottom_rank, op=MPI.SUM))
 
-                error_L2 = np.abs(L2 - L2_old)/area
+                delta_d = self.damage.d - self.damage.d_prev_it
+
+                error_rank = fem.assemble_scalar(
+                    fem.form(ufl.inner(delta_d, delta_d) * self.dx)
+                )
+                error_L2 = np.sqrt(
+                    self.msh.comm.allreduce(error_rank, op=MPI.SUM)
+                ) / area
                 if MPI.COMM_WORLD.rank == 0:
                     print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")#, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
 
@@ -223,11 +234,31 @@ class Simulation:
 
                 i += 1
     
+                converged = (
+                    i >= self.min_its
+                    and error_L2 < self.tol
+                    and error_L2 <= error_prev
+                    and error_prev < self.tol
+                )
 
-                
+                                
 
-                if i >=self.min_its and (error_L2 < self.tol) and (error_L2 <= error_prev) and (error_prev < self.tol):
-                    return 1,i
+                if converged:
+                    # if not direct_mode:
+                    #     # Retain the current displacement and local strain increments
+                    #     # as the initial guess for the fully implicit solve.
+                    #     self.momentum.creep_newton_weight.value = 1.0
+                    #     direct_mode = True
+
+                    #     if MPI.COMM_WORLD.rank == 0:
+                    #         print("Switching from Picard to fully implicit creep")
+
+                    #     # Require two fresh small-error iterations after switching.
+                    #     error_prev = float("inf")
+                    #     L2_old = L2
+                    #     continue
+
+                    return 1, i
                 
                 error_prev = error_L2
                 L2_old = L2
