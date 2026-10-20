@@ -34,11 +34,11 @@ def tr_e(A):
 def viscosity(ε, n, eps=1.e-11, A=1.0): 
     '''Viscosity from Glens law'''
     εe2 = ufl.inner(ε, ε) / 2 + eps
-    return  A**(-1/n) * εe2**((1 - n) / (2 * n))
+    return  0.5*A**(-1/n) * εe2**((1 - n) / (2 * n))
 
 def viscosity_stress(σD,n,eps=1e-11,A=1.0):
     σDe2 = ufl.inner(σD,σD)/2 + eps
-    return (1/A)*σDe2**((1 - n) / 2)
+    return (0.5/A)*σDe2**((1 - n) / 2)
 
 def viscous_energy(ε, n, eps = 1e-12, A=1.0):
     η = viscosity(ε, n, eps, A)
