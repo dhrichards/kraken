@@ -29,7 +29,10 @@ class LowerOrder(Damage):
         self.d_prev_it2 = fem.Function(self.D, name="damage_prev_it2")
         self.d_prev_it3 = fem.Function(self.D, name="damage_prev_it3")
 
-        self.g = es.degradation(self.d)
+        self.w_prev_it = self.d_prev_it
+        self.w_prev_it2 = self.d_prev_it2
+        self.w_prev_it3 = self.d_prev_it3
+
 
         
 
@@ -74,37 +77,33 @@ class AT2(LowerOrder):
         self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
 
 
+class AT2Bounded(AT2):
 
-
-class AT1(LowerOrder):
-    '''Lower order AT1 phase-field damage model.
-      Solved using a bounded solver,
-      Irreversibility is enforced using d_prev_time as a lower bound, which is updated at each timestep.'''
-    def __init__(self, sim):
-        super().__init__(sim)
-
-        self.d_prev_time = fem.Function(self.D, name="damage_prev_time")
 
     def setup_weak_form(self):
-        C3 = self.sim.params.C3; l = self.sim.params.lstar
-        ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
+        C3 = self.sim.params.C3
+        l = self.sim.params.lstar
+        dx = self.sim.momentum.dx
 
-        w = lambda d: d
-        s = np.linspace(0,1,500)
-        c0 = 4*np.trapezoid(np.sqrt(w(s)),s)
-        
+        H = ufl.max_value(
+            self.sim.momentum.ψplus - self.sim.params.ψcritstar, 0.0
+        )
 
-        H = ufl.max_value(self.sim.momentum.ψplus - ψcrit, 0)
+        v = ufl.TestFunction(self.D)
 
-        dissipated_energy = (1/C3) * es.crack_density_function(self.d, l, w, c0) * ufl.dx
-        elastic_energy = self.g * H * ufl.dx
+        self.F = (
+            self.d*v
+            + l**2*ufl.inner(ufl.grad(self.d), ufl.grad(v))
+            - 2*C3*l*(1-self.d)*H*v
+        ) * dx
 
-        total_energy = dissipated_energy + elastic_energy
+        self.J = ufl.derivative(
+            self.F, self.d, ufl.TrialFunction(self.D)
+        )
+        self.problem = solvers.SNESProblem(
+            self.F, self.d, bcs=self.bc_d
+        )
 
-        self.F = ufl.derivative(total_energy, self.d, ufl.TestFunction(self.D))
-        self.J = ufl.derivative(self.F, self.d, ufl.TrialFunction(self.D))
-
-        self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
 
     def setup_solver(self):
         d_ub = fem.Function(self.D, name="damage_ub")
@@ -116,18 +115,50 @@ class AT1(LowerOrder):
 
         self.solver.setType("vinewtonrsls")
         self.solver.setVariableBounds(self.d_prev_time.x.petsc_vec, d_ub.x.petsc_vec)
+        self.solver.setTolerances(rtol=1e-9, max_it=50)
 
-        self.solver.setTolerances(rtol=1.0e-9, max_it=50)
-        self.solver.getKSP().setType("cg")
-        self.solver.getKSP().setTolerances(rtol=1.0e-9)
-        self.solver.getKSP().getPC().setType("jacobi")
-        self.solver.getKSP().getPC().setFactorSolverType("mumps")
+        ksp = self.solver.getKSP()
+        ksp.setType("preonly")
+        pc = ksp.getPC()
+        pc.setType("lu")
+        pc.setFactorSolverType("mumps")
+
+    
 
     def timestep(self):
         # Update the history variable
         self.d_prev_time.x.array[:] = self.d.x.array[:]
+        self.d_prev_time.x.scatter_forward()
 
-
-    def write_checkpoint(self, filename, t=0):
-        adios4dolfinx.write_function(filename, self.w, name = "w_damage",time = t)
         
+
+
+
+
+class AT1(AT2Bounded):
+    '''Lower order AT1 phase-field damage model.
+      Solved using a bounded solver,
+      Irreversibility is enforced using d_prev_time as a lower bound, which is updated at each timestep.'''
+
+    def setup_weak_form(self):
+        C3 = self.sim.params.C3; l = self.sim.params.lstar
+        ν = self.sim.params.ν; ψcrit = self.sim.params.ψcritstar
+        dx = self.sim.dx
+
+        w = lambda d: d
+        c0 = 8.0/3.0
+        
+
+        H = ufl.max_value(self.sim.momentum.ψplus - ψcrit, 0)
+
+        dissipated_energy = (1/C3) * es.crack_density_function(self.d, l, w, c0) * dx
+        elastic_energy = self.g * H * dx
+
+        total_energy = dissipated_energy + elastic_energy
+
+        self.F = ufl.derivative(total_energy, self.d, ufl.TestFunction(self.D))
+        self.J = ufl.derivative(self.F, self.d, ufl.TrialFunction(self.D))
+
+        self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
+
+
