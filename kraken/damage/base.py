@@ -20,7 +20,7 @@ class Damage:
         self.H_el = bufl.quadrature_element(
             self.sim.msh.basix_cell(),
             value_shape=(),
-            scheme="default",
+            scheme=self.sim.quad_scheme,
             degree=self.sim.quad_degree,
         )
         self.H_space = fem.functionspace(self.sim.msh, self.H_el)
@@ -75,6 +75,7 @@ class Damage:
             fem.Expression(
                 self.H_func,
                 self.sim.momentum.quad_points,
+                # self.H_space.element.interpolation_points()
             )
         )
         self.Hupdated.x.scatter_forward()
