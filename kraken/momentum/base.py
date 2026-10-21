@@ -33,8 +33,10 @@ class Momentum:
         self.DG0 = fem.functionspace(self.sim.msh, ("DG", 0))
         self.areaf = ufl.TestFunction(self.DG0)
         self.cell_area_form = fem.form(self.areaf * ufl.dx)
-        self.area_0 = np.copy(fem.assemble_vector(self.cell_area_form).array)
-
+        area_vec = fem.assemble_vector(self.cell_area_form)
+        area_vec.scatter_forward()
+        self.area_0 = area_vec.array.copy()
+        
         self.area_ratio = fem.Function(self.DG0)
         self.area_ratio.x.array[:] = 1.0
 
@@ -85,7 +87,15 @@ class Momentum:
         self.ε_e_prev_time.x.scatter_forward()
 
 
-    def initial_stokes(self):
+    
+    def initial_stokes(self, bc_func=None):
+        """Initialise a 3D elastic strain from an intact, frozen-mesh flow.
+
+        bc_func must accept the auxiliary mixed (du, p) space. Supply a
+        separate callback if the main solver uses a plain vector space.
+        The vertical pin below assumes it removes only a rigid translation;
+        it is not a substitute for vertical force balance.
+        """
         u_el = bufl.element("CG", self.sim.msh.basix_cell(), 2, shape=(self.sim.msh.geometry.dim,))
         p_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
         mixed_el = bufl.mixed_element([u_el,p_el])
@@ -93,34 +103,10 @@ class Momentum:
         W = fem.functionspace(self.sim.msh, mixed_el)
         msh = self.sim.msh
         comm = msh.comm
-        vertical = msh.geometry.dim - 1
 
+        bc_func = self.sim.bc_funcs[0]
+        bcs = list(bc_func(W))
 
-        bcs = self.sim.bc_funcs[0](W)
-
-        # Scalar vertical component of the Stokes displacement.
-        Vz, z_to_W = W.sub(0).sub(vertical).collapse()
-        z_to_W = np.asarray(z_to_W, dtype=np.int32)
-
-        # Select exactly one global scalar degree of freedom.
-        imap = Vz.dofmap.index_map
-        local_ids = np.arange(
-            imap.size_local + imap.num_ghosts,
-            dtype=np.int32,
-        )
-        global_ids = imap.local_to_global(local_ids)
-
-        pin_dofs = np.sort(
-            z_to_W[global_ids == 0]
-        ).astype(np.int32)
-
-        bc_vertical_reference = fem.dirichletbc(
-            PETSc.ScalarType(0.0),
-            pin_dofs,
-            W.sub(0).sub(vertical),
-        )
-
-        bcs.append(bc_vertical_reference)
 
         w = fem.Function(W)
 
@@ -138,17 +124,20 @@ class Momentum:
         else:
             η = mf.viscosity(εdot, self.sim.params.n, 1e-8)
                 
-        σ = η*εdot - p*ufl.Identity(2)
+        σ = η*εdot - p*ufl.Identity(3)
                
-        f = mf.body_force(self.sim.msh)
+        f = (self.sim.params.ρistar / self.area_ratio) * mf.body_force(self.sim.msh)
         n = ufl.FacetNormal(self.sim.msh)
 
         # pw = mf.water_pressure(self.sim.msh, du, self.sim.params.ρwstar, self.sim.params.ucstar, self.sim.params.sea_level_star) + self.sim.params.patmstar
-        pw = mf.water_pressure_static(self.sim.msh, self.sim.params.ρwstar) + self.sim.params.patmstar
+        pw = mf.water_pressure_static(
+            self.sim.msh, self.sim.params.ρwstar,
+            self.sim.params.sea_level_star,
+        ) + self.sim.params.patmstar
         
         
         F = (
-            + ufl.inner(σ, mf.ε(v)) - ufl.inner(f, v) 
+            + ufl.inner(σ, ufl.sym(mf.L(v))) - ufl.inner(f, v)
                 ) * ufl.dx 
 
         if self.sim.basal_friction:
@@ -172,8 +161,8 @@ class Momentum:
         J = ufl.derivative(F,w,ufl.TrialFunction(W))
 
 
-        problem = solvers.SNESProblem(F, w, bcs=bcs)
-        solver = PETSc.SNES().create(MPI.COMM_WORLD)
+        problem = solvers.SNESProblemMOD(F, w, bcs=bcs, J=J)
+        solver = PETSc.SNES().create(comm)
         
         
         solver.setTolerances(rtol=1.0e-11, max_it=10, atol=1e-13)
@@ -187,11 +176,11 @@ class Momentum:
         solver.setJacobian(problem.J,dolfinx.fem.petsc.create_matrix(fem.form(J)),P=None)
         solver.solve(None, w.x.petsc_vec)
 
-        # reason = solver.getConvergedReason()
-        # if reason <= 0:
-        #     raise RuntimeError(
-        #         f"Initial Stokes solve failed: SNES reason {reason}"
-        #     )
+        reason = solver.getConvergedReason()
+        if reason <= 0:
+            raise RuntimeError(
+                f"Initial Stokes solve failed: SNES reason {reason}"
+            )
 
         w.x.scatter_forward()
 
@@ -214,9 +203,6 @@ class Momentum:
 
         
                 
-
-
-
 
     @property
     def pw(self):

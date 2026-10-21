@@ -168,8 +168,8 @@ class Simulation:
 
             errors = []
 
-            # self.momentum.creep_newton_weight.value = 0.0
-            # direct_mode = False
+            self.momentum.creep_newton_weight.value = 0.0
+            direct_mode = False
              
             i = 0
             while i < self.max_its:

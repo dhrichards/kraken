@@ -11,6 +11,7 @@ from petsc4py import PETSc
 from mpi4py import MPI
 import numpy as np
 from kraken.boundaryconditions import get_zero_bc
+from dolfinx.fem.petsc import LinearProblem
 
 
 
@@ -55,10 +56,34 @@ class AT2(Damage):
 
 
     def update_bcs(self,new_bcs):
-        bc_func_mod = lambda V: new_bcs(V.sub(0))
-        self.bc_d = bc_func_mod(self.W)
+
+
+        free_boundary = lambda x: ~np.isclose(x[0], 0.0)
+        self.bc_d = list(new_bcs(self.W.sub(0)))
+        self.bc_d.append(
+            get_zero_bc(self.W.sub(1), free_boundary)
+        )
         # self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
-        self.setup_solver()
+        self.setup()
+
+    def setup_solver(self):
+        trial = ufl.TrialFunction(self.W)
+
+        # Replace the current solution with a trial function.
+        F_linear = ufl.replace(self.F, {self.w: trial})
+
+        self.problem = LinearProblem(
+            ufl.lhs(F_linear),
+            ufl.rhs(F_linear),
+            u=self.w,
+            bcs=self.bc_d,
+            petsc_options={
+                "ksp_type": "preonly",
+                "pc_type": "lu",
+                "pc_factor_mat_solver_type": "mumps",
+            },
+        )
+        self.solver = self.problem.solver
 
 
     def setup_weak_form(self):
@@ -66,7 +91,22 @@ class AT2(Damage):
         dx = self.sim.dx
         
         
-        H = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
+        # H = ufl.max_value(self.sim.momentum.ψplus - self.sim.params.ψcritstar, self.Hprev)
+        self.H_drive = fem.Function(
+            self.H_space, name="damage driving field"
+        )
+
+        H_expr = ufl.max_value(
+            self.sim.momentum.ψplus - self.sim.params.ψcritstar,
+            self.Hprev,
+        )
+
+        self.H_drive_expr = fem.Expression(
+            H_expr,
+            self.H_space.element.interpolation_points(),
+        )
+
+        H = self.H_drive
 
         mixed_test = ufl.TestFunction(self.W)
         v, q = ufl.split(mixed_test)
@@ -89,7 +129,7 @@ class AT2(Damage):
         self.J = ufl.derivative(self.F,self.w,ufl.TrialFunction(self.W))
 
 
-        self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
+        # self.problem = solvers.SNESProblem(self.F, self.w, bcs=self.bc_d)
 
     def interpolate_from_parent(self, parent):
         super().interpolate_from_parent(parent)
@@ -114,6 +154,7 @@ class AT2(Damage):
     def timestep(self):
         super().timestep()
         self.w_prev_time.x.array[:] = self.w.x.array[:]
+        self.w_prev_time.x.scatter_forward()
 
 
 
@@ -121,8 +162,11 @@ class AT2(Damage):
         self.w_prev_it3.x.array[:] = self.w_prev_it2.x.array[:]
         self.w_prev_it2.x.array[:] = self.w_prev_it.x.array[:]
         self.w_prev_it.x.array[:] = self.w.x.array[:]
-        self.solver.solve(None, self.w.x.petsc_vec)
-        # self.problem.solve()
+        # self.solver.solve(None, self.w.x.petsc_vec)
+        self.H_drive.interpolate(self.H_drive_expr)
+        self.H_drive.x.scatter_forward()
+
+        self.problem.solve()
 
         # self.w_candidate.x.array[:] = self.w.x.array.copy()
         # self.w.x.array[:] = self.w_prev_it.x.array[:] + 0.5*(self.w_candidate.x.array[:]-self.w_prev_it.x.array[:])

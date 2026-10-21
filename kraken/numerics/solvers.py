@@ -10,6 +10,7 @@ from dolfinx.fem.petsc import (apply_lifting,
                                assemble_vector_block, set_bc,
                                set_bc_nest)
 from mpi4py import MPI
+import numpy as np
 
 
 
@@ -65,19 +66,37 @@ class SNESProblemMOD:
         self.bcs = bcs
         self.u = u
         self.constitutive_update = constitutive_update
+        self._constitutive_x = None
 
     def _update_state(self, x):
-        """Synchronise displacement, then solve the local material problem."""
+        """Update the local material state only when displacement changes."""
         x.ghostUpdate(
             addv=PETSc.InsertMode.INSERT,
             mode=PETSc.ScatterMode.FORWARD,
         )
-
         x.copy(self.u.x.petsc_vec)
         self.u.x.scatter_forward()
 
-        if self.constitutive_update is not None:
+        if self.constitutive_update is None:
+            return
+
+        values = self.u.x.array
+
+        changed_local = (
+            self._constitutive_x is None
+            or not np.array_equal(values, self._constitutive_x)
+        )
+
+        # Every rank must agree whether to enter the constitutive solver,
+        # because that solver contains MPI collectives.
+        changed = self.u.function_space.mesh.comm.allreduce(
+            changed_local, op=MPI.LOR
+        )
+
+        if changed:
+            self._constitutive_x = None
             self.constitutive_update()
+            self._constitutive_x = values.copy()
 
     def F(self, snes, x, F):
         """Assemble residual vector."""

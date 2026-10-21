@@ -236,6 +236,8 @@ class Tensor(Momentum):
                 + theta * s_e2
             )
             creep_rate = fluidity * s
+
+    
         # else:
         #     creep_rate =  s_e2**((self.sim.params.n.value - 1.0) / 2.0) * s
         
@@ -400,9 +402,9 @@ class Tensor(Momentum):
             )
 
         # Starting tolerances in your nondimensional residual units.
-        self.local_rtol = 1e-7
-        self.local_atol = 1e-9
-        self.local_max_it = 30
+        self.local_rtol = 1e-9
+        self.local_atol = 1e-11
+        self.local_max_it = 50
 
     def update_constitutive_state(self):
         """Local Newton solve with independent quadrature-point backtracking."""
@@ -436,6 +438,8 @@ class Tensor(Momentum):
         # Start Newton from the previous staggered solution.
         q_guess = self.dq_prev_it.x.array.reshape(-1, 3)
         q_values[blocks] = q_guess[blocks]
+        # Start Newton from the latest available local solution.
+        # q_values[blocks] = q_before
 
         max_backtracks = 20
         armijo = 1.0e-4
@@ -598,10 +602,16 @@ class Tensor(Momentum):
 
 
     def solve(self):
+        # Damage, fluidity or other coefficients may have changed since
+        # the previous momentum solve.
+        self.problem._constitutive_x = None
+
         self.solver.solve(None, self.w.x.petsc_vec)
-        # self.problem.solve()
         self.w.x.scatter_forward()
-        self.update_constitutive_state()
+
+        # Ensure dq matches the final displacement; reuse it if already current.
+        self.problem._update_state(self.w.x.petsc_vec)
+
 
         self.w_prev_it.x.array[:] = self.w.x.array[:]
         self.w_prev_it.x.scatter_forward()
@@ -633,6 +643,7 @@ class Tensor(Momentum):
 
         du = fem.Function(self.V)
         du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+        du.x.scatter_forward()
 
         if move_mesh:
             self.sim.msh.geometry.x[:,:self.sim.msh.geometry.dim] += self.sim.params.ucstar_float*du.x.array.reshape((-1, self.sim.msh.geometry.dim))
@@ -640,8 +651,11 @@ class Tensor(Momentum):
         self.ε_e_prev_time.x.array[:] = self.ε_e_updated.x.array[:]
         self.w_prev_time.x.array[:] += self.w.x.array[:]
 
-        self.area = fem.assemble_vector(self.cell_area_form).array
-        self.area_ratio.x.array[:] = self.area/self.area_0
+        area_vec = fem.assemble_vector(self.cell_area_form)
+        area_vec.scatter_forward()
+
+        self.area = area_vec.array.copy()
+        self.area_ratio.x.array[:] = self.area / self.area_0
         for function in (
             self.w,
             self.w_prev_it,
