@@ -167,6 +167,9 @@ class Tensor(Momentum):
             self.FluiditySpace, name="lagged fluidity"
         )
 
+        self.fluidity_used = fem.Function(
+            self.FluiditySpace, name="fluidity used in momentum solve"
+        )
 
         # R, de = mf.corotational_increment(
         #     self.du,
@@ -185,6 +188,8 @@ class Tensor(Momentum):
         #     self.ε_trial
         #     - mf.viscous_strain(self.dq)
         # )
+        self.elastic_only = False
+        self._restart_state = None
 
 
         
@@ -275,6 +280,19 @@ class Tensor(Momentum):
                 self.pw * ufl.inner(n, v)
             ) * ufl.ds
 
+
+        if self.elastic_only:
+            self.J = expand_derivatives(
+                ufl.derivative(self.F, self.w, dw)
+            )
+
+            self.problem = solvers.SNESProblemMOD(
+                self.F,
+                self.w,
+                bcs=self.bc_e,
+                J=self.J,
+            )
+            return
         # ---------------------------------------------------------------
         # Local constitutive residual: three equations per quadrature point
         # ---------------------------------------------------------------
@@ -407,10 +425,16 @@ class Tensor(Momentum):
         self.local_max_it = 50
 
     def update_constitutive_state(self):
+
+        if self.elastic_only:
+            self.dq.x.array[:] = 0.0
+            self.dq.x.scatter_forward()
+            return
         """Local Newton solve with independent quadrature-point backtracking."""
         msh = self.sim.msh
         cells = self._local_cells
         blocks = self._q_blocks
+        nqp = len(self.quad_points)
 
         q_values = self.dq.x.array.reshape(-1, 3)
 
@@ -446,9 +470,10 @@ class Tensor(Momentum):
 
 
         if len(cells) and failure is None:
-            
+
+            r = self.r_local_expr.eval(msh, cells).reshape(-1, 3)
+
             for iteration in range(self.local_max_it + 1):
-                r = self.r_local_expr.eval(msh, cells).reshape(-1, 3)
                 residual_norm = np.linalg.norm(r, axis=1)
 
                 if not np.all(np.isfinite(residual_norm)):
@@ -483,11 +508,17 @@ class Tensor(Momentum):
                     )
                     break
 
-                A = self.A_local_expr.eval(
-                    msh, cells
-                ).reshape(-1, 3, 3)
+                active_cells, cell_inverse = np.unique(
+                    active // nqp, return_inverse=True
+                )
 
-                if not np.all(np.isfinite(A[active])):
+                A_cells = self.A_local_expr.eval(
+                    msh, cells[active_cells]
+                ).reshape(-1, nqp, 3, 3)
+
+                A = A_cells[cell_inverse, active % nqp]
+
+                if not np.all(np.isfinite(A)):
                     failure = (
                         f"nonfinite local Jacobian at iteration {iteration}"
                     )
@@ -495,7 +526,7 @@ class Tensor(Momentum):
 
                 try:
                     correction = np.linalg.solve(
-                        A[active],
+                        A,
                         -r[active, :, None],
                     )[..., 0]
 
@@ -531,13 +562,21 @@ class Tensor(Momentum):
                     )
 
                     # Evaluate on owned cells. Accepted points retain their values.
-                    r_trial = self.r_local_expr.eval(
-                        msh, cells
-                    ).reshape(-1, 3)
-
-                    norm_trial = np.linalg.norm(
-                        r_trial[point_ids], axis=1
+                    pending_cells, cell_inverse = np.unique(
+                        point_ids // nqp, return_inverse=True
                     )
+
+                    r_cells = self.r_local_expr.eval(
+                        msh, cells[pending_cells]
+                    ).reshape(-1, nqp, 3)
+
+                    r_trial = r_cells[cell_inverse, point_ids % nqp]
+
+                    # Store the residual corresponding to each point's current trial dq.
+                    # Once accepted, that point is no longer modified during backtracking.
+                    r[point_ids] = r_trial
+
+                    norm_trial = np.linalg.norm(r_trial, axis=1)
 
                     sufficient_decrease = (
                         norm_trial
@@ -602,12 +641,19 @@ class Tensor(Momentum):
 
 
     def solve(self):
+        self.fluidity_used.x.array[:] = self.fluidity_prev_it.x.array
+        self.fluidity_used.x.scatter_forward()
         # Damage, fluidity or other coefficients may have changed since
         # the previous momentum solve.
         self.problem._constitutive_x = None
 
         self.solver.solve(None, self.w.x.petsc_vec)
         self.w.x.scatter_forward()
+        reason = self.solver.getConvergedReason()
+        if reason <= 0 and reason != -6:
+            raise RuntimeError(
+                f"Momentum solve failed: SNES reason {reason}"
+            )
 
         # Ensure dq matches the final displacement; reuse it if already current.
         self.problem._update_state(self.w.x.petsc_vec)
@@ -617,6 +663,8 @@ class Tensor(Momentum):
         self.w_prev_it.x.scatter_forward()
         self.dq_prev_it.x.array[:] = self.dq.x.array[:]
         self.dq_prev_it.x.scatter_forward()
+
+
 
         # fluidity_old = self.fluidity_prev_it.x.array.copy()
         s = ufl.dev(self.σ)
@@ -673,5 +721,29 @@ class Tensor(Momentum):
         super().read_checkpoint(filename, t)
         adios4dolfinx.read_function(filename, self.ε_e_prev_time, name="epsiloneprevtime", time=t)
 
-        
-        
+    def restart_elastic(self):
+        """Restore the saved simulation state and enable elastic-only momentum."""
+        if self.sim.basal_friction:
+            raise NotImplementedError(
+                "The basal friction term uses du/dt; an elastic event requires "
+                "an explicit choice of basal constraint instead."
+            )
+
+        # Restore geometry, momentum, damage, history and parameters.
+        self.sim.restore_restart_state()
+
+        # Additional deformation during the event is entirely elastic.
+        for function in (
+            self.w,
+            self.w_prev_it,
+            self.dq,
+            self.dq_prev_it,
+        ):
+            function.x.array[:] = 0.0
+            function.x.scatter_forward()
+
+        self.elastic_only = True
+        self.setup()
+
+                
+            

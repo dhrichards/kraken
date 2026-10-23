@@ -183,20 +183,33 @@ class Simulation:
                
 
                 if save:
+                    s = ufl.dev(self.momentum.σ)
+                    s_e2 = ufl.inner(s, s) / 2
+                    σ0 = es.cauchy_stress(self.momentum.ε_e, self.params.ν)
                     kr.plotting.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
-                                self.msh, [self.momentum.du,self.damage.d,
-                                           self.momentum.ψplus/self.params.ψcritstar,
-                                        #    self.momentum.dq,self.momentum.ε_e,
-                                        #    self.momentum.p_crack(self.momentum.du),
-                                        # self.momentum.u_e, self.momentum.du_v
-                                        ],
-                                        ["u","d",
-                                            "psi_plus",
-                                            # "dq","eps_e",
-                                            # "B","Q","Qexp",
-                                            # "p_c",
-                                        # "ue","uv",
-                                        ],
+                                self.msh, 
+                                [
+                                self.momentum.du,
+                                self.damage.d,
+                                self.damage.d_prev_it2,
+                                self.damage.d_prev_it,
+                                self.damage.d_prev_it3,
+                                self.momentum.ψplus / self.params.ψcritstar,
+                                self.momentum.ε_e,
+                                s,
+                                s_e2,
+                                σ0,
+                                self.momentum.σ,
+                                self.momentum.fluidity_prev_it,
+                                self.momentum.fluidity_used,
+                                self.momentum.dq,
+
+                            ],
+                            [
+                                "du", "d", "dprev2", "dprev", "dprev3",
+                                "psi_plus", "eps_e", "s", "s_e2", "sig0", "sig",
+                                "fluidity","fluidityused","dq"
+                            ],
                                     t=i,quadrature_degree=self.quad_degree)
     
                 
@@ -264,6 +277,81 @@ class Simulation:
                 L2_old = L2
             
             return 2,i
-   
+
+
+    def save_restart_state(self):
+        """Save the coupled state into reusable, rank-local buffers.
+
+        Call on every rank at a timestep boundary, before attempting
+        the next physical timestep.
+
+        Requires the same mesh and Function objects between save/restore.
+        """
+        if getattr(self, "_restart_state", None) is None:
+            functions = []
+            constants = []
+            seen = set()
+
+            # Find directly stored fields and constants once.
+            # Deduplicate aliases such as momentum.w and momentum.du.
+            for owner in (self, self.momentum, self.damage, self.params):
+                for value in vars(owner).values():
+                    if id(value) in seen:
+                        continue
+
+                    if isinstance(value, fem.Function):
+                        functions.append(
+                            (value, np.empty_like(value.x.array))
+                        )
+                        seen.add(id(value))
+
+                    elif isinstance(value, fem.Constant):
+                        constants.append(
+                            (value, np.empty_like(np.asarray(value.value)))
+                        )
+                        seen.add(id(value))
+
+            self._restart_state = {
+                "geometry": np.empty_like(self.msh.geometry.x),
+                "functions": functions,
+                "constants": constants,
+            }
+
+        state = self._restart_state
+
+        np.copyto(state["geometry"], self.msh.geometry.x)
+
+        for function, saved in state["functions"]:
+            np.copyto(saved, function.x.array)
+
+        for constant, saved in state["constants"]:
+            np.copyto(saved, np.asarray(constant.value))
+
+
+    def restore_restart_state(self):
+        """Restore the most recently saved coupled state on every rank.
+
+        Does not change solver mode, advance time, or rebuild the solvers.
+        """
+        state = getattr(self, "_restart_state", None)
+        if state is None:
+            raise RuntimeError(
+                "Call save_restart_state() before attempting the timestep."
+            )
+
+        np.copyto(self.msh.geometry.x, state["geometry"])
+
+        for function, saved in state["functions"]:
+            np.copyto(function.x.array, saved)
+
+        for constant, saved in state["constants"]:
+            constant.value = saved
+
+        # The restored coefficients invalidate any constitutive cache.
+        for owner in (self.momentum, self.damage):
+            problem = getattr(owner, "problem", None)
+            if problem is not None and hasattr(problem, "_constitutive_x"):
+                problem._constitutive_x = None
+    
 
 

@@ -13,7 +13,7 @@ class Damage:
     def __init__(self, sim):
         self.sim = sim
 
-        self.d_el = bufl.element("CG", self.sim.msh.basix_cell(), self.sim.order)
+        self.d_el = bufl.element("CG", self.sim.msh.basix_cell(), 1)
 
         # self.H_space = fem.functionspace(self.sim.msh, ("DG", self.sim.order-1))
 
