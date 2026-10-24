@@ -144,8 +144,8 @@ class Tensor(Momentum):
         self.ε_trial = (
             self.ε_e_prev_time
             + ufl.sym(mf.L(self.du))
-            # + ufl.dot(Omega, self.ε_e_prev_time)
-            # - ufl.dot(self.ε_e_prev_time, Omega)
+            + ufl.dot(Omega, self.ε_e_prev_time)
+            - ufl.dot(self.ε_e_prev_time, Omega)
         )
 
         self.ε_e = (
@@ -188,11 +188,30 @@ class Tensor(Momentum):
         #     self.ε_trial
         #     - mf.viscous_strain(self.dq)
         # )
-        self.elastic_only = False
-        self._restart_state = None
 
+        # Nondimensional velocity, scaled by uc / τ.
+        self.velocity_prev_time = fem.Function(
+            self.W, name="previous velocity"
+        )
 
-        
+        self.velocity = self.du / self.sim.params.dtstar
+
+        # Nondimensional acceleration, scaled by uc / τ².
+        self.acceleration = (
+            (self.velocity - self.velocity_prev_time)
+            / self.sim.params.dtstar
+        )
+        # Zero during ordinary viscoelastic timestepping.
+        # This coefficient represents c_artificial / delta_s,
+        # in the same nondimensional units as the momentum residual.
+        self.momentum_damping = fem.Constant(
+            self.sim.msh, PETSc.ScalarType(0.0)
+        )
+
+        # Displacement at the previous accepted artificial event step.
+        self.w_event_prev = fem.Function(
+            self.W, name="previous event displacement"
+        )
 
 
         
@@ -280,19 +299,19 @@ class Tensor(Momentum):
                 self.pw * ufl.inner(n, v)
             ) * ufl.ds
 
+        self.F += (
+            self.sim.params.C_inertia
+            * self.ρ
+            * ufl.inner(self.acceleration, v)
+            * self.dx
+        )
 
-        if self.elastic_only:
-            self.J = expand_derivatives(
-                ufl.derivative(self.F, self.w, dw)
-            )
+        self.F += (
+            self.momentum_damping
+            * ufl.inner(self.w - self.w_event_prev, v)
+            * self.dx
+        )
 
-            self.problem = solvers.SNESProblemMOD(
-                self.F,
-                self.w,
-                bcs=self.bc_e,
-                J=self.J,
-            )
-            return
         # ---------------------------------------------------------------
         # Local constitutive residual: three equations per quadrature point
         # ---------------------------------------------------------------
@@ -426,10 +445,6 @@ class Tensor(Momentum):
 
     def update_constitutive_state(self):
 
-        if self.elastic_only:
-            self.dq.x.array[:] = 0.0
-            self.dq.x.scatter_forward()
-            return
         """Local Newton solve with independent quadrature-point backtracking."""
         msh = self.sim.msh
         cells = self._local_cells
@@ -650,7 +665,7 @@ class Tensor(Momentum):
         self.solver.solve(None, self.w.x.petsc_vec)
         self.w.x.scatter_forward()
         reason = self.solver.getConvergedReason()
-        if reason <= 0 and reason != -6:
+        if reason == -3:
             raise RuntimeError(
                 f"Momentum solve failed: SNES reason {reason}"
             )
@@ -699,6 +714,16 @@ class Tensor(Momentum):
         self.ε_e_prev_time.x.array[:] = self.ε_e_updated.x.array[:]
         self.w_prev_time.x.array[:] += self.w.x.array[:]
 
+        dtstar = (
+            float(self.sim.params.dt.value)
+            / float(self.sim.params.τ_float)
+        )
+
+        self.velocity_prev_time.x.array[:] = (
+            self.w.x.array / dtstar
+        )
+        self.velocity_prev_time.x.scatter_forward()
+
         area_vec = fem.assemble_vector(self.cell_area_form)
         area_vec.scatter_forward()
 
@@ -721,29 +746,27 @@ class Tensor(Momentum):
         super().read_checkpoint(filename, t)
         adios4dolfinx.read_function(filename, self.ε_e_prev_time, name="epsiloneprevtime", time=t)
 
-    def restart_elastic(self):
-        """Restore the saved simulation state and enable elastic-only momentum."""
-        if self.sim.basal_friction:
-            raise NotImplementedError(
-                "The basal friction term uses du/dt; an elastic event requires "
-                "an explicit choice of basal constraint instead."
-            )
 
-        # Restore geometry, momentum, damage, history and parameters.
-        self.sim.restore_restart_state()
+    def begin_damped_event(self, damping):
+        """Activate damping at an already restored, consistent state."""
+        if not np.isfinite(damping) or damping <= 0:
+            raise ValueError("damping must be positive and finite.")
 
-        # Additional deformation during the event is entirely elastic.
-        for function in (
-            self.w,
-            self.w_prev_it,
-            self.dq,
-            self.dq_prev_it,
-        ):
-            function.x.array[:] = 0.0
-            function.x.scatter_forward()
+        self.w_event_prev.x.array[:] = self.w.x.array
+        self.w_event_prev.x.scatter_forward()
 
-        self.elastic_only = True
-        self.setup()
+        self.momentum_damping.value = PETSc.ScalarType(damping)
+        self.problem._constitutive_x = None
 
-                
-            
+
+    def advance_damped_event(self):
+        """Accept one converged artificial event step."""
+        self.w_event_prev.x.array[:] = self.w.x.array
+        self.w_event_prev.x.scatter_forward()
+
+
+    def end_damped_event(self):
+        """Disable artificial momentum damping."""
+        self.momentum_damping.value = PETSc.ScalarType(0.0)
+        self.problem._constitutive_x = None
+

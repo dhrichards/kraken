@@ -7,6 +7,8 @@ from mpi4py import MPI
 import numpy as np
 import adios4dolfinx
 import kraken as kr
+from petsc4py import PETSc
+
 class Simulation:
     '''Base class for the simulation. Contains the mesh, parameters, and solvers for momentum and damage.'''
     def __init__(self, msh):
@@ -148,10 +150,12 @@ class Simulation:
             '''Logic for performing fixed point iteration between
             the momentum and damage solvers.
             Returns a tuple of (flag, nits) where flag indicates the convergence status and nits is the number of iterations performed.
-            flag = 1: converged
-            flag = 2: max iterations reached
-            flag = -1: error occurred (e.g., solver did not converge)
-            
+            #  1: converged normally
+            #  2: maximum iterations reached
+            #  3: bottom criterion reached before convergence
+            #  4: converged and bottom criterion reached
+            # -1: solver failure
+                        
             Takes in as input a boolean save which if True will save the state of the simulation at each iteration to an xdmf file.
             Takes in as input a boolean stop_bottom which if True will stop the iteration if the L2 norm of the damage field on the bottom boundary exceeds 0.12.
             
@@ -243,7 +247,8 @@ class Simulation:
                     return -1,i
                 
                 if stop_bottom and L2_bottom > 0.12:
-                    return -1,i
+                    return 3, i
+
 
                 i += 1
     
@@ -270,6 +275,8 @@ class Simulation:
                     #     error_prev = float("inf")
                     #     L2_old = L2
                     #     continue
+                    if L2_bottom > 0.12:
+                        return 4, i
 
                     return 1, i
                 
@@ -352,6 +359,52 @@ class Simulation:
             problem = getattr(owner, "problem", None)
             if problem is not None and hasattr(problem, "_constitutive_x"):
                 problem._constitutive_x = None
-    
+
+    def solve_timestep(
+        self,
+        save=False,
+        stop_bottom=False,
+        trial_step = 0.2,
+        max_retries=30,
+    ):
+        """Solve one physical timestep, halving dt after solver failure.
+
+        Returns the existing (flag, nits) pair.
+        Does not advance time or commit timestep histories.
+        Preserves the final failed fields if retries are exhausted.
+        """
+        self.save_restart_state()
+        trial_dt = float(self.params.dt.value)
+
+        for retry in range(max_retries + 1):
+            try:
+                flag, nits = self.fixed_point(
+                    save=save,
+                    stop_bottom=stop_bottom,
+                )
+
+                return flag, nits
+
+            except (RuntimeError, PETSc.Error) as exc:
+                PETSc.Sys.Print(
+                    f"Solve failed at dt={trial_dt:.6g} s: {exc}"
+                )
+
+                # Preserve the last failed fields and dt for output.
+                if retry == max_retries:
+                    return -1, -1
+
+                self.restore_restart_state()
+
+                trial_dt *= trial_step
+                self.params.dt.value = trial_dt
+
+                self.momentum.solver.destroy()
+                self.momentum.setup_solver()
+
+                PETSc.Sys.Print(
+                    f"Retry {retry + 1}: dt={trial_dt:.6g} s"
+                )
+        
 
 

@@ -251,7 +251,7 @@ class Momentum:
         self.solver = PETSc.SNES().create(MPI.COMM_WORLD)
 
 
-        self.solver.setTolerances(rtol=1.0e-11, max_it=10, atol=1e-13)
+        self.solver.setTolerances(rtol=1.0e-11, max_it=15, atol=1e-13)
         self.solver.getKSP().setType("preonly")
         # self.solver.getKSP().setTolerances(rtol=1.0e-7)
         self.solver.getKSP().getPC().setType("lu")

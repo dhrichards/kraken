@@ -171,6 +171,10 @@ class Params:
     def ψcritstar(self):
         '''Non-dimensional energy threshold'''
         return self.ψcrit / self.Hc
+
+    @property
+    def C_inertia(self):
+        return self.ρc * self.H**2 / (self.μ * self.τ**2)
     
     @property
     def pc(self):
