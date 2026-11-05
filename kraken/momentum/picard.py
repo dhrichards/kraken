@@ -192,28 +192,28 @@ class Picard(Momentum):
 
     def solve(self):
 
-        comm = MPI.COMM_WORLD
+        # comm = MPI.COMM_WORLD
 
-        comm.Barrier()
-        t0 = perf_counter()
+        # comm.Barrier()
+        # t0 = perf_counter()
 
         self.solver.solve(None,self.du_e.x.petsc_vec)
         self.du_e.x.scatter_forward()
 
-        comm.Barrier()
-        t1 = perf_counter()
+        # comm.Barrier()
+        # t1 = perf_counter()
 
         self.solver_s.solve(None, self.w.x.petsc_vec)
         self.w.x.scatter_forward()
 
-        comm.Barrier()
-        t2 = perf_counter()
+        # comm.Barrier()
+        # t2 = perf_counter()
 
         self.w_prev_it.x.array[:] = self.w.x.array[:]
         self.du_e_prev_it.x.array[:] = self.du_e.x.array[:]
 
-        self.elastic_time += t1 - t0
-        self.viscous_time += t2 - t1
+        # self.elastic_time += t1 - t0
+        # self.viscous_time += t2 - t1
 
     def timestep(self):
 
@@ -293,7 +293,7 @@ class PicardNested(Picard):
     
     def setup_stokes(self):
 
-        (δu, p) = ufl.TrialFunction(self.U), ufl.TrialFunction(self.P)
+        (δu, δp) = ufl.TrialFunction(self.U), ufl.TrialFunction(self.P)
         (v, q) = ufl.TestFunction(self.U), ufl.TestFunction(self.P)
 
 
@@ -309,35 +309,35 @@ class PicardNested(Picard):
     
         # p = δp + self.p_prev_time
 
-        self.a = fem.form([[η*ufl.inner(mf.ε(δu/self.sim.params.dtstar), mf.ε(v)) * ufl.dx, g*ufl.inner(p, ufl.div(v)) * ufl.dx], 
-                           [g*ufl.inner(ufl.div(δu/self.sim.params.dtstar), q) * ufl.dx, None]])
-        # self.a = fem.form([[η*ufl.inner(mf.ε(δu/self.sim.params.dtstar), mf.ε(v)) * ufl.dx, - g*ufl.inner(p, ufl.div(v))], 
-        #               [-g*ufl.div(δu/self.sim.params.dtstar)*q * ufl.dx, None]])
-        self.L = fem.form([g*ufl.inner(σ0, mf.ε(v)) * ufl.dx, ufl.inner(fem.Constant(self.sim.msh, PETSc.ScalarType(0)), q) * ufl.dx]) 
+        # self.a = fem.form([[η*ufl.inner(mf.ε(δu/self.sim.params.dtstar), mf.ε(v)) * ufl.dx, g*ufl.inner(p, ufl.div(v)) * ufl.dx], 
+        #                    [g*ufl.inner(ufl.div(δu/self.sim.params.dtstar), q) * ufl.dx, None]])
+        # # self.a = fem.form([[η*ufl.inner(mf.ε(δu/self.sim.params.dtstar), mf.ε(v)) * ufl.dx, - g*ufl.inner(p, ufl.div(v))], 
+        # #               [-g*ufl.div(δu/self.sim.params.dtstar)*q * ufl.dx, None]])
+        # self.L = fem.form([g*ufl.inner(σ0, mf.ε(v)) * ufl.dx, ufl.inner(fem.Constant(self.sim.msh, PETSc.ScalarType(0)), q) * ufl.dx]) 
 
 
-        self.a_p11 = fem.form(η**-1*ufl.inner(p, q) * ufl.dx)
-        self.a_p = [[self.a[0][0], None], [None, self.a_p11]]
+        # self.a_p11 = fem.form(η**-1*ufl.inner(p, q) * ufl.dx)
+        # self.a_p = [[self.a[0][0], None], [None, self.a_p11]]
 
-        # self.F_s = [
-        #         (
-        #         # η0*ufl.inner(εD, mf.ε(v_v))\
-        #         η*ufl.inner(mf.ε(δu/self.sim.params.dtstar), mf.ε(v))\
-        #         - g*ufl.inner(p, ufl.div(v))  \
-        #     -    g*ufl.inner(σ0, mf.ε(v))
-        #         ) * ufl.dx,
-        #             (
-        #         - g*ufl.div(self.δu/self.sim.params.dtstar)*q \
-        #         ) * ufl.dx  
-        #         ]
+        self.F_s = [
+                (
+                # η0*ufl.inner(εD, mf.ε(v_v))\
+                η*ufl.inner(mf.ε(self.vel), mf.ε(v))\
+                - g*ufl.inner(self.p, ufl.div(v))  \
+            -    g*ufl.inner(σ0, mf.ε(v))
+                ) * ufl.dx,
+                    (
+                - g*ufl.div(self.vel)*q \
+                ) * ufl.dx  
+                ]
 
         
 
-        # self.J_s = [[ufl.derivative(self.F_s[0],self.du_v,δu), ufl.derivative(self.F_s[0],self.dp,δp)],
-        #             [ufl.derivative(self.F_s[1],self.du_v,δu), ufl.derivative(self.F_s[1],self.dp,δp)]]
+        self.J_s = [[ufl.derivative(self.F_s[0],self.du_v,δu), ufl.derivative(self.F_s[0],self.p,δp)],
+                    [ufl.derivative(self.F_s[1],self.du_v,δu), ufl.derivative(self.F_s[1],self.p,δp)]]
 
-        # self.P_s = [[self.J_s[0][0], None],
-        #             [None, η**-1 * δp * q * ufl.dx]]
+        self.P_s = [[self.J_s[0][0], None],
+                    [None, η**-1 * δp * q * ufl.dx]]
         
 
 
@@ -372,88 +372,14 @@ class PicardNested(Picard):
 
 
     def setup_viscous_solver(self):
+        self.solver_s, self.x = solvers.nested_solve(self.F_s, self.J_s, self.du_v, self.p, self.bc_s, self.P_s)
 
-        # Assemble nested matrix operators
-        A = fem.petsc.assemble_matrix_nest(self.a, bcs=self.bc_s)
-        A.assemble()
-
-        # Create a nested matrix P to use as the preconditioner. The
-        # top-left block of P is shared with the top-left block of A. The
-        # bottom-right diagonal entry is assembled from the form a_p11:
-        P11 = fem.petsc.assemble_matrix(self.a_p11, [])
-        P = PETSc.Mat().createNest([[A.getNestSubMatrix(0, 0), None], [None, P11]])
-        P.assemble()
-
-        A00 = A.getNestSubMatrix(0, 0)
-        A00.setOption(PETSc.Mat.Option.SPD, True)
-
-        P00, P11 = P.getNestSubMatrix(0, 0), P.getNestSubMatrix(1, 1)
-        P00.setOption(PETSc.Mat.Option.SPD, True)
-        P11.setOption(PETSc.Mat.Option.SPD, True)
-
-        # Assemble right-hand side vector
-        self.b = fem.petsc.assemble_vector_nest(self.L)
-
-        # Modify ('lift') the RHS for Dirichlet boundary conditions
-        fem.petsc.apply_lifting_nest(self.b, self.a, bcs=self.bc_s)
-
-        # Sum contributions for vector entries that are share across
-        # parallel processes
-        for b_sub in self.b.getNestSubVecs():
-            b_sub.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
-
-        # Set Dirichlet boundary condition values in the RHS vector
-        bcs0 = fem.bcs_by_block(fem.extract_function_spaces(self.L), self.bc_s)
-        fem.petsc.set_bc_nest(self.b, bcs0)
-
-        # The pressure field is determined only up to a constant. We supply
-        # a vector that spans the nullspace to the solver, and any component
-        # of the solution in this direction will be eliminated during the
-        # solution process.
-        # null_vec = fem.petsc.create_vector_nest(self.L)
-
-        # # Set velocity part to zero and the pressure part to a non-zero
-        # # constant
-        # null_vecs = null_vec.getNestSubVecs()
-        # null_vecs[0].set(0.0), null_vecs[1].set(1.0)
-
-        # # Normalize the vector that spans the nullspace, create a nullspace
-        # # object, and attach it to the matrix
-        # null_vec.normalize()
-        # nsp = PETSc.NullSpace().create(vectors=[null_vec])
-        # assert nsp.test(A)
-        # A.setNullSpace(nsp)
-
-        # Create a MINRES Krylov solver and a block-diagonal preconditioner
-        # using PETSc's additive fieldsplit preconditioner
-        self.solver_s = PETSc.KSP().create(MPI.COMM_WORLD)
-        self.solver_s.setOperators(A, P)
-        self.solver_s.setType("minres")
-        self.solver_s.setTolerances(rtol=1e-7)
-        self.solver_s.getPC().setType("fieldsplit")
-        self.solver_s.getPC().setFieldSplitType(PETSc.PC.CompositeType.ADDITIVE)
-
-        # Define the matrix blocks in the preconditioner with the velocity
-        # and pressure matrix index sets
-        nested_IS = P.getNestISs()
-        self.solver_s.getPC().setFieldSplitIS(("u", nested_IS[0][0]), ("p", nested_IS[0][1]))
-
-        # Set the preconditioners for each block. For the top-left
-        # Laplace-type operator we use algebraic multigrid. For the
-        # lower-right block we use a Jacobi preconditioner. By default, GAMG
-        # will infer the correct near-nullspace from the matrix block size.
-        ksp_u, ksp_p = self.solver_s.getPC().getFieldSplitSubKSP()
-        ksp_u.setType("preonly")
-        ksp_u.getPC().setType("gamg")
-        ksp_p.setType("preonly")
-        ksp_p.getPC().setType("jacobi")
-
-        # Create finite element {py:class}`Function <dolfinx.fem.Function>`s
-        # for the velocity (on the space `V`) and for the pressure (on the
-        # space `Q`). The vectors for `u` and `p` are combined to form a
-        # nested vector and the system is solved.
-        self.x = PETSc.Vec().createNest([la.create_petsc_vector_wrap(self.du_v.x), la.create_petsc_vector_wrap(self.p.x)])
-
+        # opts = PETSc.Options()
+        # # opts["snes_type"] = "newtonls"
+        # # opts["snes_linesearch_type"] = "bt"
+        
+        # # opts["snes_rtol"] = 1.0e-7
+        # self.stokes_solver.setFromOptions()
 
     def solve(self):
 
@@ -468,26 +394,8 @@ class PicardNested(Picard):
         comm.Barrier()
         t1 = perf_counter()
 
-        # Reassemble viscous RHS
-        self.b = fem.petsc.assemble_vector_nest(self.L)
 
-        fem.petsc.apply_lifting_nest(
-            self.b, self.a, bcs=self.bc_s
-        )
-
-        for b_sub in self.b.getNestSubVecs():
-            b_sub.ghostUpdate(
-                addv=PETSc.InsertMode.ADD,
-                mode=PETSc.ScatterMode.REVERSE
-            )
-
-        bcs0 = fem.bcs_by_block(
-            fem.extract_function_spaces(self.L),
-            self.bc_s
-        )
-        fem.petsc.set_bc_nest(self.b, bcs0)
-
-        self.solver_s.solve(self.b, self.x)
+        self.solver_s.solve(None, self.x)
         self.du_v.x.scatter_forward()
         self.p.x.scatter_forward()
 

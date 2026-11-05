@@ -80,7 +80,7 @@ class Damage:
         )
         self.Hupdated.x.scatter_forward()
         self.Hprev.x.array[:] = self.Hupdated.x.array
-        self.Hprev.x.scatter_forward()
+        # self.Hprev.x.scatter_forward()
 
     def write_checkpoint(self, filename, t=0):
         adios4dolfinx.write_function(filename, self.w, name = "w_damage",time = t)
