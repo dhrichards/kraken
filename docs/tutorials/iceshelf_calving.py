@@ -9,7 +9,7 @@ import kraken.numerics.maths_functions as mf
 dt_days = 2.5
 length = 2.5e3
 height = 450
-l = 8
+l = 2
 small_size = l/2
 refinements = 4
 
