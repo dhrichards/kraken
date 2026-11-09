@@ -741,10 +741,23 @@ class Tensor(Momentum):
     def write_checkpoint(self, filename, t=0):
         super().write_checkpoint(filename, t)
         adios4dolfinx.write_function(filename, self.ε_e_prev_time, name="epsiloneprevtime", time=t)
+        adios4dolfinx.write_function(filename, self.fluidity_prev_it, name="fluidityprevit", time=t)
+        adios4dolfinx.write_function(filename, self.dq, name="dq", time=t)
+        adios4dolfinx.write_function(filename, self.dq_prev_it, name="dqprevit", time=t)
+        adios4dolfinx.write_function(filename, self.w_prev_time, name="wprevtime", time=t)
+        adios4dolfinx.write_function(filename, self.velocity_prev_time, name="velocityprevtime", time=t)
+        adios4dolfinx.write_function(filename, self.fluidity_used, name="fluidityused", time=t)
+
 
     def read_checkpoint(self, filename, t=0):
         super().read_checkpoint(filename, t)
         adios4dolfinx.read_function(filename, self.ε_e_prev_time, name="epsiloneprevtime", time=t)
+        adios4dolfinx.read_function(filename, self.fluidity_prev_it, name="fluidityprevit", time=t)
+        adios4dolfinx.read_function(filename, self.dq, name="dq", time=t)
+        adios4dolfinx.read_function(filename, self.dq_prev_it, name="dqprevit", time=t)
+        adios4dolfinx.read_function(filename, self.w_prev_time, name="wprevtime", time=t)
+        adios4dolfinx.read_function(filename, self.velocity_prev_time, name="velocityprevtime", time=t)
+        adios4dolfinx.read_function(filename, self.fluidity_used, name="fluidityused", time=t)
 
 
     def begin_damped_event(self, damping):
