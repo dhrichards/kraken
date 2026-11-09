@@ -18,14 +18,6 @@ class Simulation:
         self.quad_degree = max(4, 2 * self.order)
         self.quad_scheme =  "default"
 
-        self.dx = ufl.Measure(
-                    "dx",
-                    domain=self.msh,
-                    metadata={
-                        "quadrature_degree": self.quad_degree,
-                        "quadrature_rule": self.quad_scheme,
-                    },
-                )
 
         self.damage_on = True
 
@@ -41,6 +33,17 @@ class Simulation:
         mesh_tags = mesh.meshtags(self.msh, self.msh.topology.dim - 1, b_facets, 1)
         ds = ufl.Measure("ds", domain=self.msh, subdomain_data=mesh_tags)
         self.ds_bottom = ds(1)
+
+    @property
+    def dx(self):
+        return ufl.Measure(
+            "dx",
+            domain=self.msh,
+            metadata={
+                "quadrature_degree": self.quad_degree,
+                "quadrature_rule": self.quad_scheme,
+            },
+        )
 
 
     def use_basal_friction(self,bottom_boundary,ocean_boundaries):
