@@ -15,9 +15,9 @@ import numpy as np
 
 class LowerOrder(Damage):
     ''' Parent class for lower order damage models, such as AT1 and AT2'''
+
     def __init__(self, sim):
         super().__init__(sim)
-
 
         self.D = fem.functionspace(self.sim.msh, self.d_el)
         self.d = fem.Function(self.D, name="damage")
@@ -139,7 +139,7 @@ class AT2Bounded(AT2):
         self.solver.setType("vinewtonrsls")
         self.solver.setVariableBounds(self.lower_bound.x.petsc_vec,
                                       self.upper_bound.x.petsc_vec)
-        self.solver.setTolerances(rtol=1.e-9, atol=1.e-12, stol=0., max_it=100)
+        self.solver.setTolerances(rtol=1.e-9, atol=1.e-9, stol=0., max_it=100)
         ksp = self.solver.getKSP()
         ksp.setType("preonly")
         ksp.getPC().setType("lu")
@@ -197,43 +197,21 @@ class AT1(AT2Bounded):
 
     gamma = 3/8 * (d/ell + ell*|grad(d)|**2).
     Uses instantaneous psi_plus, with no threshold subtraction or history.
-    The strength calibration overwrites the existing Kic Constant in place:
-      Gc = (8/3)*(1-ge_tol)*ell*sigma_t**2/E.
-    This makes homogeneous onset occur at psi_plus=sigma_t**2/(2E).
+    Uses the toughness supplied by the calling script without calibration.
+    Spatial positive toughness and length are supported.
     Free boundaries have zero normal damage gradient; prescribed damage
     values continue to come from the user's boundary callback.
     """
 
-    def __init__(self, sim):
-        super().__init__(sim)
-        self.update_toughness()
-
-    def update_toughness(self):
-        p = self.sim.params
-        ell, strength, E, nu, k = map(float, (p.l, p.σt, p.E, p.ν, p.ge_tol))
-        if (not np.all(np.isfinite([ell, strength, E, nu, k]))
-                or ell <= 0. or strength <= 0. or E <= 0.
-                or not -1. < nu < .5 or not 0. <= k < 1.):
-            raise ValueError("AT1 requires positive ell, sigma_t, E, "
-                             "-1 < nu < 0.5 and 0 <= ge_tol < 1")
-        # Retain the Constant referenced by existing mechanics/UFL forms.
-        p.Kic.value = np.sqrt((8./3.)*(1.-k)*ell*strength**2/(1.-nu**2))
-
     def setup_weak_form(self):
-        self.update_toughness()
         C3, l = self.sim.params.C3, self.sim.params.lstar
         dx = self.sim.dx
         self.total_energy = (
             (1/C3)*es.crack_density_function(self.d, l, lambda d: d, 8./3.)
             + self.g*self.sim.momentum.ψplus
         ) * dx
-        # Positive, spatially constant normalisation, matching the scale of
-        # the AT2 residual. Does not change stationarity or the VI solution.
-        self.F = C3*l*ufl.derivative(
+        # Differentiate the energy directly; spatial coefficients stay inside.
+        self.F = ufl.derivative(
             self.total_energy, self.d, ufl.TestFunction(self.D))
         self.J = ufl.derivative(self.F, self.d, ufl.TrialFunction(self.D))
         self.problem = solvers.SNESProblem(self.F, self.d, bcs=self.bc_d)
-
-    def solve(self):
-        self.update_toughness()
-        super().solve()

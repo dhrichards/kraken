@@ -186,13 +186,13 @@ class Simulation:
                     self.damage.solve()
 
         
-             
+                
                
 
                 if save:
-                    s = ufl.dev(self.momentum.σ)
-                    s_e2 = ufl.inner(s, s) / 2
-                    σ0 = es.cauchy_stress(self.momentum.ε_e, self.params.ν)
+                    # s = ufl.dev(self.momentum.σ)
+                    # s_e2 = ufl.inner(s, s) / 2
+                    # σ0 = es.cauchy_stress(self.momentum.ε_e, self.params.ν)
                     kr.plotting.write_xdmf("./outputs/iteration" + str(i) + ".xdmf",
                                 self.msh, 
                                 [
@@ -202,20 +202,21 @@ class Simulation:
                                 self.damage.d_prev_it,
                                 self.damage.d_prev_it3,
                                 self.momentum.ψplus / self.params.ψcritstar,
-                                self.momentum.ε_e,
-                                s,
-                                s_e2,
-                                σ0,
-                                self.momentum.σ,
-                                self.momentum.fluidity_prev_it,
-                                self.momentum.fluidity_used,
-                                self.momentum.dq,
+                                # self.momentum.ε_e,
+                                # s,
+                                # s_e2,
+                                # σ0,
+                                # self.momentum.σ,
+                                # self.momentum.fluidity_prev_it,
+                                # self.momentum.fluidity_used,
+                                # self.momentum.dq,
 
                             ],
                             [
                                 "du", "d", "dprev2", "dprev", "dprev3",
-                                "psi_plus", "eps_e", "s", "s_e2", "sig0", "sig",
-                                "fluidity","fluidityused","dq"
+                                "psi_plus",
+                                #   "eps_e", "s", "s_e2", "sig0", "sig",
+                                # "fluidity","fluidityused","dq"
                             ],
                                     t=i,quadrature_degree=self.quad_degree)
     
@@ -409,5 +410,4 @@ class Simulation:
                     f"Retry {retry + 1}: dt={trial_dt:.6g} s"
                 )
         
-
 

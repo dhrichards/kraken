@@ -113,7 +113,7 @@ class AT2(Damage):
         #         ) * dx \
         #         - (self.lap*q + ufl.inner(ufl.grad(self.d), ufl.grad(q))) * dx
         self.F = (
-            -2*C3*l*(1-self.d)*v*H
+            -2*self.driving_coefficient()*(1-self.d)*v*H
             + self.fracture_residual(v)
             - self.lap*q
             - ufl.inner(ufl.grad(self.d), ufl.grad(q))
@@ -131,6 +131,9 @@ class AT2(Damage):
         return (self.d * v
                 + (l**2 / 2) * ufl.inner(ufl.grad(self.d), ufl.grad(v))
                 - (l**4 / 16) * ufl.inner(ufl.grad(self.lap), ufl.grad(v)))
+
+    def driving_coefficient(self):
+        return self.sim.params.C3*self.sim.params.lstar
 
     def driving_energy(self):
         return ufl.max_value(
@@ -467,9 +470,7 @@ class AugmentedLagrangian(AT2):
         self.w_prev_time.x.array[self._al_idx] = self._al_lower
         self.w_prev_time.x.scatter_forward()
 
-        C3 = float(self.sim.params.C3)
-        l = float(self.sim.params.lstar)
-        drive = 2.0 * C3 * l * self.H_drive.x.array
+        drive = 2.0 * float(self.driving_coefficient()) * self.H_drive.x.array
         self._al_scale = max(1.0, self._global_max(np.abs(drive)))
         # Use the same nodal scaling as the final stationarity check. Apply
         # it to both residual and Jacobian; the Newton equation is unchanged.
@@ -586,43 +587,25 @@ class _AT1Model:
     """Mixed CG1 higher-order AT1 with squared-Laplacian regularisation.
 
     Retains the original mixed formulation and its lap=0 free-boundary
-    condition. Uses instantaneous psi_plus and the strength calibration
-    Gc=2*ell*sigma_t**2/E (overwriting Kic), as before the Hessian change.
+    condition. Uses instantaneous psi_plus and the supplied toughness.
+    Set Kic in the calling script; this model never calibrates it.
     This is distinct from Hageman's Hessian model in damage.hageman.
     """
 
-    def __init__(self, sim):
-        super().__init__(sim)
-        self.update_toughness()
-
-    def update_toughness(self):
-        p = self.sim.params
-        ell, strength, E, nu = map(float, (p.l, p.σt, p.E, p.ν))
-        if (not np.all(np.isfinite([ell, strength, E, nu]))
-                or ell <= 0.0 or strength <= 0.0 or E <= 0.0
-                or not -1.0 < nu < 0.5):
-            raise ValueError("AT1 requires positive ell, sigma_t, E "
-                             "and -1 < nu < 0.5")
-        # Gc = Kic**2*(1-nu**2)/E = 2*ell*sigma_t**2/E.
-        # Keep the Constant itself: previously built UFL forms refer to it.
-        p.Kic.value = np.sqrt(2.0 * ell * strength**2 / (1.0 - nu**2))
-
-    def setup_weak_form(self):
-        self.update_toughness()
-        super().setup_weak_form()
+    def driving_coefficient(self):
+        # AT1 uses the direct energy variation, with toughness in fracture terms.
+        return 1.0
 
     def driving_energy(self):
         return self.sim.momentum.ψplus
 
     def fracture_residual(self, v):
         l = self.sim.params.lstar
-        return (0.5 * v
-                + (l**2 / 4) * ufl.inner(ufl.grad(self.d), ufl.grad(v))
-                - (l**4 / 32) * ufl.inner(ufl.grad(self.lap), ufl.grad(v)))
+        weight = 1 / (self.sim.params.C3*l)
+        return (weight * 0.5 * v
+                + (weight*l**2 / 4) * ufl.inner(ufl.grad(self.d), ufl.grad(v))
+                - ufl.inner(ufl.grad((weight*l**4 / 32)*self.lap), ufl.grad(v)))
 
-    def solve(self):
-        self.update_toughness()
-        super().solve()
 
 
 class AT1(_AT1Model, AugmentedLagrangian):

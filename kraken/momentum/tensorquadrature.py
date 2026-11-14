@@ -218,6 +218,21 @@ class Tensor(Momentum):
 
     def setup_momentum(self):
 
+        # Reuse interpolation kernels and geometry-space storage. Expressions
+        # read current coefficients and mesh coordinates at each evaluation.
+        s = ufl.dev(self.σ)
+        self._fluidity_expr = fem.Expression(
+            ufl.inner(s, s) / 2,
+            self.FluiditySpace.element.interpolation_points(),
+        )
+        self._elastic_strain_expr = fem.Expression(
+            self.ε_e, self.E.element.interpolation_points()
+        )
+        self._mesh_displacement_expr = fem.Expression(
+            self.du, self.V.element.interpolation_points()
+        )
+        self._mesh_displacement = fem.Function(self.V)
+
         v = ufl.TestFunction(self.W)
         dw = ufl.TrialFunction(self.W)
 
@@ -656,8 +671,8 @@ class Tensor(Momentum):
 
 
     def solve(self):
+        # Full-array copies preserve the synchronised source ghost values.
         self.fluidity_used.x.array[:] = self.fluidity_prev_it.x.array
-        self.fluidity_used.x.scatter_forward()
         # Damage, fluidity or other coefficients may have changed since
         # the previous momentum solve.
         self.problem._constitutive_x = None
@@ -675,37 +690,22 @@ class Tensor(Momentum):
 
 
         self.w_prev_it.x.array[:] = self.w.x.array[:]
-        self.w_prev_it.x.scatter_forward()
         self.dq_prev_it.x.array[:] = self.dq.x.array[:]
-        self.dq_prev_it.x.scatter_forward()
 
 
 
-        # fluidity_old = self.fluidity_prev_it.x.array.copy()
-        s = ufl.dev(self.σ)
-
-        self.fluidity_prev_it.interpolate(
-            fem.Expression(
-                ufl.inner(s, s) / 2,
-                self.FluiditySpace.element.interpolation_points(),
-            )
-        )
-        # omega = 0.25
-        # self.fluidity_prev_it.x.array[:] = (
-        #     (1.0 - omega) * fluidity_old
-        #     + omega * self.fluidity_prev_it.x.array
-        # )
+        self.fluidity_prev_it.interpolate(self._fluidity_expr)
         self.fluidity_prev_it.x.scatter_forward()
 
 
 
     def timestep(self,move_mesh=True):
 
-        self.ε_e_updated.interpolate(fem.Expression(self.ε_e, self.E.element.interpolation_points()))
+        self.ε_e_updated.interpolate(self._elastic_strain_expr)
 
 
-        du = fem.Function(self.V)
-        du.interpolate(fem.Expression(self.du,self.V.element.interpolation_points()))
+        du = self._mesh_displacement
+        du.interpolate(self._mesh_displacement_expr)
         du.x.scatter_forward()
 
         if move_mesh:
@@ -722,7 +722,6 @@ class Tensor(Momentum):
         self.velocity_prev_time.x.array[:] = (
             self.w.x.array / dtstar
         )
-        self.velocity_prev_time.x.scatter_forward()
 
         area_vec = fem.assemble_vector(self.cell_area_form)
         area_vec.scatter_forward()
@@ -735,8 +734,8 @@ class Tensor(Momentum):
             self.dq,
             self.dq_prev_it,
         ):
+            # Zero owned and ghost entries together; no exchange is needed.
             function.x.array[:] = 0.0
-            function.x.scatter_forward()
         
     def write_checkpoint(self, filename, t=0):
         super().write_checkpoint(filename, t)
@@ -782,4 +781,3 @@ class Tensor(Momentum):
         """Disable artificial momentum damping."""
         self.momentum_damping.value = PETSc.ScalarType(0.0)
         self.problem._constitutive_x = None
-
