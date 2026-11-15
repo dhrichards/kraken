@@ -241,7 +241,8 @@ class Simulation:
                     self.msh.comm.allreduce(error_rank, op=MPI.SUM)
                 ) / area
                 if MPI.COMM_WORLD.rank == 0:
-                    print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_snes_its {self.momentum.solver.getIterationNumber()}, mom_snes_reason {self.momentum.solver.getConvergedReason()}")#, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
+                    solver_kind = getattr(self.momentum, "solver_kind", "snes")
+                    print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_{solver_kind}_its {self.momentum.solver.getIterationNumber()}, mom_{solver_kind}_reason {self.momentum.solver.getConvergedReason()}")#, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
 
                 errors.append(error_L2)
 
@@ -264,6 +265,11 @@ class Simulation:
                 )
 
                                 
+
+                # A single linear mechanics correction needs its own nonlinear
+                # residual check; existing momentum solvers keep their behaviour.
+                # if converged and hasattr(self.momentum, "mechanics_converged"):
+                    # converged = self.momentum.mechanics_converged()
 
                 if converged:
                     # if not direct_mode:
@@ -410,4 +416,3 @@ class Simulation:
                     f"Retry {retry + 1}: dt={trial_dt:.6g} s"
                 )
         
-

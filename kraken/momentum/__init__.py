@@ -1,1 +1,1 @@
-from . import base, mixed, elastic, picard, tensor, tensorquadrature, tensorjax
+from . import base, mixed, elastic, picard, tensor, tensorquadrature, tensorjax, tensorlinearised

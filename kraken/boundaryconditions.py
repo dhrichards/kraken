@@ -75,10 +75,25 @@ def internal_bc(V,boundary_function,val,topology_dim=None):
         topology_dim = V.mesh.topology.dim
 
     msh = V.mesh
-    msh.topology.create_connectivity(msh.topology.dim, msh.topology.dim)
-    deactivate_cells = mesh.locate_entities(msh, msh.topology.dim, boundary_function)
-    deactivate_dofs = fem.locate_dofs_topological(V, msh.topology.dim, deactivate_cells)
-    return fem.dirichletbc(default_scalar_type(val), deactivate_dofs, V)
+    msh.topology.create_connectivity(topology_dim, msh.topology.dim)
+    entities = mesh.locate_entities(msh, topology_dim, boundary_function)
+
+    # Bernstein DOFs are not point evaluations, so DOLFINx cannot apply a
+    # scalar Constant directly. Interpolate a Function, also for mixed subspaces.
+    try:
+        value_space, _ = V.collapse()
+    except RuntimeError:
+        value_space = V
+    value = fem.Function(value_space)
+    constant = np.broadcast_to(np.asarray(val, dtype=default_scalar_type), value.ufl_shape)
+    value.interpolate(lambda x: np.broadcast_to(
+        constant[..., None], (*value.ufl_shape, x.shape[1])))
+    value.x.scatter_forward()
+    if value_space is V:
+        dofs = fem.locate_dofs_topological(V, topology_dim, entities)
+        return fem.dirichletbc(value, dofs)
+    dofs = fem.locate_dofs_topological((V, value_space), topology_dim, entities)
+    return fem.dirichletbc(value, dofs, V)
 
 
 def get_zero_bc(V,boundary):

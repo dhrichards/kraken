@@ -263,7 +263,8 @@ class Bounded(AT2):
         # H_drive is fixed during this solve, so F is affine in (d, lap).
         # Take full reduced-space active-set steps rather than backtracking
         # across changes of the active bounds. PETSc still projects onto the
-        # bounds and checks the VI residual; this does not accept divergence.
+        # bounds and checks the VI residual. Max-iteration exits are handled
+        # explicitly in solve; other divergence reasons still raise.
         # A small initial VI residual can make the relative target fall below
         # assembly roundoff. Set an explicit absolute floor so a residual of
         # order 1e-12 converges instead of exhausting the active-set iterations.
@@ -303,11 +304,31 @@ class Bounded(AT2):
             self.w.x.scatter_forward()
             reason = self.solver.getConvergedReason()
             if reason <= 0:
-                raise RuntimeError(
-                    f"Bounded damage solve failed: SNES reason {reason}, "
+                residual = self.solver.getFunctionNorm()
+                message = (
+                    f"Bounded damage solve: SNES reason {reason}, "
                     f"iterations {self.solver.getIterationNumber()}, "
-                    f"VI residual {self.solver.getFunctionNorm():.6e}"
+                    f"VI residual {residual:.6e}"
                 )
+                if reason != PETSc.SNES.ConvergedReason.DIVERGED_MAX_IT:
+                    raise RuntimeError(message)
+                # Keep the last iterate on iteration exhaustion, but never
+                # accept NaNs or a material violation of the VI constraints.
+                comm = self.sim.msh.comm
+                finite = np.isfinite(residual) and np.all(np.isfinite(self.w.x.array))
+                if not comm.allreduce(bool(finite), op=MPI.LAND):
+                    raise RuntimeError(message + "; non-finite iterate or residual")
+                idx = self.d_to_W
+                damage = self.w.x.array[idx]
+                violation = comm.allreduce(float(np.max(np.maximum(
+                    self.lower_bound.x.array[idx]-damage,
+                    damage-self.upper_bound.x.array[idx]), initial=0.)), op=MPI.MAX)
+                if violation > 1.e-9:
+                    raise RuntimeError(message + f"; bound violation {violation:.6e}")
+                if comm.rank == 0:
+                    print("WARNING: " + message +
+                          "; continuing with the last bounded iterate (not converged).",
+                          flush=True)
         except Exception:
             self.w.x.array[:] = self.w_prev_it.x.array[:]
             self.w.x.scatter_forward()

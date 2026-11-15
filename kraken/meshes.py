@@ -410,7 +410,10 @@ def fenicsx_refined_mesh(L,small_size,
         msh.topology.create_entities(1)
         local_edges = mesh.compute_incident_entities(
             msh.topology, should_refine, msh.topology.dim, 1)
-        msh, _, _ = mesh.refine(msh, local_edges)
+        # Interior-facet damage forms need the neighbouring cell on each
+        # MPI rank; dolfinx 0.9's default refinement drops these ghosts.
+        msh, _, _ = mesh.refine(msh, local_edges,
+            partitioner=mesh.create_cell_partitioner(mesh.GhostMode.shared_facet))
 
     
     def cell_criterion2(x):
@@ -426,7 +429,8 @@ def fenicsx_refined_mesh(L,small_size,
         msh.topology.create_entities(1)
         local_edges = mesh.compute_incident_entities(
             msh.topology, should_refine, msh.topology.dim, 1)
-        msh, _, _ = mesh.refine(msh, local_edges)
+        msh, _, _ = mesh.refine(msh, local_edges,
+            partitioner=mesh.create_cell_partitioner(mesh.GhostMode.shared_facet))
 
 
 
@@ -448,6 +452,7 @@ def refine_by_area(msh, cell_criterion, n_div=1):
         msh.topology.create_entities(1)
         local_edges = mesh.compute_incident_entities(
             msh.topology, should_refine, msh.topology.dim, 1)
-        msh, _, _ = mesh.refine(msh, local_edges)
+        msh, _, _ = mesh.refine(msh, local_edges,
+            partitioner=mesh.create_cell_partitioner(mesh.GhostMode.shared_facet))
 
     return msh
