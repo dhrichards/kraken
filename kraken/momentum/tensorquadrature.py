@@ -1,24 +1,16 @@
 import adios4dolfinx
 from .base import Momentum
-import numpy as np
-from dolfinx import fem, mesh
-from dolfinx.fem.petsc import NonlinearProblem
+from dolfinx import fem
 from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
 import numpy as np
-from kraken import parameters
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
 from kraken.numerics import solvers
 from petsc4py import PETSc
-from kraken.numerics.invariants import matrix_function
-from kraken.boundaryconditions import marked_ds
 import basix
 from ufl.algorithms import expand_derivatives
-
-
-
 
 
 class Tensor(Momentum):
@@ -28,9 +20,9 @@ class Tensor(Momentum):
     Time evolution is handled using a semi-Lagrangian approach, such that it solves for the change
     in displacements at each timestep and the mesh is then moved. 
 
-    Solves for the change in total displacement, change in viscous displacement, and pressure as a mixed function.
-    The elastic displacement is then calculated as the difference between the total and viscous displacements.
-    The elastic strain is then calculated from the elastic displacement and the previous timestep's elastic strain.
+    Solves globally for the displacement increment and locally for viscous strain
+    increments at quadrature points. Elastic strain includes the previous
+    timestep history and the incremental rotation correction.
 
     The viscosity can be non-newtonian, for some power law
     '''
@@ -171,24 +163,6 @@ class Tensor(Momentum):
             self.FluiditySpace, name="fluidity used in momentum solve"
         )
 
-        # R, de = mf.corotational_increment(
-        #     self.du,
-        #     self.sim.params.ucstar_float,
-        # )
-
-        # self.ε_trial = (
-        #     ufl.dot(
-        #         R,
-        #         ufl.dot(self.ε_e_prev_time, R.T),
-        #     )
-        #     + de
-        # )
-
-        # self.ε_e = (
-        #     self.ε_trial
-        #     - mf.viscous_strain(self.dq)
-        # )
-
         # Nondimensional velocity, scaled by uc / τ.
         self.velocity_prev_time = fem.Function(
             self.W, name="previous velocity"
@@ -201,21 +175,6 @@ class Tensor(Momentum):
             (self.velocity - self.velocity_prev_time)
             / self.sim.params.dtstar
         )
-        # Zero during ordinary viscoelastic timestepping.
-        # This coefficient represents c_artificial / delta_s,
-        # in the same nondimensional units as the momentum residual.
-        self.momentum_damping = fem.Constant(
-            self.sim.msh, PETSc.ScalarType(0.0)
-        )
-
-        # Displacement at the previous accepted artificial event step.
-        self.w_event_prev = fem.Function(
-            self.W, name="previous event displacement"
-        )
-
-
-        
-
     def setup_momentum(self):
 
         # Reuse interpolation kernels and geometry-space storage. Expressions
@@ -239,26 +198,10 @@ class Tensor(Momentum):
         n = ufl.FacetNormal(self.sim.msh)
         dt = self.sim.params.dtstar
 
-        g = self.sim.damage.g
 
         # Must be a UFL expression depending on self.du and self.dq.
         σ = self.σ
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
-
-        # Undegraded viscosity.
-        if self.sim.params.n.value == 1.0:
-            η0 = 0.5
-        else:
-            # Retains your existing staggered/Picard viscosity treatment.
-            η0 = mf.viscosity(
-                self.ε_v_dot_prev_it,
-                self.sim.params.n,
-                1e-19,
-            )
-        η = (1-self.sim.damage.d)**2*η0 + self.sim.params.viscosity_tol/2
-
-
-        ## Hageman block
 
         s = ufl.dev(σ)
 
@@ -266,8 +209,7 @@ class Tensor(Momentum):
 
         if self.sim.params.n.value == 1.0:
             creep_rate = s
-        else:# self.sim.params.n.value == 3.0:
-            # creep_rate = s_e2*s
+        else:
             theta = self.creep_newton_weight
 
             fluidity = (
@@ -277,15 +219,6 @@ class Tensor(Momentum):
             creep_rate = fluidity * s
 
     
-        # else:
-        #     creep_rate =  s_e2**((self.sim.params.n.value - 1.0) / 2.0) * s
-        
-        # creep_rate_lim = ufl.conditional(
-        #     ufl.gt(self.sim.damage.d, 0.5),
-        #     ufl.zero(s.ufl_shape),
-        #     creep_rate,
-        # )    
-
         self.ρ = self.sim.params.ρistar / self.area_ratio
         f = self.ρ * mf.body_force(self.sim.msh)
 
@@ -321,12 +254,6 @@ class Tensor(Momentum):
             * self.dx
         )
 
-        self.F += (
-            self.momentum_damping
-            * ufl.inner(self.w - self.w_event_prev, v)
-            * self.dx
-        )
-
         # ---------------------------------------------------------------
         # Local constitutive residual: three equations per quadrature point
         # ---------------------------------------------------------------
@@ -341,10 +268,6 @@ class Tensor(Momentum):
             for ei in component_directions
         ]
 
-        # mismatch = (
-        #     2*η * self.ε_v_dot
-        #     - g*ufl.dev(σ0)
-        # )
         mismatch = self.sim.params.dtstar*(self.ε_v_dot - creep_rate)
 
         self.r_local = ufl.as_vector([
@@ -492,8 +415,6 @@ class Tensor(Momentum):
         # Start Newton from the previous staggered solution.
         q_guess = self.dq_prev_it.x.array.reshape(-1, 3)
         q_values[blocks] = q_guess[blocks]
-        # Start Newton from the latest available local solution.
-        # q_values[blocks] = q_before
 
         max_backtracks = 20
         armijo = 1.0e-4
@@ -511,17 +432,6 @@ class Tensor(Momentum):
                         f"nonfinite local residual at iteration {iteration}"
                     )
                     break
-
-                # scaled_residual = residual_norm / tolerance
-
-                # if iteration % 5 == 0 or iteration == self.local_max_it:
-                #     worst = np.argmax(scaled_residual)
-                #     print(
-                #         f"rank {msh.comm.rank}, local Newton {iteration}: "
-                #         f"max residual/tolerance={scaled_residual[worst]:.3e}, "
-                #         f"residual={residual_norm[worst]:.3e}",
-                #         flush=True,
-                #     )
 
                 active = np.flatnonzero(residual_norm > tolerance)
 
@@ -693,10 +603,8 @@ class Tensor(Momentum):
         self.dq_prev_it.x.array[:] = self.dq.x.array[:]
 
 
-
         self.fluidity_prev_it.interpolate(self._fluidity_expr)
         self.fluidity_prev_it.x.scatter_forward()
-
 
 
     def timestep(self,move_mesh=True):
@@ -757,27 +665,3 @@ class Tensor(Momentum):
         adios4dolfinx.read_function(filename, self.w_prev_time, name="wprevtime", time=t)
         adios4dolfinx.read_function(filename, self.velocity_prev_time, name="velocityprevtime", time=t)
         adios4dolfinx.read_function(filename, self.fluidity_used, name="fluidityused", time=t)
-
-
-    def begin_damped_event(self, damping):
-        """Activate damping at an already restored, consistent state."""
-        if not np.isfinite(damping) or damping <= 0:
-            raise ValueError("damping must be positive and finite.")
-
-        self.w_event_prev.x.array[:] = self.w.x.array
-        self.w_event_prev.x.scatter_forward()
-
-        self.momentum_damping.value = PETSc.ScalarType(damping)
-        self.problem._constitutive_x = None
-
-
-    def advance_damped_event(self):
-        """Accept one converged artificial event step."""
-        self.w_event_prev.x.array[:] = self.w.x.array
-        self.w_event_prev.x.scatter_forward()
-
-
-    def end_damped_event(self):
-        """Disable artificial momentum damping."""
-        self.momentum_damping.value = PETSc.ScalarType(0.0)
-        self.problem._constitutive_x = None

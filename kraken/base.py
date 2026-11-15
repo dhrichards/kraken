@@ -1,6 +1,4 @@
 from kraken import parameters, momentum, damage
-from kraken.numerics import energy_splits as es
-from kraken.numerics import maths_functions as mf
 from dolfinx import fem, mesh
 import ufl
 from mpi4py import MPI
@@ -50,11 +48,8 @@ class Simulation:
         self.marked_ds = kr.boundaryconditions.marked_ds(self.msh,[bottom_boundary,ocean_boundaries])
         self.basal_friction = True
 
-    
-        
 
-
-    def setup(self,MomentumSolver=momentum.mixed.SemiLagrangianEpsilon,
+    def setup(self,MomentumSolver=momentum.tensorquadrature.Tensor,
                     DamageSolver=damage.higherorder.AT2,
                     bc_funcs=[lambda V: [], lambda V: []]):
         '''Setup the simulation with the given momentum and damage solvers, and boundary condition functions.'''
@@ -98,8 +93,7 @@ class Simulation:
         self.params.Kic.value = parent.params.Kic.value
 
 
-        self.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
-                                kr.damage.higherorder.AT2, bcs)
+        self.setup(type(parent.momentum), type(parent.damage), bcs)
         # msh_cell_imap = self.msh.topology.index_map(self.msh.topology.dim)
         # self.cells = np.arange(msh_cell_imap.size_local + msh_cell_imap.num_ghosts)
         # self.parent_cells = entity_map.sub_topology_to_topology(self.cells, inverse=False)
@@ -109,14 +103,6 @@ class Simulation:
         
         self.momentum.interpolate_from_parent(parent)
         self.damage.interpolate_from_parent(parent)
-
-
-
-
-
-
-
-        
 
 
     def timestep(self):
@@ -163,7 +149,6 @@ class Simulation:
             Takes in as input a boolean stop_bottom which if True will stop the iteration if the L2 norm of the damage field on the bottom boundary exceeds 0.12.
             
             '''
-            L2_old = 0.0
 
             one = fem.Function(self.damage.D)
             one.x.array[:] = 1.0
@@ -173,10 +158,8 @@ class Simulation:
 
             error_prev = 100
 
-            errors = []
 
             self.momentum.creep_newton_weight.value = 0.0
-            direct_mode = False
              
             i = 0
             while i < self.max_its:
@@ -185,9 +168,6 @@ class Simulation:
                 if self.damage_on:
                     self.damage.solve()
 
-        
-                
-               
 
                 if save:
                     # s = ufl.dev(self.momentum.σ)
@@ -219,13 +199,11 @@ class Simulation:
                                 # "fluidity","fluidityused","dq"
                             ],
                                     t=i,quadrature_degree=self.quad_degree)
-    
-                
+
 
                 L2_ = ufl.inner(self.damage.d,self.damage.d)*ufl.dx
                 L2_rank = fem.assemble_scalar(fem.form(L2_))
                 L2 = np.sqrt(MPI.COMM_WORLD.allreduce(L2_rank, op=MPI.SUM))
-
 
 
                 L2_bottom_ = ufl.inner(self.damage.d,self.damage.d)*self.ds_bottom
@@ -244,9 +222,6 @@ class Simulation:
                     solver_kind = getattr(self.momentum, "solver_kind", "snes")
                     print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_{solver_kind}_its {self.momentum.solver.getIterationNumber()}, mom_{solver_kind}_reason {self.momentum.solver.getConvergedReason()}")#, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
 
-                errors.append(error_L2)
-
-                
 
                 if self.momentum.solver.getConvergedReason() == -3: 
                     return -1,i
@@ -264,7 +239,6 @@ class Simulation:
                     and error_prev < self.tol
                 )
 
-                                
 
                 # A single linear mechanics correction needs its own nonlinear
                 # residual check; existing momentum solvers keep their behaviour.
@@ -272,26 +246,12 @@ class Simulation:
                     # converged = self.momentum.mechanics_converged()
 
                 if converged:
-                    # if not direct_mode:
-                    #     # Retain the current displacement and local strain increments
-                    #     # as the initial guess for the fully implicit solve.
-                    #     self.momentum.creep_newton_weight.value = 1.0
-                    #     direct_mode = True
-
-                    #     if MPI.COMM_WORLD.rank == 0:
-                    #         print("Switching from Picard to fully implicit creep")
-
-                    #     # Require two fresh small-error iterations after switching.
-                    #     error_prev = float("inf")
-                    #     L2_old = L2
-                    #     continue
                     if L2_bottom > 0.12:
                         return 4, i
 
                     return 1, i
                 
                 error_prev = error_L2
-                L2_old = L2
             
             return 2,i
 

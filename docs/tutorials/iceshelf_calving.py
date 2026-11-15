@@ -43,14 +43,13 @@ def left_boundary(x):
     return np.isclose(x[0], 0)
 
 u_bc = lambda V: [
-                            bc.get_zero_bc(V.sub(0).sub(0), left_boundary),
-                            bc.get_zero_bc(V.sub(1).sub(0), left_boundary),
+                            bc.get_zero_bc(V.sub(0), left_boundary),
                             ]
 
 d_bc = lambda V: []
 
 
-model.setup(kr.momentum.mixed.SemiLagrangianEpsilon,
+model.setup(kr.momentum.tensorquadrature.Tensor,
                            kr.damage.higherorder.AT2, [u_bc, d_bc])
 
 kr.plotting.write_xdmf("test.xdmf",msh,[model.momentum.u],["u"])
@@ -87,11 +86,9 @@ for i in range(1,500):
     t += model.params.dt.value
     kr.plotting.write_xdmf("iceshelf_step" + str(i) + ".xdmf",
                             model.msh, [model.momentum.u,model.damage.d,
-                                    model.momentum.u_v, model.momentum.u_e,
                                     model.momentum.ψplus/model.params.ψcritstar,
                                     ],
                                     ["u","d",
-                                    "uv","ue",
                                     "psi_plus",
                                     ],
                                 t=i)

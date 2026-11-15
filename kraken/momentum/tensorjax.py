@@ -76,8 +76,7 @@ class TensorJAX(Tensor):
         else:
             self.F += self.pw*ufl.inner(n,v)*ufl.ds
         self.F += params.C_inertia*self.ρ*ufl.inner(self.acceleration,v)*self.dx
-        self.F += self.momentum_damping*ufl.inner(self.w-self.w_event_prev,v)*self.dx
-        # UFL differentiates external loads, inertia and damping. Stress is a
+        # UFL differentiates external loads and inertia. Stress is a
         # coefficient, so its missing derivative is supplied explicitly below.
         direct = ufl.derivative(self.F, self.w, dw)
         ε_trial_plane = ufl.as_vector([ε_trial_mandel[i] for i in (0,1,2,4)])

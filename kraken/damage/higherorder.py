@@ -1,18 +1,13 @@
-import adios4dolfinx
 from .base import Damage
 import basix.ufl as bufl
 import ufl
-from dolfinx import fem, default_real_type, nls
-from kraken.numerics import maths_functions as mf
-from kraken.numerics import energy_splits as es
-from kraken.numerics.maths_functions import ε
+from dolfinx import fem
 from kraken.numerics import solvers
 from petsc4py import PETSc
 from mpi4py import MPI
 import numpy as np
 from kraken.boundaryconditions import get_zero_bc
 from dolfinx.fem.petsc import LinearProblem
-
 
 
 class AT2(Damage):
@@ -29,7 +24,6 @@ class AT2(Damage):
 
         self.W = fem.functionspace(self.sim.msh, self.d_el_mixed)
         self.w = fem.Function(self.W, name="mixed function")
-        self.w_candidate = fem.Function(self.W)
         self.d, self.lap = ufl.split(self.w)
         self.w_prev_time = fem.Function(self.W, name="mixed function previous time")
         self.d_prev_time, self.lap_prev_time = ufl.split(self.w_prev_time)
@@ -156,7 +150,6 @@ class AT2(Damage):
         self.w_prev_it3.sub(0).interpolate(parent.damage.w_prev_it3.sub(0), cells0=self.sim.parent_cells, cells1=self.sim.cells)
         self.w_prev_it3.sub(1).interpolate(parent.damage.w_prev_it3.sub(1), cells0=self.sim.parent_cells, cells1=self.sim.cells)
 
-        
 
         self.w_prev_time.sub(0).interpolate(parent.damage.w_prev_time.sub(0), cells0=self.sim.parent_cells, cells1=self.sim.cells)
         self.w_prev_time.sub(1).interpolate(parent.damage.w_prev_time.sub(1), cells0=self.sim.parent_cells, cells1=self.sim.cells)
@@ -165,7 +158,6 @@ class AT2(Damage):
         super().timestep()
         self.w_prev_time.x.array[:] = self.w.x.array[:]
         self.w_prev_time.x.scatter_forward()
-
 
 
     def solve(self):
@@ -178,15 +170,12 @@ class AT2(Damage):
 
         self.problem.solve()
 
-        # self.w_candidate.x.array[:] = self.w.x.array.copy()
-        # self.w.x.array[:] = self.w_prev_it.x.array[:] + 0.5*(self.w_candidate.x.array[:]-self.w_prev_it.x.array[:])
         self.w.x.scatter_forward()
         
         assert self.solver.getConvergedReason() > 0, "Nonlinear solver did not converge"
 
     def revert(self):
         self.w.x.array[:] = self.w_prev_time.x.array[:]
-
 
 
 class Bounded(AT2):
@@ -203,7 +192,6 @@ class Bounded(AT2):
         self.upper_bound = fem.Function(self.W, name="damage_upper_bound")
         self.previous_bound_tol = 1.0e-3
 
-    
 
     def driving_energy(self):
         # Signed instantaneous drive: no positive-part clipping or history.
@@ -338,7 +326,6 @@ class Bounded(AT2):
     def timestep(self):
         self.w_prev_time.x.array[:] = self.w.x.array[:]
         self.w_prev_time.x.scatter_forward()
-
 
 
 class AugmentedLagrangian(AT2):
@@ -626,7 +613,6 @@ class _AT1Model:
         return (weight * 0.5 * v
                 + (weight*l**2 / 4) * ufl.inner(ufl.grad(self.d), ufl.grad(v))
                 - ufl.inner(ufl.grad((weight*l**4 / 32)*self.lap), ufl.grad(v)))
-
 
 
 class AT1(_AT1Model, AugmentedLagrangian):

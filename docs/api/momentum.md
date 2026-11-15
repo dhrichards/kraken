@@ -1,3 +1,5 @@
 :::kraken.momentum.elastic
 
-:::kraken.momentum.mixed
+:::kraken.momentum.tensorquadrature
+
+:::kraken.momentum.tensorlinearised

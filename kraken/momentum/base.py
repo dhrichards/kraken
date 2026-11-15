@@ -1,25 +1,13 @@
-import numpy as np
 from dolfinx import fem
 import dolfinx
-from dolfinx.fem.petsc import NonlinearProblem
 from mpi4py import MPI
 import ufl
 import basix.ufl as bufl
-import numpy as np
 from kraken.numerics import maths_functions as mf
 from kraken.numerics import energy_splits as es
 from kraken.numerics import solvers
 from petsc4py import PETSc
 import adios4dolfinx
-
-def L(du):
-    # Mesh coordinates: (x, z)
-    # Tensor coordinates: (x, y, z)
-    return ufl.as_tensor([
-        [du[0].dx(0), 0, du[0].dx(1)],
-        [0,             0, 0],
-        [du[1].dx(0), 0, du[1].dx(1)],
-    ])
 
 class Momentum:
     '''Base class for solving the momentum equation.'''
@@ -39,13 +27,6 @@ class Momentum:
         
         self.area_ratio = fem.Function(self.DG0)
         self.area_ratio.x.array[:] = 1.0
-
-
-        
-        
-
-
-
 
 
     def setup(self):
@@ -87,7 +68,6 @@ class Momentum:
         self.ε_e_prev_time.x.scatter_forward()
 
 
-    
     def initial_stokes(self, bc_func=None):
         """Initialise a 3D elastic strain from an intact, frozen-mesh flow.
 
@@ -184,7 +164,6 @@ class Momentum:
 
         w.x.scatter_forward()
 
-  
 
         eps_e_init = (
             0.5 * ufl.dev(σ)
@@ -199,10 +178,6 @@ class Momentum:
         )
         self.ε_e_prev_time.x.scatter_forward()
 
-        
-
-        
-                
 
     @property
     def pw(self):
@@ -219,9 +194,6 @@ class Momentum:
         #             self.sim.params.sea_level_star,
         #             self.sim.params.crack_level_star)
 
-
-
-    
 
     @property
     def σ(self):
@@ -272,9 +244,6 @@ class Momentum:
         self.area_ratio.interpolate(parent.momentum.area_ratio, cells0=self.sim.parent_cells, cells1=self.sim.cells)
 
 
-    
-    
-
     def solve(self):
         pass
 
@@ -295,6 +264,4 @@ class Momentum:
         adios4dolfinx.read_function(filename, self.w, name = "w_momentum", time = t)
         adios4dolfinx.read_function(filename, self.area_ratio, name = "area_ratio", time = t)
 
-
-        
 
