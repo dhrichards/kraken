@@ -202,6 +202,7 @@ class Tensor(Momentum):
         # Must be a UFL expression depending on self.du and self.dq.
         σ = self.σ
         σ0 = es.cauchy_stress(self.ε_e, self.sim.params.ν)
+        g = self.sim.damage.g
 
         s = ufl.dev(σ)
 
@@ -572,6 +573,9 @@ class Tensor(Momentum):
             details = "; ".join(reports[:4])
             if len(reports) > 4:
                 details += f"; plus {len(reports) - 4} other ranks"
+
+            if msh.comm.rank == 0:
+                print("Local viscous constitutive solve failed: " + details, flush=True)
 
             raise RuntimeError(
                 "Local viscous constitutive solve failed: " + details

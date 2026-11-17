@@ -23,6 +23,9 @@ class Simulation:
         self.tol = 5e-6
         self.min_its = 2
         self.max_its = 300
+        self.newton_only = False
+        self.newton_depth_z = 0.6
+        self.linearised_l2_jump = 0.5
 
         self.basal_friction = False
 
@@ -143,6 +146,7 @@ class Simulation:
             #  2: maximum iterations reached
             #  3: bottom criterion reached before convergence
             #  4: converged and bottom criterion reached
+            #  5: large damage L2 increase in linearised mode; retry with Newton
             # -1: solver failure
                         
             Takes in as input a boolean save which if True will save the state of the simulation at each iteration to an xdmf file.
@@ -157,7 +161,14 @@ class Simulation:
             area = np.sqrt(MPI.COMM_WORLD.allreduce(area, op=MPI.SUM))
 
             error_prev = 100
-
+            check_l2_jump = (hasattr(self.momentum, "use_newton")
+                             and not self.momentum.using_newton)
+            if check_l2_jump:
+                # Include jumps on iteration zero relative to timestep start.
+                L2_rank = fem.assemble_scalar(fem.form(
+                    ufl.inner(self.damage.d, self.damage.d) * ufl.dx
+                ))
+                L2_previous = np.sqrt(self.msh.comm.allreduce(L2_rank, op=MPI.SUM))
 
             self.momentum.creep_newton_weight.value = 0.0
              
@@ -226,6 +237,16 @@ class Simulation:
                 if self.momentum.solver.getConvergedReason() == -3: 
                     return -1,i
                 
+                if check_l2_jump:
+                    # A relative increase is undefined for initially zero damage.
+                    if (L2_previous > 0.0
+                            and L2 > (1.0 + self.linearised_l2_jump) * L2_previous):
+                        PETSc.Sys.Print(
+                            f"Linearised damage L2 jump: {L2_previous:.3e} -> {L2:.3e}"
+                        )
+                        return 5, i
+                    L2_previous = L2
+
                 if stop_bottom and L2_bottom > 0.12:
                     return 3, i
 
@@ -337,12 +358,23 @@ class Simulation:
         trial_step = 0.2,
         max_retries=30,
     ):
-        """Solve one physical timestep, halving dt after solver failure.
+        """Solve a physical timestep without committing time/history.
+
+        Linearised momentum gets one same-dt Newton retry. Other solvers retain
+        the existing dt-reduction policy controlled by trial_step/max_retries.
 
         Returns the existing (flag, nits) pair.
         Does not advance time or commit timestep histories.
         Preserves the final failed fields if retries are exhausted.
         """
+        if hasattr(self.momentum, "use_newton"):
+            result = self._solve_timestep_with_newton(
+                save, stop_bottom, trial_step, max_retries
+            )
+            if result[0] in (1, 4):
+                self.check_crevasse_depth()
+            return result
+
         self.save_restart_state()
         trial_dt = float(self.params.dt.value)
 
@@ -376,3 +408,74 @@ class Simulation:
                     f"Retry {retry + 1}: dt={trial_dt:.6g} s"
                 )
         
+
+    def check_crevasse_depth(self):
+        """Latch Newton for future timesteps after a converged damage solve.
+
+        Uses nodal damage on the current, approximately unit-height mesh.
+        The completed solve and its physical fields are left untouched.
+        """
+        if self.newton_only:
+            return
+        damage = self.damage
+        n = damage.D.dofmap.index_map.size_local
+        z = damage.D.tabulate_dof_coordinates()[:n, self.msh.geometry.dim - 1]
+        if hasattr(damage, "d_to_W"):
+            d = damage.w.x.array[damage.d_to_W[:n]]
+        else:
+            d = damage.d.x.array[:n]
+        reached = np.any((d > 0.5) & (z < self.newton_depth_z))
+        if self.msh.comm.allreduce(bool(reached), op=MPI.LOR):
+            self.newton_only = True
+            PETSc.Sys.Print(
+                f"Damage below z={self.newton_depth_z:g}: using Newton from next timestep"
+            )
+
+    def _solve_timestep_with_newton(
+        self, save=False, stop_bottom=False, trial_step=0.2, max_retries=30,
+    ):
+        """Retry linearised failures/L2 jumps with Newton at the same dt.
+
+        Newton reduces dt on solver exceptions or outer iteration exhaustion
+        and honours stop_bottom. All reduced-dt attempts remain on Newton.
+        """
+        if not self.newton_only:
+            self.momentum.use_linearised()
+        self.save_restart_state()
+        trial_dt = float(self.params.dt.value)
+        try:
+            if not self.newton_only:
+                try:
+                    flag, nits = self.fixed_point(save=save, stop_bottom=stop_bottom)
+                    if flag in (1, 3, 4):
+                        return flag, nits
+                    reason = "large damage L2 increase" if flag == 5 else f"outer flag {flag}"
+                except (RuntimeError, PETSc.Error) as exc:
+                    reason = str(exc)
+
+                self.restore_restart_state()
+                PETSc.Sys.Print(
+                    f"Retrying timestep with Newton at unchanged dt={trial_dt:.6g} s: {reason}"
+                )
+            self.momentum.use_newton(rebuild=True)
+            for retry in range(max_retries + 1):
+                try:
+                    flag, nits = self.fixed_point(save=save, stop_bottom=stop_bottom)
+                    if flag == 2:
+                        raise RuntimeError("Newton outer iteration limit reached")
+                    return flag, nits
+                except (RuntimeError, PETSc.Error) as exc:
+                    PETSc.Sys.Print(f"Newton solve failed at dt={trial_dt:.6g} s: {exc}")
+                    if retry == max_retries:
+                        return -1, -1
+                    self.restore_restart_state()
+                    trial_dt *= trial_step
+                    self.params.dt.value = trial_dt
+                    # A callback exception can leave SNES work vectors locked.
+                    # Recreate solver storage, retaining Newton for this retry.
+                    self.momentum.use_newton(rebuild=True)
+                    PETSc.Sys.Print(f"Newton retry {retry + 1}: dt={trial_dt:.6g} s")
+        finally:
+            # A depth-triggered switch persists; ordinary fallbacks do not.
+            if not self.newton_only:
+                self.momentum.use_linearised()

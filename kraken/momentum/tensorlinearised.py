@@ -19,12 +19,16 @@ from kraken.numerics import maths_functions as mf
 class Tensor(NonlinearTensor):
     solver_kind = "ksp"
     accept_iteration_limit = False
-    line_search = True
-    max_backtracks = 12
-    backtracking_armijo = 1e-4
-    backtracking_atol = 1e-12
+    using_newton = False
 
     def setup_momentum(self):
+        if self.using_newton:
+            self.use_linearised()
+        # Rebuilding forms/BCs invalidates the cached Newton callbacks.
+        for name in ("_newton_solver", "_newton_a", "_newton_b", "_newton_x"):
+            if hasattr(self, name):
+                getattr(self, name).destroy()
+                delattr(self, name)
         if float(self.sim.params.n.value) not in (1.0, 3.0):
             raise ValueError("tensorlinearised supports n=1 or n=3")
         super().setup_momentum()
@@ -90,9 +94,10 @@ class Tensor(NonlinearTensor):
         return self._residual.norm()
 
     def solve(self):
+        if self.using_newton:
+            return self._solve_newton()
         self.creep_newton_weight.value = PETSc.ScalarType(0.0)
-        # Start on the prescribed boundary values, so every damped correction
-        # has homogeneous boundary data and preserves those values exactly.
+        # Enforce prescribed values before constructing the correction.
         petsc.set_bc(self.w.x.petsc_vec, self.bc_e)
         self.w.x.scatter_forward()
         # Damage may have changed since the last call.
@@ -129,75 +134,78 @@ class Tensor(NonlinearTensor):
         finite = np.all(np.isfinite(dq)) and np.all(np.isfinite(self.correction.x.array))
         if not self.sim.msh.comm.allreduce(finite, op=MPI.LAND):
             raise RuntimeError("Nonfinite linearised mechanics correction")
-        self._apply_correction(dq)
+        self.dq.x.array.reshape(-1, 3)[self._q_blocks] += dq
+        self.dq.x.scatter_forward()
+        self.w.x.array[:] += self.correction.x.array
         self.w_prev_it.x.array[:] = self.w.x.array
         self.dq_prev_it.x.array[:] = self.dq.x.array
 
-    def _quadrature_rms(self, values):
-        # Owned cells only, including participation by ranks with no cells.
-        totals = np.array([np.sum(np.abs(values)**2), values.size], dtype=float)
-        global_totals = np.empty(2)
-        self.sim.msh.comm.Allreduce(totals, global_totals, op=MPI.SUM)
-        return np.sqrt(global_totals[0] / max(global_totals[1], 1.0))
+    def use_newton(self, rebuild=False):
+        """Temporarily use the original local-Newton/global-SNES equations.
 
-    def _step_residual_norms(self):
-        # r_local uses the FROZEN fluidity used to construct this Newton step.
-        local = (self.r_local_expr.eval(self.sim.msh, self._local_cells)
-                 if len(self._local_cells) else np.empty(0))
-        return np.array([self._momentum_residual_norm(), self._quadrature_rms(local)])
+        All physical fields stay on this object, so timestep rollback restores
+        both solvers consistently. No constitutive-history transfer is needed.
+        """
+        if rebuild:
+            self.use_linearised()
+            for name in ("_newton_solver", "_newton_a", "_newton_b", "_newton_x"):
+                if hasattr(self, name):
+                    getattr(self, name).destroy()
+                    delattr(self, name)
+        if self.using_newton:
+            return
+        if not hasattr(self, "_newton_solver"):
+            solver = PETSc.SNES().create(self.sim.msh.comm)
+            solver.setOptionsPrefix("tensorlinearised_newton_")
+            solver.setType("newtonls")
+            solver.setTolerances(rtol=1e-11, atol=1e-13, max_it=15)
+            solver.getKSP().setType("preonly")
+            solver.getKSP().getPC().setType("lu")
+            solver.getKSP().getPC().setFactorSolverType("mumps")
+            self._newton_b = petsc.create_vector(self.problem.L)
+            self._newton_a = petsc.create_matrix(self.problem.a)
+            solver.setFunction(self.problem.F, self._newton_b)
+            solver.setJacobian(self.problem.J, self._newton_a)
+            solver.setFromOptions()
+            # Callbacks write into w. Keep the SNES solution separate so line
+            # search trial evaluations cannot overwrite its current iterate.
+            self._newton_x = self.w.x.petsc_vec.duplicate()
+            self._newton_solver = solver
+        self._linear_solver = self.solver
+        self.solver = self._newton_solver
+        self.using_newton = True
+        self.solver_kind = "snes"
+        self.problem._constitutive_x = None
+        # The caller has restored the timestep-start fields before a retry.
+        # Recompute the frozen coefficient from those fields, rather than
+        # carrying the linearised solver's pre-correction fluidity into Newton.
+        self.fluidity_prev_it.interpolate(self._fluidity_expr)
+        self.fluidity_prev_it.x.scatter_forward()
 
-    def _apply_correction(self, dq):
-        u0 = self.w.x.array.copy()
-        q0 = self.dq.x.array.copy()
-        blocks = self._q_blocks
-        self.last_step_length = 1.0
-        self.last_backtracks = 0
-        if self.line_search:
-            initial = self._step_residual_norms()
-            if not np.all(np.isfinite(initial)):
-                raise RuntimeError("Nonfinite initial mechanics residual")
-            # Fixed scales for ALL trials in this search. Including the strain
-            # increment avoids dividing by a vanishing initial creep residual.
-            scales = np.array([
-                max(initial[0], self._vector.norm(), self.backtracking_atol),
-                max(initial[1], self._quadrature_rms(q0.reshape(-1, 3)[blocks]),
-                    self._quadrature_rms(dq), self.backtracking_atol),
-            ])
-            self.last_merit_before = float(np.sum((initial / scales)**2))
-            roundoff = float(np.sum((self.backtracking_atol / scales)**2))
+    def use_linearised(self):
+        if self.using_newton:
+            self.solver = self._linear_solver
+            self.using_newton = False
+            self.solver_kind = "ksp"
+        self.problem._constitutive_x = None
+        self._reference_residual = None
 
-        for backtrack in range(self.max_backtracks + 1):
-            alpha = 0.5**backtrack
-            self.w.x.array[:] = u0 + alpha * self.correction.x.array
-            self.dq.x.array[:] = q0
-            self.dq.x.array.reshape(-1, 3)[blocks] += alpha * dq
-            self.dq.x.scatter_forward()
-            # u0 and correction have synchronised ghosts; their linear
-            # combination needs no additional forward scatter.
-            if self.line_search:
-                trial = self._step_residual_norms()
-                merit = float(np.sum((trial / scales)**2))
-                accepted = (np.isfinite(merit) and merit <=
-                            (1.0 - self.backtracking_armijo * alpha)
-                            * self.last_merit_before + roundoff)
-            else:
-                accepted = True
-            if accepted:
-                self.last_step_length = alpha
-                self.last_backtracks = backtrack
-                if self.line_search:
-                    self.last_merit_after = merit
-                if backtrack:
-                    PETSc.Sys.Print(f"Momentum backtracking: alpha={alpha:.5g}, "
-                                    f"merit {self.last_merit_before:.3e} -> {merit:.3e}")
-                return
-
-        # Do not expose a rejected mechanical state to the damage solver.
-        self.w.x.array[:] = u0
-        self.dq.x.array[:] = q0
-        self.last_step_length = 0.0
-        self.last_backtracks = self.max_backtracks
-        raise RuntimeError("Momentum backtracking failed; mechanical state restored")
+    def _solve_newton(self):
+        # Match tensorquadrature: fluidity remains lagged across outer
+        # iterations; the stress split and local viscous equations use Newton.
+        self.creep_newton_weight.value = PETSc.ScalarType(0.0)
+        self.fluidity_used.x.array[:] = self.fluidity_prev_it.x.array
+        self.problem._constitutive_x = None
+        self.w.x.petsc_vec.copy(self._newton_x)
+        self.solver.solve(None, self._newton_x)
+        reason = self.solver.getConvergedReason()
+        if reason == -3:
+            raise RuntimeError(f"Fallback momentum solve failed: SNES reason {reason}")
+        self.problem._update_state(self._newton_x)
+        self.w_prev_it.x.array[:] = self.w.x.array
+        self.dq_prev_it.x.array[:] = self.dq.x.array
+        self.fluidity_prev_it.interpolate(self._fluidity_expr)
+        self.fluidity_prev_it.x.scatter_forward()
 
     def mechanics_converged(self):
         """Called AFTER damage is updated, before accepting an outer iteration."""
