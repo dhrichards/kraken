@@ -229,12 +229,13 @@ class Simulation:
                 error_L2 = np.sqrt(
                     self.msh.comm.allreduce(error_rank, op=MPI.SUM)
                 ) / area
+                momentum_reason = self.momentum.solver.getConvergedReason()
                 if MPI.COMM_WORLD.rank == 0:
                     solver_kind = getattr(self.momentum, "solver_kind", "snes")
-                    print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_{solver_kind}_its {self.momentum.solver.getIterationNumber()}, mom_{solver_kind}_reason {self.momentum.solver.getConvergedReason()}")#, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
+                    print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_{solver_kind}_its {self.momentum.solver.getIterationNumber()}, mom_{solver_kind}_reason {momentum_reason}")#, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
 
 
-                if self.momentum.solver.getConvergedReason() == -3: 
+                if momentum_reason == -3:
                     return -1,i
                 
                 if check_l2_jump:
@@ -247,7 +248,7 @@ class Simulation:
                         return 5, i
                     L2_previous = L2
 
-                if stop_bottom and L2_bottom > 0.12:
+                if stop_bottom and momentum_reason > 0 and L2_bottom > 0.12:
                     return 3, i
 
 
@@ -255,6 +256,7 @@ class Simulation:
     
                 converged = (
                     i >= self.min_its
+                    and momentum_reason > 0
                     and error_L2 < self.tol
                     and error_L2 <= error_prev
                     and error_prev < self.tol
@@ -385,6 +387,8 @@ class Simulation:
                     stop_bottom=stop_bottom,
                 )
 
+                if flag == 2 and retry < max_retries:
+                    raise RuntimeError(f"Outer fixed-point limit reached ({nits} iterations)")
                 return flag, nits
 
             except (RuntimeError, PETSc.Error) as exc:

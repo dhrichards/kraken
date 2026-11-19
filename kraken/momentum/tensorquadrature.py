@@ -584,6 +584,14 @@ class Tensor(Momentum):
         self.dq.x.scatter_forward()
 
 
+    def setup_solver(self):
+        # Retry setup must also discard workspace left by a callback exception.
+        if hasattr(self, "_snes_x"):
+            self._snes_x.destroy()
+        super().setup_solver()
+        # Callbacks write trial values into w; keep SNES's iterate separate.
+        self._snes_x = self.w.x.petsc_vec.duplicate()
+
     def solve(self):
         # Full-array copies preserve the synchronised source ghost values.
         self.fluidity_used.x.array[:] = self.fluidity_prev_it.x.array
@@ -591,16 +599,17 @@ class Tensor(Momentum):
         # the previous momentum solve.
         self.problem._constitutive_x = None
 
-        self.solver.solve(None, self.w.x.petsc_vec)
-        self.w.x.scatter_forward()
+        self.w.x.petsc_vec.copy(self._snes_x)
+        self.solver.solve(None, self._snes_x)
         reason = self.solver.getConvergedReason()
         if reason == -3:
             raise RuntimeError(
                 f"Momentum solve failed: SNES reason {reason}"
             )
 
-        # Ensure dq matches the final displacement; reuse it if already current.
-        self.problem._update_state(self.w.x.petsc_vec)
+        # Copy the final SNES iterate back, including after a rejected trial,
+        # and ensure dq matches it; reuse dq if already current.
+        self.problem._update_state(self._snes_x)
 
 
         self.w_prev_it.x.array[:] = self.w.x.array[:]
