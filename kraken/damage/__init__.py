@@ -1,1 +1,1 @@
-from . import base, lowerorder, higherorder, hageman
+from . import base, lowerorder, higherorder, hageman, omega

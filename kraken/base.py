@@ -161,6 +161,8 @@ class Simulation:
             area = np.sqrt(MPI.COMM_WORLD.allreduce(area, op=MPI.SUM))
 
             error_prev = 100
+            stalled_passes = 0
+            solver_kind = getattr(self.momentum, "solver_kind", "snes")
             check_l2_jump = (hasattr(self.momentum, "use_newton")
                              and not self.momentum.using_newton)
             if check_l2_jump:
@@ -230,13 +232,24 @@ class Simulation:
                     self.msh.comm.allreduce(error_rank, op=MPI.SUM)
                 ) / area
                 momentum_reason = self.momentum.solver.getConvergedReason()
+                momentum_its = self.momentum.solver.getIterationNumber()
                 if MPI.COMM_WORLD.rank == 0:
-                    solver_kind = getattr(self.momentum, "solver_kind", "snes")
-                    print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_{solver_kind}_its {self.momentum.solver.getIterationNumber()}, mom_{solver_kind}_reason {momentum_reason}")#, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
+                    print(f"iteration {i}, error {error_L2:.3e}, L2 {L2:.3e}, L2_bottom {L2_bottom:.3e},mom_{solver_kind}_its {momentum_its}, mom_{solver_kind}_reason {momentum_reason}")#, elastic time {self.momentum.elastic_time:.3e}, viscous time {self.momentum.viscous_time:.3e}")
 
 
                 if momentum_reason == -3:
                     return -1,i
+
+                if (solver_kind == "snes" and momentum_reason == -6
+                        and momentum_its == 0 and error_L2 < self.tol):
+                    stalled_passes += 1
+                    if stalled_passes >= 3:
+                        raise RuntimeError(
+                            f"Momentum stalled at outer iteration {i}: three consecutive "
+                            "zero-iteration line-search failures with damage below tolerance"
+                        )
+                else:
+                    stalled_passes = 0
                 
                 if check_l2_jump:
                     # A relative increase is undefined for initially zero damage.
@@ -248,7 +261,7 @@ class Simulation:
                         return 5, i
                     L2_previous = L2
 
-                if stop_bottom and momentum_reason > 0 and L2_bottom > 0.12:
+                if stop_bottom and momentum_reason > 0 and L2_bottom > 0.05:
                     return 3, i
 
 
@@ -269,7 +282,7 @@ class Simulation:
                     # converged = self.momentum.mechanics_converged()
 
                 if converged:
-                    if L2_bottom > 0.12:
+                    if L2_bottom > 0.05:
                         return 4, i
 
                     return 1, i
